@@ -750,13 +750,19 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
     if (baseData.length < 2) return baseData;
     
     const last3 = baseData.slice(-3);
+    const lastElement = last3[last3.length - 1];
+    const firstElement = last3[0];
+    if (!lastElement || !firstElement) return baseData;
+
+    const lastActual = lastElement.actual ?? 0;
+    const firstActual = firstElement.actual ?? 0;
     const avgVelocity = last3.length >= 2 
-      ? (last3[last3.length - 1].actual - last3[0].actual) / (last3.length - 1)
+      ? (lastActual - firstActual) / (last3.length - 1)
       : 0;
       
     const forecastData = [...baseData.map(d => ({ ...d, forecast: d.actual }))];
-    let currentActual = last3[last3.length - 1].actual;
-    const scope = last3[last3.length - 1].scope;
+    let currentActual = lastActual;
+    const scope = lastElement.scope;
     
     for (let i = 1; i <= 5; i++) {
       currentActual = Math.min(scope, currentActual + avgVelocity);

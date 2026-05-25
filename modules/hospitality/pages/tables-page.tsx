@@ -38,8 +38,8 @@ export default function HospitalityTablesPage() {
             <div key={table.id} className="rounded-2xl border border-border/60 bg-card/60 p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="font-bold">{table.name}</p>
-                  <p className="text-sm text-muted-foreground">{table.zone} · Capacity {table.capacity}</p>
+                  <p className="font-bold">{table.label}</p>
+                  <p className="text-sm text-muted-foreground">{table.zone?.name} · Capacity {table.capacity}</p>
                 </div>
                 <Badge variant={table.status === "available" ? "default" : table.status === "reserved" ? "secondary" : "outline"}>
                   {table.status}

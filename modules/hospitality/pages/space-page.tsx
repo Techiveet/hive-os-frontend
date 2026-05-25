@@ -78,7 +78,7 @@ export default function SpaceManagementPage() {
       ) : (
         <div className="space-y-10">
           <SpatialGridMap 
-            locations={allLocations} 
+            zones={zones || []} 
             businessType={businessType}
             onLocationClick={(loc) => setSelectedLocation(loc)}
           />

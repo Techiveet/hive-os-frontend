@@ -202,3 +202,32 @@ export interface ProjectSummary {
     value: number;
   }>;
 }
+
+export interface FinancialReport {
+  budget: number;
+  total_costs: number;
+  estimated_revenue: number;
+  weekly_trend?: Array<{ week: string; cost: number }>;
+  projections?: Array<{ week: string; forecasted_cost: number }>;
+  progress_percent: number;
+  profitability: number;
+  issue_type_breakdown?: Array<{ type: string; cost: number }>;
+  roi: number;
+  total_hours: number;
+  currency: string;
+  remaining_budget: number;
+  hourly_rate: number;
+  member_breakdown?: Array<{ id: string; name: string; cost: number; hours: number }>;
+  risk_score: number;
+}
+
+export interface GlobalWorkloadUser extends User {
+  tasks?: Array<{
+    id: string;
+    title: string;
+    due_date: string | null;
+    project?: { id: string; name: string };
+  }>;
+}
+
+

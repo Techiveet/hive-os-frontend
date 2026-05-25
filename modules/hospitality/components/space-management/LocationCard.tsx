@@ -62,7 +62,7 @@ export default function LocationCard({ location, businessType, onStatusChange }:
             <Icon className="h-6 w-6" />
           </div>
           <div>
-            <h3 className="text-lg font-black tracking-tight">{location.name}</h3>
+            <h3 className="text-lg font-black tracking-tight">{location.label}</h3>
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
               {locationLabel} • Capacity: {location.capacity}
             </p>

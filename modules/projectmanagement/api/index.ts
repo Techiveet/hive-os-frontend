@@ -15,6 +15,8 @@ import type {
   Sprint,
   TaskTimeLog,
   TaskIssueType,
+  FinancialReport,
+  GlobalWorkloadUser,
 } from "../types";
 
 const PM_PREFIX = "/project-management";
@@ -39,8 +41,14 @@ type ProjectPayload = Partial<Pick<Project, "name" | "description" | "status" | 
 
 type ProjectAutomation = Record<string, unknown>;
 type ProjectGoal = Record<string, unknown>;
-type FinancialReport = Record<string, unknown>;
-type ProjectCommentCollection = ProjectComment[] | { data: ProjectComment[]; meta?: Record<string, unknown> };
+type ProjectCommentCollection = { 
+  data: ProjectComment[]; 
+  current_page: number; 
+  last_page: number; 
+  per_page?: number; 
+  total?: number; 
+  meta?: Record<string, unknown>; 
+};
 type SprintPayload = Partial<Pick<Sprint, "name" | "start_date" | "end_date" | "goal">>;
 
 export type TaskPayload = Partial<{
@@ -94,7 +102,7 @@ export const projectApi = {
     api.post<ProjectMember>(`${PM_PREFIX}/projects/${projectId}/members`, data).then(res => res.data),
   removeMember: (projectId: string, userId: string) => 
     api.delete(`${PM_PREFIX}/projects/${projectId}/members/${userId}`),
-  getGlobalWorkload: () => api.get<Array<Record<string, unknown>>>(`${PM_PREFIX}/members/global-workload`).then(res => res.data),
+  getGlobalWorkload: () => api.get<GlobalWorkloadUser[]>(`${PM_PREFIX}/members/global-workload`).then(res => res.data),
 
   // Boards
   createBoard: (data: BoardPayload) => api.post<Board>(`${PM_PREFIX}/boards`, data).then(res => res.data),

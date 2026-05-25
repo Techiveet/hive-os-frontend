@@ -7,7 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchCurrentTenantSubscriptions } from "@/modules/subscription/api";
 
 export function TrialBannerWrapper() {
-  const { plan } = useTenantModuleAccess();
+  const { moduleAccess } = useTenantModuleAccess();
+  const plan = moduleAccess?.plan;
   
   const { data } = useQuery({
     queryKey: ["tenant-current-subscriptions"],

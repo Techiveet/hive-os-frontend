@@ -207,7 +207,7 @@ export default function ApprovalRolesPage() {
                         {user.name}
                       </Badge>
                     ))}
-                    {(role.users?.length > 5) && (
+                    {(role.users && role.users.length > 5) && (
                       <Badge variant="outline" className="text-[10px]">
                         +{role.users.length - 5} more
                       </Badge>

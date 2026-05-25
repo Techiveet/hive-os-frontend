@@ -38,7 +38,7 @@ export default function HospitalityServiceOrdersPage() {
             <div key={order.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/60 p-4">
               <div>
                 <p className="font-bold">{order.order_number}</p>
-                <p className="text-sm text-muted-foreground">{order.table?.name} · {order.items.length} items</p>
+                <p className="text-sm text-muted-foreground">{order.location?.label} · {order.items.length} items</p>
               </div>
               <Badge variant={order.status === "closed" ? "default" : "outline"}>
                 {order.status}

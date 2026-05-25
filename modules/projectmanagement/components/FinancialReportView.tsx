@@ -89,7 +89,8 @@ const cumulativeData = useMemo(() => {
       };
     });
 
-    if (!report?.projections?.length) return history;
+    const projectionsList = report.projections;
+    if (!projectionsList?.length) return history;
 
     const scenarioMultiplier = 
       selectedScenario === "Aggressive" ? 1.4 : 
@@ -97,8 +98,8 @@ const cumulativeData = useMemo(() => {
       selectedScenario === "Optimal" ? 1.1 : 1;
 
     let lastSum = sum;
-    const projections = report.projections.map((p: any, i: number) => {
-      const prevForecasted = i === 0 ? sum : report.projections[i-1].forecasted_cost;
+    const projections = projectionsList.map((p: any, i: number) => {
+      const prevForecasted = i === 0 ? sum : projectionsList[i-1].forecasted_cost;
       const incrementalCost = (p.forecasted_cost - prevForecasted) * scenarioMultiplier;
       lastSum += incrementalCost;
       return {
@@ -115,19 +116,20 @@ const cumulativeData = useMemo(() => {
   }, [report, selectedScenario]);
 
   const profitabilityData = useMemo(() => {
-    if (!report?.weekly_trend) return [];
+    const weeklyTrend = report?.weekly_trend;
+    if (!weeklyTrend) return [];
     
     // Calculate "Earned Revenue" trend based on progress
-    const progressPerWeek = (report.progress_percent || 0) / report.weekly_trend.length;
+    const progressPerWeek = (report.progress_percent || 0) / weeklyTrend.length;
     let cumulativeProgress = 0;
 
-    return report.weekly_trend.map((d: any) => {
+    return weeklyTrend.map((d: any) => {
       cumulativeProgress += progressPerWeek;
       const earnedRevenue = (estimatedRevenue * (cumulativeProgress / 100));
       return {
         week: d.week,
         cost: d.cost,
-        revenue: earnedRevenue / report.weekly_trend.length, // Distributed roughly
+        revenue: earnedRevenue / weeklyTrend.length, // Distributed roughly
         margin: report.profitability
       };
     });
@@ -156,15 +158,18 @@ const cumulativeData = useMemo(() => {
   }, [report, budgetUsedPercent]);
 
   const roiData = useMemo(() => {
-    if (!report?.weekly_trend) return [];
+    const weeklyTrend = report?.weekly_trend;
+    if (!weeklyTrend) return [];
     let cumulativeCost = 0;
-    return report.weekly_trend.map((d: any) => {
+    const progressPercent = report.progress_percent;
+    const roiVal = report.roi;
+    return weeklyTrend.map((d: any) => {
       cumulativeCost += d.cost;
-      const currentROI = cumulativeCost > 0 ? ((estimatedRevenue * (report.progress_percent / 100) - cumulativeCost) / cumulativeCost) * 100 : 0;
+      const currentROI = cumulativeCost > 0 ? ((estimatedRevenue * (progressPercent / 100) - cumulativeCost) / cumulativeCost) * 100 : 0;
       return {
         week: d.week,
         roi: Math.max(0, currentROI),
-        yield: report.roi
+        yield: roiVal
       };
     });
   }, [report, estimatedRevenue]);
@@ -192,8 +197,9 @@ const cumulativeData = useMemo(() => {
 
   const runwayDays = useMemo(() => {
     if (!report || report.remaining_budget <= 0) return 0;
-    const weeklyVelocity = report.weekly_trend?.length > 0 
-      ? report.total_costs / report.weekly_trend.length 
+    const weeklyTrend = report.weekly_trend;
+    const weeklyVelocity = weeklyTrend && weeklyTrend.length > 0 
+      ? report.total_costs / weeklyTrend.length 
       : report.hourly_rate * 40; // Default to 40h/week if no trend
     
     if (weeklyVelocity <= 0) return 365; // Basically forever

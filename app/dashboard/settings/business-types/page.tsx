@@ -69,18 +69,15 @@ export default function BusinessTypesPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
-  const [localSearch, setLocalSearch] = useState(search);
-  const debouncedSearch = useDebounce(localSearch, 400);
-
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
 
   const { data, isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["settings", "business-types", page, size, debouncedSearch, sortCol, sortDir],
+    queryKey: ["settings", "business-types", page, size, search, sortCol, sortDir],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("page", String(page));
       params.set("size", String(size));
-      if (debouncedSearch) params.set("search", debouncedSearch);
+      if (search) params.set("search", search);
       params.set("sortCol", sortCol);
       params.set("sortDir", sortDir);
 
@@ -128,21 +125,21 @@ export default function BusinessTypesPage() {
   }, [refetch]);
 
   const handleDeleteRows = useCallback(async (rows: BusinessType[]) => {
-    const keysToDelete = rows.map(r => r.key);
-    const newTypes = businessTypes.filter(bt => !keysToDelete.includes(bt.key));
+    const keysToDelete = rows.map((r: BusinessType) => r.key);
+    const newTypes = businessTypes.filter((bt: BusinessType) => !keysToDelete.includes(bt.key));
     await handleSave(newTypes);
-    queryClient.setQueryData(["settings", "business-types", page, size, debouncedSearch, sortCol, sortDir], {
+    queryClient.setQueryData(["settings", "business-types", page, size, search, sortCol, sortDir], {
       ...data,
       data: { business_types: newTypes },
       total: newTypes.length
     });
     toast.success(`Deleted ${rows.length} business type(s)`);
-  }, [businessTypes, handleSave, queryClient, data, page, size, debouncedSearch, sortCol, sortDir]);
+  }, [businessTypes, handleSave, queryClient, data, page, size, search, sortCol, sortDir]);
 
   const handleSubmit = async () => {
     let newTypes: BusinessType[];
     if (editingKey) {
-      newTypes = businessTypes.map((bt) =>
+      newTypes = businessTypes.map((bt: BusinessType) =>
         bt.key === editingKey ? { key: form.key, label: form.label, description: form.description, icon: form.icon } : bt
       );
     } else {
@@ -151,7 +148,7 @@ export default function BusinessTypesPage() {
 
     try {
       await handleSave(newTypes);
-      queryClient.setQueryData(["settings", "business-types", page, size, debouncedSearch, sortCol, sortDir], {
+      queryClient.setQueryData(["settings", "business-types", page, size, search, sortCol, sortDir], {
         ...data,
         data: { business_types: newTypes },
         total: newTypes.length
@@ -172,10 +169,10 @@ export default function BusinessTypesPage() {
   };
 
   const handleDelete = async (key: string) => {
-    const newTypes = businessTypes.filter((bt) => bt.key !== key);
+    const newTypes = businessTypes.filter((bt: BusinessType) => bt.key !== key);
     try {
       await handleSave(newTypes);
-      queryClient.setQueryData(["settings", "business-types", page, size, debouncedSearch, sortCol, sortDir], {
+      queryClient.setQueryData(["settings", "business-types", page, size, search, sortCol, sortDir], {
         ...data,
         data: { business_types: newTypes },
         total: newTypes.length
@@ -256,8 +253,6 @@ export default function BusinessTypesPage() {
         pageSizeOptions={[10, 25, 50, 100]}
         onQueryChange={handleQueryChange}
         searchPlaceholder="Search business types..."
-        searchValue={localSearch}
-        onSearchChange={setLocalSearch}
         enableRowSelection={true}
         selectedRowIds={selectedRows}
         onSelectionChange={(rows) => setSelectedRows(rows)}
