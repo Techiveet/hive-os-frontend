@@ -6,7 +6,7 @@ import {
     Loader2, Palette, Shield, Settings, Globe, Bell, Headset, 
     Globe2, Sliders, AlertTriangle, Clock, HardDrive, HelpCircle, 
     Image as ImageIcon, Upload, CheckCircle2, X, Activity, Mail, UserPlus, ShieldCheck,
-    CreditCard, Database, Sparkles
+    CreditCard, Database, Sparkles, LayoutTemplate
 } from 'lucide-react';
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ import { BackupSettings } from '@/components/settings/backup-settings';
 import { EmailSettings } from '@/components/settings/email-settings';
 import { PaymentSettings } from '@/components/settings/payment-settings';
 import { PlanSettings } from '@/components/settings/plan-settings';
+import { TenantLandingSettings } from '@/components/settings/tenant-landing-settings';
 import { useChatStore } from '@/store/chat-store';
 import { useMailStore } from '@/store/mail-store';
 
@@ -771,6 +772,7 @@ function SettingsTabs({
 
     const TABS = [
         canManageBrand ? { id: 'brand', label: t('nav.settings_brand', 'Brand Settings'), icon: Palette } : null,
+        (canManageBrand && !isCentralNode) ? { id: 'landing', label: 'Landing Page', icon: LayoutTemplate } : null,
         canManageGeneral ? { id: 'general', label: t('nav.settings_general', 'General'), icon: Settings } : null,
         canManageGeneral ? { id: 'email', label: t('nav.settings_email', 'Email Servers'), icon: Mail } : null,
         canManagePayments ? { id: 'payments', label: 'Payment Providers', icon: CreditCard } : null,
@@ -812,6 +814,11 @@ function SettingsTabs({
 
             <div className="flex-1 min-w-0">
                 {canManageBrand && activeTab === 'brand' && <BrandSettings />}
+                {canManageBrand && activeTab === 'landing' && !isCentralNode && (
+                    <div className="transition-all animate-in fade-in slide-in-from-bottom-2">
+                        <TenantLandingSettings />
+                    </div>
+                )}
                 {canManageGeneral && activeTab === 'general' && <GeneralSettings />}
                 {canManageGeneral && activeTab === 'email' && <EmailSettings />}
                 {canManagePayments && activeTab === 'payments' && (
