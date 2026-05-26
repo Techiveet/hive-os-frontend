@@ -1,11 +1,9 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import {
-  ArrowUpRight,
   Building2,
   Code2,
   Droplets,
@@ -30,17 +28,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { getAuthHeaders, getBackendApiRoot } from "@/lib/runtime-context";
 import {
-  applyLandingTemplateMeta,
   buildTenantLandingPreviewHtml,
   FALLBACK_TENANT_BUSINESS_TYPES,
   formatLandingTemplateJson,
+  mergeTenantEditableTemplateWithDesign,
   parseLandingTemplateJson,
   resolveBusinessTypeCatalog,
   resolveLandingTemplate,
   resolveTemplateVariant,
+  stripTemplateCodeForTenantEditor,
   type TenantLandingPreviewBranding,
   type TenantBusinessTypeDefinition,
-  type TenantLandingTemplateVariant,
+  type TenantLandingTemplate,
 } from "@/modules/tenancy/landing-template";
 
 const LANDING_TEMPLATE_FILE = "landing-template.json";
@@ -127,7 +126,7 @@ export function TenantLandingSettings() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (payload: { business_type: string; landing_page_template: any }) =>
+    mutationFn: (payload: { business_type: string; landing_page_template: TenantLandingTemplate }) =>
       apiFetch("/settings/landing", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -157,7 +156,7 @@ export function TenantLandingSettings() {
         const templateKey = activeTemplate.meta?.template_key || "signature";
         setSelectedTemplateKey(templateKey);
 
-        setTemplateFiles(createTemplateFiles(formatLandingTemplateJson(activeTemplate)));
+        setTemplateFiles(createTemplateFiles(formatLandingTemplateJson(stripTemplateCodeForTenantEditor(activeTemplate))));
         setJsonError(null);
       } catch (caught) {
         console.error("[TenantLandingSettings] Initialization failed:", caught);
@@ -217,10 +216,17 @@ export function TenantLandingSettings() {
     }
   }, [activeBusinessType, activeTemplateVariant, currentTemplateContent]);
 
+  const previewTemplate = React.useMemo(() => {
+    return mergeTenantEditableTemplateWithDesign(
+      activeTemplateVariant?.template ?? activeBusinessType.default_template,
+      parsedTemplateState.template,
+    );
+  }, [activeBusinessType.default_template, activeTemplateVariant?.template, parsedTemplateState.template]);
+
   const previewHtml = React.useMemo(() => {
     try {
       return buildTenantLandingPreviewHtml(
-        parsedTemplateState.template,
+        previewTemplate,
         previewBranding?.app_title || activeBusinessType?.label || "My Business",
         activeBusinessType?.label || "General Business",
         {
@@ -236,7 +242,7 @@ export function TenantLandingSettings() {
         </div>
       `;
     }
-  }, [activeBusinessType, parsedTemplateState.template, previewBranding, previewColorMode]);
+  }, [activeBusinessType, previewTemplate, previewBranding, previewColorMode]);
 
   React.useEffect(() => {
     setJsonError(parsedTemplateState.error);
@@ -251,20 +257,20 @@ export function TenantLandingSettings() {
     setSelectedTemplateKey(defaultTemplateKey);
 
     const variant = resolveTemplateVariant(nextBusinessType, defaultTemplateKey);
-    setTemplateFiles(createTemplateFiles(formatLandingTemplateJson(variant.template)));
+    setTemplateFiles(createTemplateFiles(formatLandingTemplateJson(stripTemplateCodeForTenantEditor(variant.template))));
     setJsonError(null);
   };
 
   const handleTemplateVariantChange = (nextKey: string) => {
     setSelectedTemplateKey(nextKey);
     const variant = resolveTemplateVariant(activeBusinessType, nextKey);
-    setTemplateFiles(createTemplateFiles(formatLandingTemplateJson(variant.template)));
+    setTemplateFiles(createTemplateFiles(formatLandingTemplateJson(stripTemplateCodeForTenantEditor(variant.template))));
     setJsonError(null);
   };
 
   const handleResetTemplate = () => {
     const variant = resolveTemplateVariant(activeBusinessType, selectedTemplateKey);
-    setTemplateFiles(createTemplateFiles(formatLandingTemplateJson(variant.template)));
+    setTemplateFiles(createTemplateFiles(formatLandingTemplateJson(stripTemplateCodeForTenantEditor(variant.template))));
     setJsonError(null);
     toast.info("Editor reset to the preset template.");
   };
@@ -276,7 +282,7 @@ export function TenantLandingSettings() {
     }
     saveMutation.mutate({
       business_type: selectedBusinessTypeKey,
-      landing_page_template: parsedTemplateState.template,
+      landing_page_template: previewTemplate,
     });
   };
 

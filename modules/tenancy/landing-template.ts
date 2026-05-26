@@ -8,6 +8,14 @@ export type TenantLandingTheme = {
   muted?: string;
 };
 
+export type TenantLandingRendering = {
+  mode: "structured" | "custom_code" | "raw_package";
+  html: string;
+  css: string;
+  js: string;
+  asset_base_url: string;
+};
+
 export type TenantLandingHero = {
   eyebrow: string;
   title: string;
@@ -75,6 +83,7 @@ export type TenantLandingTemplate = {
   spotlight: TenantLandingSpotlight;
   testimonials: TenantLandingTestimonial[];
   final_cta: TenantLandingFinalCta;
+  rendering: TenantLandingRendering;
 };
 
 export type TenantLandingTemplateVariant = {
@@ -175,6 +184,13 @@ export const FALLBACK_TENANT_LANDING_TEMPLATE: TenantLandingTemplate = {
     secondary_label: "Jump to Services",
     secondary_href: "#offers",
   },
+  rendering: {
+    mode: "structured",
+    html: "",
+    css: "",
+    js: "",
+    asset_base_url: "",
+  },
 };
 
 export const FALLBACK_TENANT_BUSINESS_TYPES: TenantBusinessTypeDefinition[] = [
@@ -246,6 +262,39 @@ export const resolveLandingTemplate = (
         }))
       : cloneTemplate(fallback).testimonials,
     final_cta: { ...fallback.final_cta, ...(candidate.final_cta ?? {}) },
+    rendering: resolveLandingRendering(candidate.rendering, fallback.rendering),
+  };
+};
+
+const resolveLandingRendering = (
+  rendering: unknown,
+  fallback: TenantLandingRendering = FALLBACK_TENANT_LANDING_TEMPLATE.rendering,
+): TenantLandingRendering => {
+  if (!rendering || typeof rendering !== "object") {
+    return { ...fallback };
+  }
+
+  const candidate = rendering as Partial<TenantLandingRendering>;
+  const mode = candidate.mode === "custom_code" || candidate.mode === "raw_package"
+    ? candidate.mode
+    : "structured";
+
+  if (mode !== "custom_code" && mode !== "raw_package") {
+    return {
+      mode: "structured",
+      html: "",
+      css: "",
+      js: "",
+      asset_base_url: "",
+    };
+  }
+
+  return {
+    mode,
+    html: String(candidate.html ?? fallback.html ?? ""),
+    css: String(candidate.css ?? fallback.css ?? ""),
+    js: mode === "raw_package" ? String(candidate.js ?? fallback.js ?? "") : "",
+    asset_base_url: mode === "raw_package" ? String(candidate.asset_base_url ?? fallback.asset_base_url ?? "") : "",
   };
 };
 
@@ -510,6 +559,43 @@ export const applyLandingTemplateMeta = (
   };
 };
 
+export const stripTemplateCodeForTenantEditor = (
+  template: TenantLandingTemplate,
+): TenantLandingTemplate => {
+  const resolved = resolveLandingTemplate(template);
+
+  return {
+    ...resolved,
+    rendering: {
+      mode: "structured",
+      html: "",
+      css: "",
+      js: "",
+      asset_base_url: "",
+    },
+  };
+};
+
+export const mergeTenantEditableTemplateWithDesign = (
+  designTemplate: TenantLandingTemplate,
+  editableTemplate: TenantLandingTemplate,
+): TenantLandingTemplate => {
+  const design = resolveLandingTemplate(designTemplate);
+  const editable = resolveLandingTemplate(editableTemplate, design);
+
+  return applyLandingTemplateMeta(
+    {
+      ...editable,
+      rendering: design.rendering,
+    },
+    {
+      ...design.meta,
+      ...editable.meta,
+      is_custom: true,
+    },
+  );
+};
+
 export const buildTemplateVariantsForBusinessType = (
   businessKey: string,
   businessLabel: string,
@@ -658,6 +744,14 @@ const escapeHtml = (value: string): string =>
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
+const escapeScriptJson = (value: unknown): string =>
+  JSON.stringify(value)
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("&", "\\u0026")
+    .replaceAll("\u2028", "\\u2028")
+    .replaceAll("\u2029", "\\u2029");
+
 const sanitizeHref = (value?: string): string => {
   const href = (value ?? "").trim();
 
@@ -670,6 +764,168 @@ const sanitizeHref = (value?: string): string => {
   }
 
   return "#";
+};
+
+const sanitizeRuntimeTemplateHtml = (html: string): string =>
+  html
+    .replace(/<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, "")
+    .replace(/<\s*\/?\s*(iframe|object|embed|link|meta|base)\b[^>]*>/gi, "")
+    .replace(/\s+on[a-z0-9_-]+\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, "")
+    .replace(/\s+srcdoc\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, "")
+    .replace(/\s+(href|src|xlink:href)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, ' $1="#"')
+    .replace(/\s+(href|src|xlink:href)\s*=\s*javascript:[^\s>]*/gi, ' $1="#"');
+
+const sanitizeRuntimeTemplateCss = (css: string): string =>
+  css
+    .replace(/@import\b[^;]*;?/gi, "")
+    .replace(/expression\s*\([^)]*\)/gi, "")
+    .replace(/url\s*\(\s*(["']?)\s*javascript:[^)]+\)/gi, 'url("#")')
+    .replace(/(^|[;{\s])behavior\s*:[^;]*;?/gi, "$1");
+
+const sanitizeRuntimeTemplateJs = (js: string): string =>
+  js
+    .replace(/\0/g, "")
+    .replace(/<\s*\/\s*script/gi, "<\\/script");
+
+const normalizeRuntimeAssetBaseUrl = (value?: string): string => {
+  const raw = (value ?? "").trim();
+
+  if (!raw || /^(javascript|data|vbscript):/i.test(raw)) {
+    return "";
+  }
+
+  if (/^https?:\/\//i.test(raw)) {
+    return `${raw.replace(/\/+$/, "")}/`;
+  }
+
+  if (!/^[a-zA-Z0-9_./-]+$/.test(raw)) {
+    return "";
+  }
+
+  return `/${raw.replace(/^\/+|\/+$/g, "")}/`;
+};
+
+const getPathValue = (source: unknown, path: string): unknown => {
+  return path.split(".").reduce<unknown>((current, part) => {
+    if (current === null || current === undefined) {
+      return undefined;
+    }
+
+    if (Array.isArray(current)) {
+      const index = Number(part);
+      return Number.isInteger(index) ? current[index] : undefined;
+    }
+
+    if (typeof current === "object" && part in current) {
+      return (current as Record<string, unknown>)[part];
+    }
+
+    return undefined;
+  }, source);
+};
+
+const interpolateTemplateCode = (
+  source: string,
+  template: TenantLandingTemplate,
+  brandName: string,
+  businessLabel: string,
+  options?: { assetBaseUrl?: string; css?: boolean },
+): string => {
+  const tokenSource = {
+    assets: {
+      base_url: options?.assetBaseUrl ?? "",
+    },
+    brand: {
+      name: brandName,
+    },
+    business: {
+      label: businessLabel,
+    },
+    hero: template.hero,
+    stats: template.stats,
+    highlights: template.highlights,
+    spotlight: template.spotlight,
+    testimonials: template.testimonials,
+    final_cta: template.final_cta,
+    theme: template.theme,
+  };
+
+  return source.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_match, token: string) => {
+    const value = getPathValue(tokenSource, token);
+    const stringValue = value === null || value === undefined ? "" : String(value);
+
+    if (options?.css) {
+      return sanitizeRuntimeTemplateCss(stringValue);
+    }
+
+    if (token.endsWith("_href")) {
+      return escapeHtml(sanitizeHref(stringValue));
+    }
+
+    return escapeHtml(stringValue);
+  });
+};
+
+const buildCustomCodeLandingDocument = (
+  template: TenantLandingTemplate,
+  brandName: string,
+  businessLabel: string,
+): string => {
+  const isRawPackage = template.rendering.mode === "raw_package";
+  const assetBaseUrl = isRawPackage
+    ? normalizeRuntimeAssetBaseUrl(template.rendering.asset_base_url)
+    : "";
+  const html = sanitizeRuntimeTemplateHtml(
+    interpolateTemplateCode(template.rendering.html, template, brandName, businessLabel, { assetBaseUrl }),
+  );
+  const css = sanitizeRuntimeTemplateCss(
+    interpolateTemplateCode(template.rendering.css, template, brandName, businessLabel, { assetBaseUrl, css: true }),
+  );
+  const js = isRawPackage
+    ? sanitizeRuntimeTemplateJs(
+        interpolateTemplateCode(template.rendering.js, template, brandName, businessLabel, { assetBaseUrl }),
+      )
+    : "";
+  const landingData = isRawPackage
+    ? escapeScriptJson({
+        assets: {
+          base_url: assetBaseUrl,
+        },
+        brand: {
+          name: brandName,
+        },
+        business: {
+          label: businessLabel,
+        },
+        final_cta: template.final_cta,
+        hero: template.hero,
+        highlights: template.highlights,
+        spotlight: template.spotlight,
+        stats: template.stats,
+        testimonials: template.testimonials,
+        theme: template.theme,
+      })
+    : "";
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base target="_top" />
+    <title>${escapeHtml(brandName)}</title>
+    <style>
+      html, body { margin: 0; min-height: 100%; }
+      body { background: ${escapeHtml(template.theme.surface || "#020617")}; }
+      ${css}
+    </style>
+  </head>
+  <body>
+    ${isRawPackage ? `<script>window.HIVE_LANDING_DATA = Object.freeze(${landingData});</script>` : ""}
+    ${html}
+    ${isRawPackage && js.trim() ? `<script>${js}</script>` : ""}
+  </body>
+</html>`;
 };
 
 type PreviewColorMode = "light" | "dark";
@@ -753,6 +1009,14 @@ export const buildTenantLandingPreviewHtml = (
   const isDark = colorMode === "dark";
   const branding = options?.branding ?? null;
   const previewBrandName = branding?.app_title?.trim() || brandName;
+
+  if (
+    (resolved.rendering.mode === "custom_code" || resolved.rendering.mode === "raw_package")
+    && resolved.rendering.html.trim()
+  ) {
+    return buildCustomCodeLandingDocument(resolved, previewBrandName, businessLabel);
+  }
+
   const accent = normalizeHexColor(branding?.primary_color ?? theme.accent, "#0F766E");
   const accentSoft = normalizeHexColor(
     theme.accent_soft,

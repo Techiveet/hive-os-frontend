@@ -201,6 +201,8 @@ export function TenantLandingTemplateSettings() {
   const [codeTemplateName, setCodeTemplateName] = React.useState("");
   const [codeTemplateDescription, setCodeTemplateDescription] = React.useState("");
   const [codeTemplateBody, setCodeTemplateBody] = React.useState("");
+  const [codeTemplateHtml, setCodeTemplateHtml] = React.useState("");
+  const [codeTemplateCss, setCodeTemplateCss] = React.useState("");
   const [jsonError, setJsonError] = React.useState<string | null>(null);
 
   const { data, isLoading, isError, error } = useQuery({
@@ -280,7 +282,7 @@ export function TenantLandingTemplateSettings() {
       setTemplateFiles(createTemplateFiles(formatLandingTemplateJson(firstVariant.template)));
       setJsonError(null);
     }
-  }, [data]);
+  }, [data, selectedBusinessTypeKey]);
 
   const businessTypeMap = React.useMemo(
     () => Object.fromEntries(catalog.map((item) => [item.key, item])),
@@ -574,8 +576,10 @@ export function TenantLandingTemplateSettings() {
     setCodeTemplateName(`${activeBusinessType.label} Custom`);
     setCodeTemplateDescription(`Code-authored template for ${activeBusinessType.label}.`);
     setCodeTemplateBody(currentTemplateContent);
+    setCodeTemplateHtml(activeTemplateVariant.template.rendering.html || `<section class="tenant-code-hero">\n  <p>{{hero.eyebrow}}</p>\n  <h1>{{hero.title}}</h1>\n  <p>{{hero.description}}</p>\n  <a href="{{hero.primary_href}}">{{hero.primary_label}}</a>\n</section>`);
+    setCodeTemplateCss(activeTemplateVariant.template.rendering.css || `.tenant-code-hero {\n  min-height: 100vh;\n  display: grid;\n  align-content: center;\n  gap: 18px;\n  padding: clamp(28px, 8vw, 96px);\n  color: #f8fafc;\n  background: linear-gradient(135deg, #020617, #0f172a);\n}\n.tenant-code-hero h1 {\n  max-width: 900px;\n  font-size: clamp(44px, 8vw, 88px);\n  line-height: .95;\n  letter-spacing: -.06em;\n}`);
     setShowCodeComposer(true);
-  }, [activeBusinessType.label, currentTemplateContent]);
+  }, [activeBusinessType.label, activeTemplateVariant.template.rendering.css, activeTemplateVariant.template.rendering.html, currentTemplateContent]);
 
   const handleCreateTemplateFromCode = React.useCallback(() => {
     const baseCatalog = commitCurrentTemplateToCatalog(catalog);
@@ -600,18 +604,35 @@ export function TenantLandingTemplateSettings() {
       return;
     }
 
+    if (!codeTemplateHtml.trim()) {
+      toast.error("Template HTML is required for a code-authored landing style.");
+      return;
+    }
+
     const nextVariant: TenantLandingTemplateVariant = {
       key: nextKey,
       label: requestedName,
       description: requestedDescription,
-      template: applyLandingTemplateMeta(parsedTemplate, {
-        business_type: activeBusinessType.key,
-        business_label: activeBusinessType.label,
-        template_key: nextKey,
-        template_label: requestedName,
-        template_description: requestedDescription,
-        is_custom: false,
-      }),
+      template: applyLandingTemplateMeta(
+        {
+          ...parsedTemplate,
+          rendering: {
+            mode: "custom_code",
+            html: codeTemplateHtml,
+            css: codeTemplateCss,
+            js: "",
+            asset_base_url: "",
+          },
+        },
+        {
+          business_type: activeBusinessType.key,
+          business_label: activeBusinessType.label,
+          template_key: nextKey,
+          template_label: requestedName,
+          template_description: requestedDescription,
+          is_custom: false,
+        },
+      ),
     };
 
     const nextCatalog = baseCatalog.map((definition) => {
@@ -638,6 +659,8 @@ export function TenantLandingTemplateSettings() {
     catalog,
     codeTemplateBody,
     codeTemplateDescription,
+    codeTemplateCss,
+    codeTemplateHtml,
     codeTemplateName,
     commitCurrentTemplateToCatalog,
     selectedBusinessTypeKey,
@@ -1035,11 +1058,11 @@ export function TenantLandingTemplateSettings() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-foreground">Create Template from Code</p>
                   <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">
-                    JSON
+                    HTML + CSS
                   </Badge>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Paste valid template JSON, then save as a reusable preset for this business type.
+                  Paste central-admin authored HTML and scoped CSS. Tenants will only edit the content JSON and cannot change this raw code.
                 </p>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -1069,7 +1092,7 @@ export function TenantLandingTemplateSettings() {
 
                 <div className="mt-3 space-y-1.5">
                   <Label className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Template JSON
+                    Editable Content JSON
                   </Label>
                   <textarea
                     value={codeTemplateBody}
@@ -1079,6 +1102,31 @@ export function TenantLandingTemplateSettings() {
                   />
                 </div>
 
+                <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Template HTML
+                    </Label>
+                    <textarea
+                      value={codeTemplateHtml}
+                      onChange={(event) => setCodeTemplateHtml(event.target.value)}
+                      spellCheck={false}
+                      className="min-h-[260px] w-full rounded-xl border border-border/60 bg-[#0b1220] px-4 py-3 font-mono text-xs leading-6 text-slate-100 outline-none ring-0 transition focus:border-primary/50"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Scoped CSS
+                    </Label>
+                    <textarea
+                      value={codeTemplateCss}
+                      onChange={(event) => setCodeTemplateCss(event.target.value)}
+                      spellCheck={false}
+                      className="min-h-[260px] w-full rounded-xl border border-border/60 bg-[#0b1220] px-4 py-3 font-mono text-xs leading-6 text-slate-100 outline-none ring-0 transition focus:border-primary/50"
+                    />
+                  </div>
+                </div>
+
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button
                     type="button"
@@ -1086,7 +1134,7 @@ export function TenantLandingTemplateSettings() {
                     onClick={() => setCodeTemplateBody(currentTemplateContent)}
                     className="h-9 rounded-lg px-3"
                   >
-                    Load Current JSON
+                    Load Current Content
                   </Button>
                   <Button
                     type="button"

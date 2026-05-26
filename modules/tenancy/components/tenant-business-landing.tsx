@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import { getBackendStorageUrl } from "@/lib/runtime-context";
-import type { TenantLandingTemplate, TenantLandingTheme } from "@/modules/tenancy/landing-template";
+import {
+  buildTenantLandingPreviewHtml,
+  type TenantLandingTemplate,
+  type TenantLandingTheme,
+} from "@/modules/tenancy/landing-template";
 
 type BrandSettings = {
   app_title?: string | null;
@@ -206,6 +210,7 @@ function BrandLogo({
   }
 
   return (
+    // eslint-disable-next-line @next/next/no-img-element -- Tenant logo URLs can point at configured storage domains outside Next image allowlists.
     <img
       src={logoUrl}
       alt={fallback}
@@ -238,6 +243,34 @@ export function TenantBusinessLanding({
     () => resolveBrandFontFamily(brandSettings?.font_family),
     [brandSettings?.font_family],
   );
+  const customLandingHtml = React.useMemo(() => {
+    if (
+      (template.rendering.mode !== "custom_code" && template.rendering.mode !== "raw_package")
+      || !template.rendering.html.trim()
+    ) {
+      return null;
+    }
+
+    return buildTenantLandingPreviewHtml(template, brandName, businessLabel, {
+      colorMode: isDark ? "dark" : "light",
+      branding: brandSettings,
+    });
+  }, [brandName, brandSettings, businessLabel, isDark, template]);
+
+  if (customLandingHtml) {
+    return (
+      <iframe
+        title={`${brandName} landing page`}
+        srcDoc={customLandingHtml}
+        className="block h-screen min-h-screen w-full border-0"
+        sandbox={
+          template.rendering.mode === "raw_package"
+            ? "allow-scripts allow-popups allow-top-navigation-by-user-activation"
+            : "allow-popups allow-top-navigation-by-user-activation"
+        }
+      />
+    );
+  }
 
   return (
     <div
@@ -436,7 +469,7 @@ export function TenantBusinessLanding({
                 >
                   <CheckCircle2 className="h-8 w-8" style={{ color: palette.accent }} />
                   <p className="mt-4 text-lg leading-8" style={{ color: palette.text }}>
-                    "{item.quote}"
+                    &ldquo;{item.quote}&rdquo;
                   </p>
                   <footer className="mt-6">
                     <p className="text-sm font-black uppercase tracking-[0.16em]" style={{ color: palette.textStrong }}>
