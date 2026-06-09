@@ -58,6 +58,7 @@ import * as RuntimeContext from "@/lib/runtime-context";
 import { cn } from "@/lib/utils";
 import { TaskTimer } from "./TaskTimer";
 import { History as HistoryIcon, Clock, Trash2 as TrashIcon } from "lucide-react";
+import { useTranslation } from "@/store/use-translation";
 
 interface TaskDetailModalProps {
   taskId: string | null;
@@ -82,6 +83,7 @@ const ISSUE_TYPE_CONFIG = {
 const STORY_POINTS = [1, 2, 3, 5, 8, 13, 21];
 
 export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailModalProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { user } = useUser();
   const isSoftwareDev = user?.business_type?.toLowerCase()?.replace('-', ' ') === 'software development';
@@ -726,12 +728,12 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="w-[95vw] xl:max-w-[1400px] 2xl:max-w-[1600px] h-[90vh] p-0 bg-background border border-border/40 overflow-hidden flex flex-col rounded-2xl shadow-2xl">
-          <DialogTitle className="sr-only">Task Details</DialogTitle>
+          <DialogTitle className="sr-only">{t('project_management.task_details', 'Task Details')}</DialogTitle>
           
           <div className="flex items-center justify-between px-6 py-4 border-b bg-muted/10 shrink-0">
-            <h2 className="text-xl font-bold tracking-tight">Task Details</h2>
+            <h2 className="text-xl font-bold tracking-tight">{t('project_management.task_details', 'Task Details')}</h2>
             <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Task</span><span>&gt;</span><span className="font-medium text-foreground">Task Details</span>
+              <span>{t('project_management.task', 'Task')}</span><span>&gt;</span><span className="font-medium text-foreground">{t('project_management.task_details', 'Task Details')}</span>
             </div>
             <Button variant="ghost" size="icon" className="sm:hidden h-8 w-8" onClick={() => onOpenChange(false)}>
               <X className="h-4 w-4" />
@@ -752,7 +754,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                       <div className="flex flex-wrap items-center gap-3">
                         <div className="flex items-center gap-3">
                           <div className="w-1.5 h-6 bg-primary rounded-full"></div>
-                          <h3 className="text-lg sm:text-xl font-bold">{isEditMode ? "Edit Task" : "Task Summary"}</h3>
+                          <h3 className="text-lg sm:text-xl font-bold">{isEditMode ? t('project_management.edit_task', 'Edit Task') : t('project_management.task_summary', 'Task Summary')}</h3>
                         </div>
                         {!isEditMode && task && (
                           <div className="ml-0 sm:ml-4">
@@ -762,12 +764,12 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                       </div>
                       {!isEditMode ? (
                         <Button onClick={handleStartEdit} size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white w-full sm:w-auto">
-                          <Pencil className="w-4 h-4 mr-2" /> Edit Task
+                          <Pencil className="w-4 h-4 mr-2" /> {t('project_management.edit_task', 'Edit Task')}
                         </Button>
                       ) : (
                         <div className="flex items-center gap-2">
                           <Button variant="ghost" size="sm" onClick={() => setIsEditMode(false)} className="h-8">
-                            Cancel
+                            {t('project_management.cancel', 'Cancel')}
                           </Button>
                           <Button 
                             size="sm" 
@@ -784,7 +786,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                             })}
                             disabled={updateTaskMutation.isPending || !editTitle.trim()}
                           >
-                            {updateTaskMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <CheckCircle2 className="h-3 w-3 mr-2" />} Save Changes
+                            {updateTaskMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <CheckCircle2 className="h-3 w-3 mr-2" />} {t('project_management.save_changes', 'Save Changes')}
                           </Button>
                         </div>
                       )}
@@ -793,44 +795,44 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                     {isEditMode ? (
                       <div className="space-y-4">
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Task Title</Label>
+                          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('project_management.task_title', 'Task Title')}</Label>
                           <Input 
                             value={editTitle}
                             onChange={(e) => setEditTitle(e.target.value)}
                             className="text-lg font-bold bg-background/50"
-                            placeholder="Enter task title..."
+                            placeholder={t('project_management.task_title_placeholder', 'Enter task title...')}
                           />
                         </div>
                         
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Task Description</Label>
+                          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('project_management.task_description', 'Task Description')}</Label>
                           <RichTextEditor 
                             value={editDescription}
                             onChange={setEditDescription}
                             className="min-h-[200px] bg-background/50 leading-relaxed"
-                            placeholder="Describe the task in detail..."
+                            placeholder={t('project_management.task_description_placeholder', 'Describe the task in detail...')}
                             onOpenMediaPicker={() => setIsFileManagerOpen(true)}
                           />
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Priority</Label>
+                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('project_management.priority_level', 'Priority')}</Label>
                             <Select value={editPriority} onValueChange={setEditPriority}>
                               <SelectTrigger className="bg-background/50 h-10">
-                                <SelectValue placeholder="Select priority" />
+                                <SelectValue placeholder={t('project_management.select_priority', 'Select priority')} />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="low">Low</SelectItem>
-                                <SelectItem value="medium">Medium</SelectItem>
-                                <SelectItem value="high">High</SelectItem>
-                                <SelectItem value="urgent">Urgent</SelectItem>
+                                <SelectItem value="low">{t('project_management.priority_low', 'Low')}</SelectItem>
+                                <SelectItem value="medium">{t('project_management.priority_medium', 'Medium')}</SelectItem>
+                                <SelectItem value="high">{t('project_management.priority_high', 'High')}</SelectItem>
+                                <SelectItem value="urgent">{t('project_management.priority_urgent', 'Urgent')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           
                           <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Due Date</Label>
+                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('project_management.due_date', 'Due Date')}</Label>
                             <Input 
                               type="date"
                               value={editDueDate}
@@ -844,13 +846,13 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                           <div className="mt-8 space-y-6">
                             <div className="flex items-center gap-2 px-1">
                               <Cpu className="w-4 h-4 text-primary" />
-                              <h3 className="text-sm font-bold uppercase tracking-wider text-primary">Software Development Details</h3>
+                              <h3 className="text-sm font-bold uppercase tracking-wider text-primary">{t('project_management.software_dev_details', 'Software Development Details')}</h3>
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 rounded-2xl bg-primary/[0.02] border border-primary/10 shadow-inner">
                               <div className="space-y-3">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                                  <Terminal className="w-3.5 h-3.5" /> Issue Type
+                                  <Terminal className="w-3.5 h-3.5" /> {t('project_management.issue_type', 'Issue Type')}
                                 </Label>
                                 <div className="grid grid-cols-2 gap-2">
                                   {Object.entries(ISSUE_TYPE_CONFIG).map(([value, config]) => (
@@ -874,7 +876,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
 
                               <div className="space-y-3">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                                  <Zap className="w-3.5 h-3.5" /> Story Points (Fibonacci)
+                                  <Zap className="w-3.5 h-3.5" /> {t('project_management.story_points', 'Story Points')}
                                 </Label>
                                 <div className="flex flex-wrap gap-2">
                                   {STORY_POINTS.map((pts) => (
@@ -897,7 +899,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
 
                               <div className="space-y-3">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                                  <Globe className="w-3.5 h-3.5" /> Environment
+                                  <Globe className="w-3.5 h-3.5" /> {t('project_management.target_environment', 'Environment')}
                                 </Label>
                                 <div className="flex gap-2">
                                   {['none', 'development', 'staging', 'production'].map((env) => (
@@ -920,7 +922,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
 
                               <div className="space-y-3">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                                  <Link className="w-3.5 h-3.5" /> PR URL
+                                  <Link className="w-3.5 h-3.5" /> {t('project_management.pr_reference', 'PR URL')}
                                 </Label>
                                 <div className="relative group">
                                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors">
@@ -943,13 +945,13 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                         <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-foreground">{task.title}</h1>
                         
                         <div className="space-y-3 mb-8">
-                          <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Task Description :</h4>
-                          <div className="text-foreground/90 text-sm sm:text-base leading-relaxed prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: task.description || "No description provided." }} />
+                          <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t('project_management.task_description', 'Task Description')} :</h4>
+                          <div className="text-foreground/90 text-sm sm:text-base leading-relaxed prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: task.description || t('project_management.no_description', "No description provided.") }} />
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-6 border-t border-border/50">
                           <div>
-                            <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">Assigned By</p>
+                            <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">{t('project_management.assigned_by', 'Assigned By')}</p>
                             <div className="flex items-center gap-2.5">
                               <Avatar className="w-8 h-8 ring-2 ring-background">
                                 <AvatarImage src={task.creator?.avatar_path || undefined} />
@@ -959,15 +961,15 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                             </div>
                           </div>
                           <div>
-                            <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">Assigned Date</p>
+                            <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">{t('project_management.assigned_date', 'Assigned Date')}</p>
                             <p className="text-sm font-semibold">{format(new Date(task.created_at), "dd MMM yyyy")}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">Due Date</p>
+                            <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">{t('project_management.due_date', 'Due Date')}</p>
                             <p className="text-sm font-semibold">{task.due_date ? format(new Date(task.due_date), "dd MMM yyyy") : "-"}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">Progress</p>
+                            <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">{t('project_management.progress', 'Progress')}</p>
                             <div className="flex items-center gap-3">
                               <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
                                 <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${task.progress || 0}%` }}></div>
@@ -985,7 +987,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                     <div className="flex items-center justify-between gap-3 mb-8 shrink-0">
                       <div className="flex items-center gap-3">
                         <div className="w-1.5 h-6 bg-primary rounded-full" />
-                        <h3 className="text-lg sm:text-xl font-bold">Task Discussions</h3>
+                        <h3 className="text-lg sm:text-xl font-bold">{t('project_management.task_discussions', 'Task Discussions')}</h3>
                       </div>
                       <div className="flex items-center gap-2">
                         {isSelectMode && selectedIds.size > 0 && (
@@ -997,7 +999,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                                 className="h-8 px-3 text-xs font-bold gap-1.5 rounded-lg"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
-                                Delete {selectedIds.size} selected
+                                {t('project_management.delete_selected', 'Delete {count} selected').replace('{count}', selectedIds.size.toString())}
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56 rounded-xl">
@@ -1006,16 +1008,16 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                                 onClick={() => deleteSelectedComments('me')}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
-                                <span>Delete for me</span>
-                                <span className="ml-auto text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">All</span>
+                                <span>{t('project_management.delete_for_me', 'Delete for me')}</span>
+                                <span className="ml-auto text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{t('project_management.all', 'All')}</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer gap-2 py-2.5" 
                                 onClick={() => deleteSelectedComments('everyone')}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
-                                <span>Delete for everyone</span>
-                                <span className="ml-auto text-[10px] bg-destructive/10 px-1.5 py-0.5 rounded">Admin / Yours</span>
+                                <span>{t('project_management.delete_for_everyone', 'Delete for everyone')}</span>
+                                <span className="ml-auto text-[10px] bg-destructive/10 px-1.5 py-0.5 rounded">{t('project_management.admin_yours', 'Admin / Yours')}</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1030,7 +1032,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                             }}
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" />
-                            {selectedIds.size === visibleCommentIds.length ? "Deselect All" : "Select All"}
+                            {selectedIds.size === visibleCommentIds.length ? t('project_management.deselect_all', 'Deselect All') : t('project_management.select_all', 'Select All')}
                           </Button>
                         )}
                         <Button
@@ -1046,7 +1048,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                           }}
                         >
                           <ListChecks className="h-3.5 w-3.5" />
-                          {isSelectMode ? "Cancel" : "Select"}
+                          {isSelectMode ? t('project_management.cancel', 'Cancel') : t('project_management.select', 'Select')}
                         </Button>
                       </div>
                     </div>
@@ -1073,7 +1075,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                       ) : (
                         <div className="text-center py-12 text-muted-foreground text-sm italic bg-muted/5 rounded-2xl border border-dashed border-border/50 h-full flex flex-col items-center justify-center">
                           <MessageSquare className="h-8 w-8 mx-auto mb-3 opacity-20" />
-                          No comments yet. Start the conversation!
+                          {t('project_management.no_comments_yet', 'No comments yet. Start the conversation!')}
                         </div>
                       )}
                       
@@ -1100,7 +1102,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                         <div className="mb-4 flex items-center justify-between bg-primary/5 px-4 py-2 rounded-2xl border border-primary/10 animate-in slide-in-from-bottom-2">
                           <div className="flex items-center gap-3">
                             <div className="p-1.5 bg-primary/10 rounded-lg"><Reply className="h-3.5 w-3.5 text-primary" /></div>
-                            <p className="text-xs font-bold">Replying to <span className="text-primary">{replyToName}</span></p>
+                            <p className="text-xs font-bold">{t('project_management.replying_to', 'Replying to')} <span className="text-primary">{replyToName}</span></p>
                           </div>
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full hover:bg-primary/10" onClick={() => { setParentId(null); setReplyToName(null); }}>
                             <X className="h-4 w-4" />
@@ -1110,7 +1112,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
 
                       <div className="flex items-center gap-2 mb-3">
                         <MessageSquare className="h-4 w-4 text-primary" />
-                        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Add to conversation</span>
+                        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('project_management.add_to_conversation', 'Add to conversation')}</span>
                       </div>
                       
                       <DiscussionComposer 
@@ -1144,16 +1146,16 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                   <div className="bg-card border rounded-2xl p-6 shadow-sm">
                     <div className="flex items-center gap-3 mb-6">
                       <div className="w-1.5 h-6 bg-primary rounded-full"></div>
-                      <h3 className="text-lg font-bold">Additional Details</h3>
+                      <h3 className="text-lg font-bold">{t('project_management.additional_details', 'Additional Details')}</h3>
                     </div>
                     
                     <div className="space-y-1 text-sm">
                       <div className="flex flex-col sm:flex-row sm:justify-between py-3 border-b border-border/50 gap-1">
-                        <span className="font-semibold text-muted-foreground">Task ID :</span>
+                        <span className="font-semibold text-muted-foreground">{t('project_management.task_id', 'Task ID')} :</span>
                         <span className="font-mono font-medium">SPK - {task?.id?.slice(0, 4).toUpperCase()}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:justify-between py-3 border-b border-border/50 gap-2 items-start sm:items-center">
-                        <span className="font-semibold text-muted-foreground">Task Tags :</span>
+                        <span className="font-semibold text-muted-foreground">{t('project_management.task_tags', 'Task Tags')} :</span>
                         <div className="flex flex-wrap gap-1.5">
                           {(task.tags || ['UI/UX', 'Design']).map((tag: string, i: number) => (
                             <Badge key={i} variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20">{tag}</Badge>
@@ -1161,11 +1163,11 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                         </div>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:justify-between py-3 border-b border-border/50 gap-1">
-                        <span className="font-semibold text-muted-foreground">Project Name :</span>
+                        <span className="font-semibold text-muted-foreground">{t('project_management.project_name', 'Project Name')} :</span>
                         <span className="font-semibold truncate max-w-[200px]" title={task?.project?.name}>{task?.project?.name}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:justify-between py-3 border-b border-border/50 gap-1 sm:items-center">
-                        <span className="font-semibold text-muted-foreground">Priority :</span>
+                        <span className="font-semibold text-muted-foreground">{t('project_management.priority_level', 'Priority')} :</span>
                         <Badge 
                           variant="outline" 
                           className={`uppercase text-[10px] tracking-wider font-bold ${
@@ -1179,7 +1181,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                         </Badge>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:justify-between py-3 gap-2 items-start sm:items-center">
-                        <span className="font-semibold text-muted-foreground">Assigned To :</span>
+                        <span className="font-semibold text-muted-foreground">{t('project_management.assigned_to', 'Assigned To')} :</span>
                         <div className="flex -space-x-2 overflow-hidden py-1">
                           {(task.assignees || []).length > 0 ? (
                             (task.assignees || []).map((assignee: any) => (
@@ -1189,7 +1191,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                               </Avatar>
                             ))
                           ) : (
-                            <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                            <span className="text-xs text-muted-foreground italic">{t('project_management.unassigned', 'Unassigned')}</span>
                           )}
                         </div>
                       </div>
@@ -1198,7 +1200,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                         <div className="pt-4 mt-4 border-t border-border/30 space-y-4">
                           <div className="flex items-center gap-2 mb-2">
                             <Terminal className="w-3.5 h-3.5 text-primary" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-primary">Software Context</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-primary">{t('project_management.software_context', 'Software Context')}</span>
                           </div>
 
                           <div className="flex flex-col sm:flex-row sm:justify-between py-1 gap-1 sm:items-center">
@@ -1272,7 +1274,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                     <div className="flex justify-between items-center mb-6 shrink-0">
                       <div className="flex items-center gap-3">
                         <div className="w-1.5 h-6 bg-primary rounded-full"></div>
-                        <h3 className="text-lg font-bold">Sub Tasks</h3>
+                        <h3 className="text-lg font-bold">{t('project_management.sub_tasks', 'Sub Tasks')}</h3>
                       </div>
                       <Badge variant="secondary" className="font-mono">
                         {task?.checklists?.filter(i => i.is_completed).length || 0}/{task?.checklists?.length || 0}
@@ -1301,7 +1303,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                         <Input 
                           value={checklistItem} 
                           onChange={(e) => setChecklistItem(e.target.value)} 
-                          placeholder="Add new sub-task..." 
+                          placeholder={t('project_management.add_new_sub_task', 'Add new sub-task...')} 
                           className="h-9 border-none bg-transparent focus-visible:ring-0 px-3 text-sm"
                           onKeyDown={(e) => e.key === 'Enter' && checklistItem.trim() && addChecklist.mutate()}
                         />
@@ -1317,13 +1319,13 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                     <div className="flex justify-between items-center mb-6">
                       <div className="flex items-center gap-3">
                         <div className="w-1.5 h-6 bg-primary rounded-full"></div>
-                        <h3 className="text-lg font-bold">Attachments</h3>
+                        <h3 className="text-lg font-bold">{t('project_management.attachments', 'Attachments')}</h3>
                       </div>
                       <Button variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-lg" onClick={() => {
                         setFilePickerContext('attachments');
                         setIsFileManagerOpen(true);
                       }}>
-                        <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                        <Plus className="w-3.5 h-3.5 mr-1" /> {t('project_management.add', 'Add')}
                       </Button>
                     </div>
 
@@ -1424,7 +1426,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                     <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center gap-3">
                         <div className="w-1.5 h-6 bg-primary rounded-full"></div>
-                        <h3 className="text-lg font-bold">Time Tracking</h3>
+                        <h3 className="text-lg font-bold">{t('project_management.time_tracking', 'Time Tracking')}</h3>
                       </div>
                       <Badge variant="outline" className="bg-primary/5 text-primary">
                         {timeLogs?.length || 0} logs
@@ -1460,7 +1462,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                       ) : (
                         <div className="text-center py-8 rounded-xl border border-dashed border-border/60">
                           <HistoryIcon className="h-6 w-6 mx-auto mb-2 text-muted-foreground/30" />
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">No logs yet</p>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{t('project_management.no_logs_yet', 'No logs yet')}</p>
                         </div>
                       )}
                     </div>

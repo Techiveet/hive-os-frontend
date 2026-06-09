@@ -10,12 +10,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { projectApi } from "../api";
 import { toast } from "sonner";
 import { CreateAutomationModal } from "./CreateAutomationModal";
+import { useTranslation } from "@/store/use-translation";
 
 interface ProjectAutomationsProps {
   project: Project;
 }
 
 export function ProjectAutomations({ project }: ProjectAutomationsProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
@@ -44,17 +46,18 @@ export function ProjectAutomations({ project }: ProjectAutomationsProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Workflow Automations</h2>
+          <h2 className="text-2xl font-bold tracking-tight">{t('project_management.workflow_automations', 'Workflow Automations')}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Automate repetitive tasks and keep your project moving efficiently.
+            {t('project_management.automate_repetitive_tasks', 'Automate repetitive tasks and keep your project moving efficiently.')}
           </p>
         </div>
         <Button 
+          id="tour-pm-automations-create"
           className="h-10 gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl"
           onClick={() => setIsCreateModalOpen(true)}
         >
           <Plus className="h-4 w-4" />
-          Create Automation
+          {t('project_management.create_automation', 'Create Automation')}
         </Button>
       </div>
 
@@ -64,7 +67,7 @@ export function ProjectAutomations({ project }: ProjectAutomationsProps) {
         projectId={project.id}
       />
 
-      <div className="grid gap-4">
+      <div id="tour-pm-automations-list" className="grid gap-4">
         {automations.map((automation: any) => (
           <div key={automation.id} className="group flex items-center justify-between p-5 rounded-2xl border bg-card hover:shadow-md transition-all">
             <div className="flex items-start gap-4">
@@ -75,22 +78,22 @@ export function ProjectAutomations({ project }: ProjectAutomationsProps) {
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-lg">{automation.name}</h3>
                   {automation.is_active ? (
-                    <Badge className="bg-emerald-500/10 text-emerald-600 border-none uppercase text-[9px] tracking-widest font-black">Active</Badge>
+                    <Badge className="bg-emerald-500/10 text-emerald-600 border-none uppercase text-[9px] tracking-widest font-black">{t('project_management.active', 'Active')}</Badge>
                   ) : (
-                    <Badge variant="secondary" className="uppercase text-[9px] tracking-widest font-black">Paused</Badge>
+                    <Badge variant="secondary" className="uppercase text-[9px] tracking-widest font-black">{t('project_management.paused', 'Paused')}</Badge>
                   )}
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground font-medium">
-                  <span className="px-2 py-0.5 rounded-md bg-muted/50 text-foreground font-bold">IF</span>
-                  <span>{automation.trigger.replace(/_/g, ' ')}</span>
-                  <span className="px-2 py-0.5 rounded-md bg-muted/50 text-foreground font-bold">THEN</span>
-                  <span className="text-primary font-bold">{automation.action.replace(/_/g, ' ')}</span>
+                  <span className="px-2 py-0.5 rounded-md bg-muted/50 text-foreground font-bold">{t('project_management.if', 'IF')}</span>
+                  <span>{t(`project_management.${automation.trigger}`, automation.trigger.replace(/_/g, ' '))}</span>
+                  <span className="px-2 py-0.5 rounded-md bg-muted/50 text-foreground font-bold">{t('project_management.then', 'THEN')}</span>
+                  <span className="text-primary font-bold">{t(`project_management.${automation.action}`, automation.action.replace(/_/g, ' '))}</span>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 mr-4 pr-4 border-r border-border/50">
-                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Enabled</span>
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('project_management.enabled', 'Enabled')}</span>
                 <Switch 
                   checked={automation.is_active} 
                   onCheckedChange={(checked) => toggleMutation.mutate({ id: automation.id, is_active: checked })}
@@ -118,23 +121,23 @@ export function ProjectAutomations({ project }: ProjectAutomationsProps) {
             <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
               <Zap className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-bold">No automations yet</h3>
+            <h3 className="text-lg font-bold">{t('project_management.no_automations_yet', 'No automations yet')}</h3>
             <p className="text-sm text-muted-foreground mt-2 max-w-sm">
-              Create your first automation to handle repetitive status changes, notifications, or subtask creation.
+              {t('project_management.create_first_automation_desc', 'Create your first automation to handle repetitive status changes, notifications, or subtask creation.')}
             </p>
             <Button variant="outline" className="mt-6 rounded-xl border-dashed">
-              Explore Templates
+              {t('project_management.explore_templates', 'Explore Templates')}
             </Button>
           </div>
         )}
       </div>
 
-      <div className="p-6 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex gap-4">
+      <div id="tour-pm-automations-recommend" className="p-6 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex gap-4">
         <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-bold text-amber-900">Recommended for this project:</p>
+          <p className="text-sm font-bold text-amber-900">{t('project_management.recommended_for_project', 'Recommended for this project:')}</p>
           <p className="text-xs text-amber-700/80 mt-1">
-            We noticed many tasks are being completed without notifications. Consider adding an automation to "Notify Project Manager when a task is marked as Done".
+            {t('project_management.recommended_automation_desc', 'We noticed many tasks are being completed without notifications. Consider adding an automation to "Notify Project Manager when a task is marked as Done".')}
           </p>
         </div>
       </div>

@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Calendar,
   ExternalLink,
+  HelpCircle,
   ChevronRight,
   MoreVertical,
   Layers
@@ -36,8 +37,18 @@ import { useProjectManagementRealtime } from "../hooks/use-project-management-re
 import { format } from "date-fns";
 import type { Task, TaskPriority } from "../types";
 import { cn } from "@/lib/utils";
+import { useTour } from "@/components/providers/tour-provider";
+import { useTranslation } from "@/store/use-translation";
 
 export default function MyWorkPage() {
+  const { t } = useTranslation();
+  const { startTour } = useTour();
+  
+  const myWorkTourSteps = [
+    { target: '#tour-pm-my-work-header', title: t('tour.mywork_header_title', 'Your Command Center'), content: t('tour.mywork_header_desc', 'See everything assigned directly to you.'), placement: 'bottom' as const },
+    { target: '#tour-pm-my-work-stats', title: t('tour.mywork_stats_title', 'Personal Metrics'), content: t('tour.mywork_stats_desc', 'Track your throughput and urgent items.'), placement: 'bottom' as const },
+    { target: '#tour-pm-my-work-list', title: t('tour.mywork_list_title', 'Task Inbox'), content: t('tour.mywork_list_desc', 'Click any task to slide out the detail panel.'), placement: 'top' as const },
+  ];
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<"active" | "completed">("active");
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
@@ -66,54 +77,58 @@ export default function MyWorkPage() {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+      <div id="tour-pm-my-work-header" className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="space-y-2">
           <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
-            My Work
+            {t('project_management.my_work', 'My Work')}
           </h1>
           <p className="text-muted-foreground text-lg font-light">
-            Stay focused on your active responsibilities across all projects.
+            {t('project_management.my_work_desc', 'Stay focused on your active responsibilities across all projects.')}
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => startTour(myWorkTourSteps)} className="h-10 px-4 bg-background/50 backdrop-blur-md rounded-full border-border/50 hover:bg-muted/50 transition-colors">
+            <HelpCircle className="h-4 w-4 mr-2" />
+            {t('topbar.system_tour', 'System Tour')}
+          </Button>
           <div className="flex -space-x-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-10 w-10 rounded-full border-2 border-background bg-muted animate-pulse" />
             ))}
           </div>
           <div className="text-sm font-medium text-muted-foreground bg-secondary/50 px-3 py-1 rounded-full border border-border/50">
-            {stats.count} Tasks Assigned
+            {stats.count} {t('project_management.tasks_assigned', 'Tasks Assigned')}
           </div>
         </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div id="tour-pm-my-work-stats" className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <WorkStat 
-          label="Total Effort" 
+          label={t('project_management.total_effort', 'Total Effort')} 
           value={stats.totalPoints} 
-          subtext="Story Points"
+          subtext={t('project_management.story_points', 'Story Points')}
           icon={Trophy} 
           color="primary" 
         />
         <WorkStat 
-          label="Priority Alert" 
+          label={t('project_management.priority_alert', 'Priority Alert')} 
           value={stats.highPriority} 
-          subtext="High/Urgent"
+          subtext={t('project_management.high_urgent', 'High/Urgent')}
           icon={AlertCircle} 
           color="rose" 
         />
         <WorkStat 
-          label="Approaching" 
+          label={t('project_management.approaching', 'Approaching')} 
           value={stats.dueSoon} 
-          subtext="Next 48 hours"
+          subtext={t('project_management.next_48_hours', 'Next 48 hours')}
           icon={Clock} 
           color="amber" 
         />
         <WorkStat 
-          label="Active Load" 
+          label={t('project_management.active_load', 'Active Load')} 
           value={stats.count} 
-          subtext="Across projects"
+          subtext={t('project_management.across_projects', 'Across projects')}
           icon={Layout} 
           color="emerald" 
         />
@@ -122,7 +137,7 @@ export default function MyWorkPage() {
       <GlobalResourceHeatmap />
 
       {/* Main Content Area */}
-      <div className="flex flex-col gap-6 bg-card/30 backdrop-blur-2xl p-6 rounded-[2rem] border border-white/5 shadow-2xl overflow-hidden relative">
+      <div id="tour-pm-my-work-list" className="flex flex-col gap-6 bg-card/30 backdrop-blur-2xl p-6 rounded-[2rem] border border-white/5 shadow-2xl overflow-hidden relative">
         <div className="absolute top-0 right-0 p-12 bg-primary/5 blur-[100px] rounded-full pointer-events-none" />
         
         {/* Filters Row */}
@@ -130,7 +145,7 @@ export default function MyWorkPage() {
           <div className="relative w-full md:w-96">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
             <Input 
-              placeholder="Search in my work..." 
+              placeholder={t('project_management.search_in_my_work', 'Search in my work...')} 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-11 pl-11 bg-background/50 border-white/10 rounded-xl focus-visible:ring-primary/30"
@@ -143,14 +158,14 @@ export default function MyWorkPage() {
               onClick={() => setStatusFilter("active")}
               className="h-9 rounded-lg px-4 transition-all"
             >
-              Active
+              {t('project_management.active_status', 'Active')}
             </Button>
             <Button
               variant={statusFilter === "completed" ? "secondary" : "ghost"}
               onClick={() => setStatusFilter("completed")}
               className="h-9 rounded-lg px-4 transition-all"
             >
-              Completed
+              {t('project_management.completed_status', 'Completed')}
             </Button>
             <div className="h-4 w-px bg-white/10 mx-1" />
             <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg">
@@ -171,6 +186,7 @@ export default function MyWorkPage() {
                 key={task.id} 
                 task={task} 
                 onClick={() => setSelectedTaskId(task.id)} 
+                t={t}
               />
             ))
           ) : (
@@ -179,8 +195,8 @@ export default function MyWorkPage() {
                 <CheckCircle2 className="h-12 w-12 text-primary/30" />
               </div>
               <div>
-                <p className="text-xl font-semibold">You're all caught up!</p>
-                <p className="text-muted-foreground">No tasks matching your filters.</p>
+                <p className="text-xl font-semibold">{t('project_management.all_caught_up', "You're all caught up!")}</p>
+                <p className="text-muted-foreground">{t('project_management.no_tasks_found', 'No tasks matching your filters.')}</p>
               </div>
             </div>
           )}
@@ -234,7 +250,7 @@ function WorkStat({
   );
 }
 
-function TaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
+function TaskRow({ task, onClick, t }: { task: Task; onClick: () => void; t: any }) {
   const priorityColor = {
     urgent: "bg-rose-500/10 text-rose-500 border-rose-500/20",
     high: "bg-orange-500/10 text-orange-500 border-orange-500/20",
@@ -291,7 +307,7 @@ function TaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
         <div className="flex items-center gap-6">
           {task.due_date && (
             <div className="flex flex-col items-center md:items-end">
-              <span className="text-[10px] uppercase font-bold opacity-40">Due Date</span>
+              <span className="text-[10px] uppercase font-bold opacity-40">{t('project_management.due_date', 'Due Date')}</span>
               <span className={cn(
                 "text-sm font-medium flex items-center gap-1.5",
                 new Date(task.due_date) < new Date() ? "text-rose-500" : "text-muted-foreground"
@@ -303,7 +319,7 @@ function TaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
           )}
 
           <div className="flex flex-col items-center md:items-end">
-            <span className="text-[10px] uppercase font-bold opacity-40">Priority</span>
+            <span className="text-[10px] uppercase font-bold opacity-40">{t('project_management.priority', 'Priority')}</span>
             <Badge className={cn("mt-1 font-bold", priorityColor[task.priority])}>
               {task.priority}
             </Badge>

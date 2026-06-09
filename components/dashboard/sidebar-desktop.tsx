@@ -712,7 +712,7 @@ function SidebarInner({
                           >
                             <ListTodo className="h-4 w-4 shrink-0 text-primary" />
                             <span className="truncate font-bold text-foreground">
-                              Project Management
+                              {t("nav.project_management", "Project Management")}
                             </span>
                           </Link>
                           <button
@@ -744,7 +744,7 @@ function SidebarInner({
                               )}
                             >
                               <LayoutDashboard className="h-4 w-4 shrink-0" />
-                              <span>Overview</span>
+                              <span>{t("nav.pm_overview", "Overview")}</span>
                             </Link>
 
                             <Link
@@ -759,7 +759,7 @@ function SidebarInner({
                               )}
                             >
                               <KanbanSquare className="h-4 w-4 shrink-0" />
-                              <span>Projects</span>
+                              <span>{t("nav.pm_projects", "Projects")}</span>
                             </Link>
 
                             <Link
@@ -774,7 +774,7 @@ function SidebarInner({
                               )}
                             >
                               <CheckCircle className="h-4 w-4 shrink-0" />
-                              <span>My Tasks</span>
+                              <span>{t("nav.pm_my_tasks", "My Tasks")}</span>
                             </Link>
 
                             <div className="pt-2 pb-1 pr-2">
@@ -790,7 +790,7 @@ function SidebarInner({
                                 }}
                               >
                                 <Plus className="h-3.5 w-3.5" />
-                                Create Project
+                                {t("nav.pm_create_project", "Create Project")}
                               </Button>
                             </div>
                           </div>
@@ -954,7 +954,7 @@ function SidebarInner({
                       )}
                     >
                       <RefreshCcw className="h-4 w-4 shrink-0" />
-                      <span className="truncate">Converters</span>
+                      <span className="truncate">{t("nav.tools_converters", "Converters")}</span>
                     </Link>
                   )}
                   {canAccessConverter && (
@@ -1036,7 +1036,7 @@ function SidebarInner({
                   {canAccessConverter && (
                     <Link
                       href="/dashboard/tools/converters"
-                      title="Converters Hub"
+                      title={t("nav.tools_converters_hub", "Converters Hub")}
                       className={cn(
                         "group flex items-center justify-center rounded-xl px-0 py-2.5 text-[13px] transition-all duration-200 mt-1",
                         pathname.startsWith("/dashboard/tools/converters")

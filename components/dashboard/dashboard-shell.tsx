@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
-import { OfflineStatusBanner } from "@/components/offline/offline-status-banner";
 import { syncUserSession } from "@/lib/auth-sync";
 import { DashboardFooter } from "./footer";
 import { DashboardSidebarDesktop } from "./sidebar-desktop";
@@ -122,7 +121,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           >
             <div className="min-h-full w-full rounded-2xl md:rounded-[2.5rem] border border-border/40 bg-card/60 p-3 sm:p-5 md:p-6 lg:p-8 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-500 relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 pointer-events-none" />
-              <OfflineStatusBanner />
               <div className="relative z-10">
                 {children}
               </div>

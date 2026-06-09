@@ -744,7 +744,7 @@ function DataTableInner<TData, TValue>({
               ) : table.getRowModel().rows.length ? (
                 table.getRowModel().rows.map((row) => (
                   <React.Fragment key={row.id}>
-                    <TableRow className={cn("border-b border-border/40 hover:bg-muted/20 transition-colors", row.getIsSelected() && "bg-primary/5")} data-state={row.getIsSelected() && "selected"}>
+                    <TableRow className={cn("border-b border-border/40 hover:bg-muted/20 transition-colors group", row.getIsSelected() && "bg-primary/5")} data-state={row.getIsSelected() && "selected"}>
                       {row.getVisibleCells().map((cell) => (
                         <TableCell 
                           key={cell.id} 

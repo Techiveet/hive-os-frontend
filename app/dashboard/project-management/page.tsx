@@ -11,7 +11,8 @@ import {
   Clock, 
   TrendingUp,
   ArrowRight,
-  Plus
+  Plus,
+  HelpCircle
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ProjectCard } from "@/modules/projectmanagement/components/ProjectCard";
@@ -22,9 +23,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useProjectManagementRealtime } from "@/modules/projectmanagement/hooks/use-project-management-realtime";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useTour } from "@/components/providers/tour-provider";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useTranslation } from "@/store/use-translation";
 
 export default function ProjectDashboard() {
+  const { t } = useTranslation();
+  const { startTour } = useTour();
+  
+  const overviewTourSteps = [
+    { target: '#tour-pm-header', title: t('tour.overview_header_title', 'Project Command Center'), content: t('tour.overview_header_desc', 'Welcome to the central hub for all your initiatives.'), placement: 'bottom' as const },
+    { target: '#tour-pm-stats', title: t('tour.stats_grid_title', 'Live Metrics Grid'), content: t('tour.stats_grid_desc', 'Track your total projects and active workloads.'), placement: 'bottom' as const },
+    { target: '#tour-pm-charts', title: t('tour.charts_title', 'Predictive Analytics'), content: t('tour.charts_desc', 'Visualize issue distribution and project velocities.'), placement: 'top' as const },
+    { target: '#tour-pm-recent', title: t('tour.recent_projects_title', 'Recent Activity'), content: t('tour.recent_projects_desc', 'Jump right back into the projects you recently interacted with.'), placement: 'top' as const }
+  ];
   useProjectManagementRealtime();
   const { hasAnyPermission } = usePermissions();
 
@@ -97,31 +109,35 @@ export default function ProjectDashboard() {
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 pt-4"
+        id="tour-pm-header" className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 pt-4"
       >
         <div className="space-y-4">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-black uppercase tracking-widest animate-in fade-in slide-in-from-left duration-700">
             <TrendingUp className="h-3 w-3" />
-            Live Analytics Console
+            {t('project_management.live_analytics', 'Live Analytics Console')}
           </div>
           <h1 className="text-5xl font-black tracking-tighter sm:text-7xl">
             <span className="bg-gradient-to-br from-foreground via-foreground to-foreground/40 bg-clip-text text-transparent">
-              Project
+              {t('project_management.project', 'Project')}
             </span>
             <span className="text-primary inline-block ml-3 drop-shadow-[0_0_20px_hsl(var(--primary)/0.3)]">
-              Hub
+              {t('project_management.hub', 'Hub')}
             </span>
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl font-medium leading-relaxed">
-            Monitor your organization&apos;s projects, track completion velocity, and manage resource distribution in real-time with our high-fidelity command center.
+            {t('project_management.dashboard_desc', "Monitor your organization's projects, track completion velocity, and manage resource distribution in real-time with our high-fidelity command center.")}
           </p>
         </div>
         {canCreateProject && (
           <div className="flex items-center gap-3">
+            <Button variant="outline" size="lg" onClick={() => startTour(overviewTourSteps)} className="rounded-2xl h-14 px-6 border-border/50 bg-background/50 backdrop-blur-md hover:bg-muted/50 transition-colors">
+                <HelpCircle className="h-5 w-5 mr-2" />
+                {t('topbar.system_tour', 'System Tour')}
+            </Button>
             <Link href="/dashboard/project-management/projects">
                 <Button size="lg" className="rounded-2xl h-14 px-8 shadow-2xl shadow-primary/30 hover:scale-105 active:scale-95 transition-all duration-300 font-bold tracking-tight">
                     <Plus className="h-5 w-5 mr-2 stroke-[3]" />
-                    Initialize Project
+                    {t('project_management.initialize_project', 'Initialize Project')}
                 </Button>
             </Link>
           </div>
@@ -129,69 +145,69 @@ export default function ProjectDashboard() {
       </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+      <div id="tour-pm-stats" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
         <StatCard 
-          title="Total Projects" 
+          title={t('project_management.total_projects', 'Total Projects')} 
           value={stats.total} 
           icon={Briefcase} 
-          description="Global workspace count"
+          description={t('project_management.global_workspace_count', 'Global workspace count')}
           index={0}
         />
         <StatCard 
-          title="Active Now" 
+          title={t('project_management.active_now', 'Active Now')} 
           value={stats.active} 
           icon={TrendingUp} 
           color="text-emerald-500"
           bgClass="bg-emerald-500/10"
-          description="Currently in progress"
+          description={t('project_management.currently_in_progress', 'Currently in progress')}
           index={1}
         />
         <StatCard 
-          title="Overdue" 
+          title={t('project_management.overdue', 'Overdue')} 
           value={overdueProjects} 
           icon={Clock} 
           color="text-rose-500"
           bgClass="bg-rose-500/10"
-          description="Critical attention needed"
+          description={t('project_management.critical_attention_needed', 'Critical attention needed')}
           index={2}
           isAlert={overdueProjects > 0}
         />
         <StatCard 
-          title="At Risk" 
+          title={t('project_management.at_risk', 'At Risk')} 
           value={atRiskProjects} 
           icon={Clock} 
           color="text-orange-500"
           bgClass="bg-orange-500/10"
-          description="Due soon / Low progress"
+          description={t('project_management.due_soon', 'Due soon / Low progress')}
           index={3}
           isAlert={atRiskProjects > 0}
         />
         <StatCard 
-          title="Completed" 
+          title={t('project_management.completed', 'Completed')} 
           value={stats.completed} 
           icon={CheckCircle2} 
           color="text-blue-500"
           bgClass="bg-blue-500/10"
-          description="Successfully delivered"
+          description={t('project_management.successfully_delivered', 'Successfully delivered')}
           index={4}
         />
       </div>
 
       {/* Charts Section */}
-      <div className="space-y-6">
+      <div id="tour-pm-charts" className="space-y-6">
         <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold tracking-tight">Analytics Dashboard</h2>
+            <h2 className="text-2xl font-bold tracking-tight">{t('project_management.analytics_dashboard', 'Analytics Dashboard')}</h2>
         </div>
         <DashboardCharts projects={allProjects} issueTypeDistribution={summary?.issue_type_distribution || []} />
       </div>
 
       {/* Recent Projects Section */}
-      <div className="space-y-6">
+      <div id="tour-pm-recent" className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold tracking-tight">Recent Projects</h2>
+          <h2 className="text-2xl font-bold tracking-tight">{t('project_management.recent_projects', 'Recent Projects')}</h2>
           <Link href="/dashboard/project-management/projects">
             <Button variant="ghost" className="text-muted-foreground hover:text-foreground group">
-                All Projects
+                {t('project_management.all_projects', 'All Projects')}
                 <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
             </Button>
           </Link>
@@ -213,10 +229,10 @@ export default function ProjectDashboard() {
                       <div className="h-16 w-16 bg-muted/50 rounded-2xl flex items-center justify-center mx-auto">
                         <Briefcase className="h-8 w-8 text-muted-foreground" />
                       </div>
-                      <p className="text-muted-foreground text-lg">No recent activity detected. Ready to launch your next project?</p>
+                      <p className="text-muted-foreground text-lg">{t('project_management.no_recent_activity', 'No recent activity detected. Ready to launch your next project?')}</p>
                       {canCreateProject && (
                         <Link href="/dashboard/project-management/projects" className="inline-block">
-                          <Button variant="outline" className="rounded-full">Get Started</Button>
+                          <Button variant="outline" className="rounded-full">{t('project_management.get_started', 'Get Started')}</Button>
                         </Link>
                       )}
                   </div>
@@ -283,6 +299,7 @@ function StatCard({
             <CardContent className="pb-10 px-10">
                 <div className="text-5xl font-black tracking-tighter mb-2 leading-none flex items-baseline gap-1">
                     {value}
+                    {/* Note: 'units' can be localized if passed via props, assuming stat context is known */}
                     <span className="text-xs font-bold text-muted-foreground/40 tracking-normal">units</span>
                 </div>
                 <div className="flex items-center gap-2">

@@ -154,6 +154,32 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
     const handleJoyrideEvent = (data: EventData) => {
         const { status, type, action, index } = data;
 
+        if (type === EVENTS.TOOLTIP) {
+            const stepTarget = steps[index]?.target as string;
+            if (stepTarget) {
+                const element = document.querySelector(stepTarget);
+                if (element) {
+                    // Find the nearest scrollable parent
+                    const scrollParent = (function getScrollParent(node: HTMLElement | null): HTMLElement | null {
+                        if (node == null) {
+                            return null;
+                        }
+                        if (node.scrollHeight > node.clientHeight) {
+                            return node;
+                        } else {
+                            return getScrollParent(node.parentNode as HTMLElement);
+                        }
+                    })(element as HTMLElement);
+
+                    // If it's inside our dashboard scroll container or any scroll container
+                    setTimeout(() => {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 50);
+                }
+            }
+        }
+
+
         if (type === EVENTS.TARGET_NOT_FOUND) {
             setStepIndex(index + (action === 'prev' ? -1 : 1));
         } else if (type === EVENTS.STEP_AFTER) {

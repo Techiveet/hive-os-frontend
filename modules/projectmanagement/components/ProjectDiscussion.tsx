@@ -32,6 +32,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useProjectManagementRealtime } from "../hooks/use-project-management-realtime";
 import { useUser } from "@/hooks/use-user";
+import { useTranslation } from "@/store/use-translation";
 import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
 import { motion, AnimatePresence } from "framer-motion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -55,7 +56,9 @@ const getStorageUrl = (url: string | null | undefined) => {
 };
 
 export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
+
   const [parentId, setParentId] = React.useState<number | null>(null);
   const [replyToName, setReplyToName] = React.useState<string | null>(null);
   const [attachments, setAttachments] = React.useState<ProjectAttachment[]>([]);
@@ -321,12 +324,12 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
       setReplyToName(null);
       setAttachments([]);
       queryClient.invalidateQueries({ queryKey: ["project-comments", projectId] });
-      toast.success("Message posted");
+      toast.success(t("project_management.message_posted", "Message posted"));
       setIsAtBottom(true);
       setTimeout(() => scrollToBottom("smooth"), 150);
     },
     onError: (error: any) => {
-      toast.error(error?.response?.data?.message || "Failed to post message");
+      toast.error(error?.response?.data?.message || t("project_management.failed_to_post_message", "Failed to post message"));
     }
   });
 
@@ -337,7 +340,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
       setEditingCommentId(null);
       setEditContent("");
       queryClient.invalidateQueries({ queryKey: ["project-comments", projectId] });
-      toast.success("Message updated");
+      toast.success(t("project_management.message_updated", "Message updated"));
     },
   });
 
@@ -370,7 +373,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
 
       const confirmDescription = deletableForEveryoneCount === ids.length 
         ? "This action will remove the content and attachments for all participants. This cannot be undone."
-        : `You only have permission to delete ${deletableForEveryoneCount} of the selected messages for everyone. The remaining ${ids.length - deletableForEveryoneCount} will only be hidden for you.`;
+        : t("project_management.delete_permission_warning", "You only have permission to delete {x} of the selected messages for everyone. The remaining {y} will only be hidden for you.", { x: deletableForEveryoneCount, y: ids.length - deletableForEveryoneCount });
 
       setDeleteConfirm({
         isOpen: true,
@@ -712,8 +715,8 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
             <MessageSquare className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h3 className="font-bold tracking-tight">Project Discussion</h3>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Team Collaboration</p>
+            <h3 className="font-bold tracking-tight">{t("project_management.project_discussion", "Project Discussion")}</h3>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">{t("project_management.team_collaboration", "Team Collaboration")}</p>
           </div>
         </div>
 
@@ -727,7 +730,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
                   className="h-8 px-3 text-xs font-bold gap-1.5 rounded-lg shadow-lg shadow-destructive/20 animate-in fade-in slide-in-from-right-4"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Delete {selectedIds.size} selected
+                  {t("project_management.delete_selected", "Delete {count} selected", { count: selectedIds.size })}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 rounded-xl border-border/50 backdrop-blur-md">
@@ -764,7 +767,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
             }}
           >
             {isSelectMode ? <X className="h-4 w-4" /> : <ListChecks className="h-4 w-4" />}
-            {isSelectMode ? "Cancel Select" : "Select"}
+            {isSelectMode ? t("project_management.cancel_select", "Cancel Select") : t("project_management.select", "Select")}
           </Button>
 
           {isSelectMode && (
@@ -781,7 +784,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
               }}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              {selectedIds.size === visibleCommentIds.length ? "Deselect All" : "Select All"}
+              {selectedIds.size === visibleCommentIds.length ? t("project_management.deselect_all", "Deselect All") : t("project_management.select_all", "Select All")}
             </Button>
           )}
 
@@ -808,7 +811,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
               <X className="h-8 w-8 text-destructive" />
             </div>
             <h4 className="font-bold text-foreground/80">Failed to load messages</h4>
-            <Button variant="outline" size="sm" className="mt-4" onClick={() => queryClient.invalidateQueries({ queryKey: ["project-comments", projectId] })}>Retry</Button>
+            <Button variant="outline" size="sm" className="mt-4" onClick={() => queryClient.invalidateQueries({ queryKey: ["project-comments", projectId] })}>{t("project_management.retry_loading", "Retry")}</Button>
           </div>
         ) : groupedItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -833,8 +836,8 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
                 if ('isDateDivider' in item) {
                   const dividerDate = new Date(item.date);
                   let label = format(dividerDate, "MMMM d, yyyy");
-                  if (isToday(dividerDate)) label = "Today";
-                  else if (isYesterday(dividerDate)) label = "Yesterday";
+                  if (isToday(dividerDate)) label = t("project_management.today", "Today");
+                  else if (isYesterday(dividerDate)) label = t("project_management.yesterday", "Yesterday");
 
                   return (
                     <motion.div key={`date-${item.date}`} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex items-center gap-4 py-4">
@@ -893,7 +896,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
 
         <div className="flex items-center gap-2 mb-3">
           <MessageSquare className="h-4 w-4 text-primary" />
-          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Add to conversation</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t("project_management.add_to_conversation", "Add to conversation")}</span>
         </div>
 
         <DiscussionComposer 
@@ -913,7 +916,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
       <Dialog open={isFileManagerOpen} onOpenChange={setIsFileManagerOpen}>
         <DialogContent className="sm:max-w-[1000px] h-[80vh] flex flex-col p-0 overflow-hidden rounded-3xl border-none shadow-2xl z-[10000]">
           <div className="flex items-center justify-between border-b border-border/40 px-6 py-4 bg-muted/20">
-            <DialogTitle className="font-bold tracking-tight text-lg">Select Project Files</DialogTitle>
+            <DialogTitle className="font-bold tracking-tight text-lg">{t("project_management.select_project_files", "Select Project Files")}</DialogTitle>
             <Button variant="ghost" size="icon" onClick={() => setIsFileManagerOpen(false)} className="rounded-full h-8 w-8">
               <X className="h-4 w-4" />
             </Button>

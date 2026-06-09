@@ -66,6 +66,9 @@ export type HospitalityServiceOrderItem = {
   quantity: string;
   unit_price: string;
   total_price: string;
+  is_comp?: boolean;
+  comp_reason?: string | null;
+  stock_deducted?: boolean;
 };
 
 export type HospitalityServiceOrder = {
@@ -77,41 +80,145 @@ export type HospitalityServiceOrder = {
   notes?: string | null;
   total_amount: string;
   served_by_id?: number | null;
+  created_at?: string;
+  updated_at?: string;
   location?: {
     id: number;
-    label: string;
+    name?: string;
+    label?: string;
+    table_type?: string;
   } | null;
+  reservation?: HospitalityReservation | null;
+  served_by?: HospitalityStaff | null;
   items: HospitalityServiceOrderItem[];
 };
 
 export type HospitalityMenuCategory = {
   id: number;
   name: string;
-  slug: string;
+  slug?: string;
+  color?: string | null;
+  icon?: string | null;
+  sort_order?: number | null;
+  is_active?: boolean;
 };
 
 export type HospitalityMenuItem = {
   id: number;
   category_id: number;
+  inventory_item_id?: number | null;
   name: string;
+  description?: string | null;
   price: string;
+  cost_price?: string | null;
   is_available: boolean;
+  is_featured: boolean;
+  preparation_time_minutes?: number | null;
+  allergens?: string[] | null;
+  tags?: string[] | null;
+  image_url?: string | null;
+  model_3d_url?: string | null;
+  sort_order?: number | null;
+  category?: HospitalityMenuCategory | null;
 };
 
 export type HospitalityEvent = {
   id: number;
   name: string;
-  event_type: string;
+  description?: string | null;
+  event_type: "party" | "private" | "corporate" | "promotion" | "live_music" | "other";
   start_at: string;
   end_at: string;
+  is_private: boolean;
+  min_guests?: number | null;
+  max_guests?: number | null;
+  ticket_price?: string | null;
+  status: "draft" | "published" | "cancelled" | "completed";
+  organizer_id?: number | null;
+  cover_image_url?: string | null;
+  notes?: string | null;
+  organizer?: HospitalityStaff | null;
+  blocked_locations_count?: number;
+  reservations_count?: number;
+};
+
+export type HospitalityStaffShift = {
+  id: number;
+  staff_id: number;
+  shift_date: string;
+  start_at: string;
+  end_at: string;
+  zone?: string | null;
+  role?: "host" | "waiter" | "bartender" | "chef" | "manager" | "security" | "other" | null;
+  is_confirmed: boolean;
+  notes?: string | null;
+  staff?: HospitalityStaff | null;
+  created_by?: HospitalityStaff | null;
 };
 
 export type HospitalityCustomer = {
   id: number;
   name: string;
   phone: string;
+  email?: string | null;
+  date_of_birth?: string | null;
+  tier?: "bronze" | "silver" | "gold" | "platinum" | "none" | null;
+  preferences?: string[] | null;
+  allergies?: string[] | null;
+  notes?: string | null;
   loyalty_points: number;
+  total_spend?: string;
+  last_visit_at?: string | null;
+  reservations_count?: number;
 };
+
+export type HospitalityWaitlistEntry = {
+  id: number;
+  customer_name: string;
+  customer_phone: string;
+  party_size: number;
+  preferred_zone?: string | null;
+  notes?: string | null;
+  status: "waiting" | "notified" | "seated" | "cancelled" | "no_show";
+  estimated_wait_minutes?: number | null;
+  seated_at?: string | null;
+  reservation_id?: number | null;
+  created_at: string;
+  reservation?: {
+    id: number;
+    reservation_code: string;
+  } | null;
+};
+
+export type HospitalityFeedback = {
+  id: number;
+  reservation_id?: number | null;
+  service_order_id?: number | null;
+  customer_name: string;
+  customer_phone?: string | null;
+  rating: number;
+  food_rating?: number | null;
+  service_rating?: number | null;
+  ambiance_rating?: number | null;
+  comment?: string | null;
+  tags?: string[] | null;
+  is_published: boolean;
+  response?: string | null;
+  responded_at?: string | null;
+  responded_by_id?: number | null;
+  created_at: string;
+  reservation?: {
+    id: number;
+    reservation_code: string;
+  } | null;
+  respondedBy?: {
+    id: number;
+    name: string;
+    email: string;
+  } | null;
+};
+
+
 
 export type HospitalityOverview = {
   tables: {
@@ -137,6 +244,18 @@ export type HospitalityOverview = {
   analytics?: {
     guest_arrivals?: { status: string; count: number }[];
     promoter_stats?: HospitalityPromoterCommission[];
+    popular_items?: { name: string; quantity: number }[];
+    table_status_breakdown?: { status: string; count: number }[];
+    table_type_breakdown?: { type: string; count: number }[];
+    revenue_trend?: { date: string; revenue: number }[];
+    busy_hours?: { hour: string; count: number }[];
+    weekly_reservations_trend?: { date: string; count: number }[];
+    comps_breakdown?: { reason: string; value: number }[];
+  };
+  financials?: {
+    daily: { income: number; expenses: number; comps: number; net_revenue: number };
+    weekly: { income: number; expenses: number; comps: number; net_revenue: number };
+    monthly: { income: number; expenses: number; comps: number; net_revenue: number };
   };
   business_type?: string;
 };

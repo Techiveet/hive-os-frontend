@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/store/use-translation";
 
 interface ResourceHeatmapProps {
   project: Project;
@@ -14,6 +15,7 @@ interface ResourceHeatmapProps {
 }
 
 export function ResourceHeatmap({ project, tasks }: ResourceHeatmapProps) {
+  const { t } = useTranslation();
   const startDate = startOfWeek(new Date(), { weekStartsOn: 1 });
   const endDate = addDays(startDate, 13); // 2 weeks
   const days = eachDayOfInterval({ start: startDate, end: endDate });
@@ -53,24 +55,24 @@ export function ResourceHeatmap({ project, tasks }: ResourceHeatmapProps) {
   };
 
   return (
-    <div className="bg-card border rounded-2xl p-6 shadow-sm overflow-hidden">
+    <div id="tour-pm-resource-table" className="bg-card border rounded-2xl p-6 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h3 className="text-xl font-bold">Resource Workload Heatmap</h3>
-          <p className="text-sm text-muted-foreground mt-1">Allocation across the next 14 days</p>
+          <h3 className="text-xl font-bold">{t('project_management.resource_workload_heatmap', 'Resource Workload Heatmap')}</h3>
+          <p className="text-sm text-muted-foreground mt-1">{t('project_management.allocation_across_days', 'Allocation across the next 14 days')}</p>
         </div>
         <div className="flex items-center gap-4 text-xs font-medium">
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded bg-muted/30" /> <span>Free</span>
+            <div className="w-3 h-3 rounded bg-muted/30" /> <span>{t('project_management.free', 'Free')}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded bg-emerald-200" /> <span>Optimal</span>
+            <div className="w-3 h-3 rounded bg-emerald-200" /> <span>{t('project_management.optimal', 'Optimal')}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded bg-amber-200" /> <span>Busy</span>
+            <div className="w-3 h-3 rounded bg-amber-200" /> <span>{t('project_management.busy', 'Busy')}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded bg-rose-200" /> <span>Overloaded</span>
+            <div className="w-3 h-3 rounded bg-rose-200" /> <span>{t('project_management.overloaded', 'Overloaded')}</span>
           </div>
         </div>
       </div>
@@ -79,10 +81,10 @@ export function ResourceHeatmap({ project, tasks }: ResourceHeatmapProps) {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="p-3 text-left text-xs font-bold uppercase tracking-widest text-muted-foreground border-b min-w-[200px]">Team Member</th>
+              <th className="p-3 text-left text-xs font-bold uppercase tracking-widest text-muted-foreground border-b min-w-[200px]">{t('project_management.team_member', 'Team Member')}</th>
               {days.map(day => (
                 <th key={day.toISOString()} className="p-3 text-center border-b min-w-[40px]">
-                  <p className="text-[10px] font-black text-muted-foreground uppercase">{format(day, "EEE")}</p>
+                  <p className="text-[10px] font-black text-muted-foreground uppercase">{t(`project_management.${format(day, "EEE").toLowerCase()}`, format(day, "EEE"))}</p>
                   <p className={cn(
                     "text-xs font-bold mt-1",
                     isSameDay(day, new Date()) && "text-primary"
@@ -106,7 +108,7 @@ export function ResourceHeatmap({ project, tasks }: ResourceHeatmapProps) {
                     </Avatar>
                     <div>
                       <p className="text-sm font-bold truncate max-w-[120px]">{member.name}</p>
-                      <p className="text-[10px] text-muted-foreground truncate max-w-[120px] font-medium">Developer</p>
+                      <p className="text-[10px] text-muted-foreground truncate max-w-[120px] font-medium">{t('project_management.developer', 'Developer')}</p>
                     </div>
                   </div>
                 </td>
@@ -125,7 +127,7 @@ export function ResourceHeatmap({ project, tasks }: ResourceHeatmapProps) {
                             </div>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p className="font-bold text-xs">{count} active tasks</p>
+                            <p className="font-bold text-xs">{count} {t('project_management.active_tasks', 'active tasks')}</p>
                             <p className="text-[10px] opacity-70">{format(day, "PPP")}</p>
                           </TooltipContent>
                         </Tooltip>

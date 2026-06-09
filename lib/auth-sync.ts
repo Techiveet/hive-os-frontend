@@ -12,10 +12,16 @@ export const clearHiveSession = (ejectReason?: string) => {
   localStorage.removeItem("hive_context_signature");
   clearSessionActivity();
   window.dispatchEvent(new Event("hive_session_cleared"));
+  window.dispatchEvent(new Event("hive_session_changed"));
 
   if (ejectReason) {
     sessionStorage.setItem("hive_eject_reason", ejectReason);
   }
+};
+
+export const notifySessionChanged = (): void => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("hive_session_changed"));
 };
 
 export const handleAuthFailureResponse = async (response: Response): Promise<boolean> => {

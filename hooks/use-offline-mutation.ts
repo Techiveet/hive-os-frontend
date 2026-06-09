@@ -12,6 +12,8 @@ import {
 import {
   enqueueOfflineMutation,
   isLikelyOfflineMutationError,
+  isOfflineMutationQueuedResult,
+  markOfflineManagedRequest,
   processOfflineMutationQueue,
   type OfflineMutationDefinition,
   type OfflineQueuedMutationResult,
@@ -41,52 +43,77 @@ export const useOfflineMutation = <
 >(
   options: UseOfflineMutationOptions<TData, TError, TVariables, TContext>,
 ): UseOfflineMutationResult<TData, TError, TVariables, TContext> => {
-  const { definition, onQueued, ...mutationOptions } = options;
+  const { definition, onQueued, onSuccess, ...mutationOptions } = options;
   const queryClient = useQueryClient();
+
+  const wrappedExecute = React.useCallback(
+    async (variables: TVariables): Promise<TData> => {
+      if (!onlineManager.isOnline()) {
+        const queued = enqueueOfflineMutation(definition.key, definition.label, variables);
+        onQueued?.(variables, queued);
+        return queued as unknown as TData;
+      }
+
+      const release = markOfflineManagedRequest();
+      try {
+        return await definition.execute(variables);
+      } catch (error) {
+        if (isLikelyOfflineMutationError(error)) {
+          const queued = enqueueOfflineMutation(definition.key, definition.label, variables);
+          onQueued?.(variables, queued);
+          return queued as unknown as TData;
+        }
+        throw error;
+      } finally {
+        release();
+      }
+    },
+    [definition, onQueued],
+  );
+
+  const wrappedOnSuccess = React.useCallback(
+    (data: TData, variables: TVariables, context: TContext) => {
+      if (isOfflineMutationQueuedResult(data)) {
+        // Already routed to onQueued inside wrappedExecute. Don't fire onSuccess.
+        return;
+      }
+      (onSuccess as ((d: TData, v: TVariables, c: TContext) => void) | undefined)?.(
+        data,
+        variables,
+        context,
+      );
+    },
+    [onSuccess],
+  );
 
   const mutation = useMutation<TData, TError, TVariables, TContext>({
     ...mutationOptions,
     mutationKey: [definition.key],
-    mutationFn: definition.execute,
-    networkMode: "online",
+    mutationFn: wrappedExecute,
+    networkMode: "always",
+    onSuccess: wrappedOnSuccess as unknown as UseMutationOptions<
+      TData,
+      TError,
+      TVariables,
+      TContext
+    >["onSuccess"],
   });
-
-  const queueMutation = React.useCallback(
-    (variables: TVariables) => {
-      const queued = enqueueOfflineMutation(definition.key, definition.label, variables);
-      onQueued?.(variables, queued);
-      return queued;
-    },
-    [definition.key, definition.label, onQueued],
-  );
 
   const mutateAsync = React.useCallback(
     async (variables: TVariables) => {
-      if (!onlineManager.isOnline()) {
-        return queueMutation(variables);
-      }
-
-      try {
-        const result = await mutation.mutateAsync(variables);
-        void processOfflineMutationQueue(queryClient);
-        return result;
-      } catch (error) {
-        if (isLikelyOfflineMutationError(error)) {
-          return queueMutation(variables);
-        }
-
-        throw error;
-      }
+      const result = await mutation.mutateAsync(variables);
+      void processOfflineMutationQueue(queryClient);
+      return result;
     },
-    [mutation, queryClient, queueMutation],
+    [mutation, queryClient],
   );
 
   const mutate = React.useCallback(
     (variables: TVariables) => {
       void mutateAsync(variables).catch(() => {
-        // React Query already routes these failures through the mutation's
-        // onError callback, so swallowing here prevents an unhandled promise
-        // rejection from surfacing as a noisy runtime overlay.
+        // Errors are routed through the mutation's onError callback and/or
+        // surfaced as toasts by the caller. Swallow to avoid unhandled
+        // rejection overlays when consumers only use `mutate`.
       });
     },
     [mutateAsync],
@@ -98,3 +125,5 @@ export const useOfflineMutation = <
     mutateAsync,
   };
 };
+
+export { isOfflineMutationQueuedResult };

@@ -34,6 +34,7 @@ import { CreateProjectModal } from "./CreateProjectModal";
 import { DeleteProjectDialog } from "./DeleteProjectDialog";
 import { projectApi } from "../api";
 import { toast } from "sonner";
+import { useTranslation } from "@/store/use-translation";
 
 interface ProjectCardProps {
   project: Project;
@@ -63,16 +64,17 @@ function initials(name?: string | null) {
     .toUpperCase();
 }
 
-function cleanText(value?: string | null) {
-  return value?.replace(/<[^>]*>/g, "").trim() || "No description provided.";
+function cleanText(value: string | null | undefined, defaultText: string) {
+  return value?.replace(/<[^>]*>/g, "").trim() || defaultText;
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return "No date";
+function formatDate(value: string | null | undefined, defaultText: string) {
+  if (!value) return defaultText;
   return format(new Date(value), "dd,MMM yyyy");
 }
 
 export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
+  const { t } = useTranslation();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
@@ -88,11 +90,11 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       queryClient.invalidateQueries({ queryKey: ["project-summary"] });
-      toast.success("Project deleted successfully");
+      toast.success(t('project_management.project_deleted_success', "Project deleted successfully"));
       setIsDeleteDialogOpen(false);
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to delete project");
+      toast.error(error.response?.data?.message || t('project_management.project_delete_failed', "Failed to delete project"));
     },
   });
 
@@ -111,9 +113,9 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
   const isAtRisk = !isCompleted && !isOverdue && diffDays !== null && diffDays <= 3 && progress < 80;
 
   const getStatusConfig = () => {
-    if (isOverdue) return { color: "text-rose-500", bg: "bg-rose-500", label: "Critical" };
-    if (isAtRisk) return { color: "text-orange-500", bg: "bg-orange-500", label: "At Risk" };
-    if (isCompleted) return { color: "text-emerald-500", bg: "bg-emerald-500", label: "Completed" };
+    if (isOverdue) return { color: "text-rose-500", bg: "bg-rose-500", label: t('project_management.critical', "Critical") };
+    if (isAtRisk) return { color: "text-orange-500", bg: "bg-orange-500", label: t('project_management.at_risk', "At Risk") };
+    if (isCompleted) return { color: "text-emerald-500", bg: "bg-emerald-500", label: t('project_management.completed', "Completed") };
     return { color: "text-primary", bg: "bg-primary", label: project.status.replace("_", " ") };
   };
 
@@ -175,7 +177,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
                     "bg-primary/5 text-muted-foreground border-border/40"
                   )}>
                     <CalendarDays className="h-2.5 w-2.5" />
-                    {isOverdue ? "Overdue" : isAtRisk ? "Due Soon" : "Deadline"} {formatDate(project.end_date)}
+                    {isOverdue ? t('project_management.overdue', "Overdue") : isAtRisk ? t('project_management.due_soon', "Due Soon") : t('project_management.deadline', "Deadline")} {formatDate(project.end_date, t('project_management.no_date', 'No date'))}
                   </div>
                 </div>
               </div>
@@ -191,13 +193,13 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
                 <DropdownMenuItem asChild>
                   <Link href={`/dashboard/project-management/projects/${project.id}`} className="flex items-center gap-3 py-2.5 px-3 rounded-xl cursor-pointer">
                     <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary"><Eye className="h-4 w-4" /></div>
-                    <span className="font-bold text-sm text-foreground/80">View Strategy</span>
+                    <span className="font-bold text-sm text-foreground/80">{t('project_management.view_strategy', "View Strategy")}</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href={`/dashboard/project-management/projects/${project.id}?view=board`} className="flex items-center gap-3 py-2.5 px-3 rounded-xl cursor-pointer">
                     <div className="h-8 w-8 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-500"><Layout className="h-4 w-4" /></div>
-                    <span className="font-bold text-sm text-foreground/80">Task Matrix</span>
+                    <span className="font-bold text-sm text-foreground/80">{t('project_management.task_matrix', "Task Matrix")}</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-border/40" />
@@ -206,14 +208,14 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
                   className="flex items-center gap-3 py-2.5 px-3 rounded-xl cursor-pointer"
                 >
                   <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-500"><Edit className="h-4 w-4" /></div>
-                  <span className="font-bold text-sm text-foreground/80">Configure</span>
+                  <span className="font-bold text-sm text-foreground/80">{t('project_management.configure', "Configure")}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem 
                   onClick={() => setIsDeleteDialogOpen(true)}
                   className="flex items-center gap-3 py-2.5 px-3 rounded-xl cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
                 >
                   <div className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center"><Trash2 className="h-4 w-4" /></div>
-                  <span className="font-bold text-sm">Terminate</span>
+                  <span className="font-bold text-sm">{t('project_management.terminate', "Terminate")}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -222,7 +224,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
           {/* Description */}
           <div className="mb-6">
             <p className="text-sm text-muted-foreground/80 line-clamp-2 min-h-[2.5rem] leading-relaxed font-medium">
-              {cleanText(project.description)}
+              {cleanText(project.description, t('project_management.no_description', "No description provided."))}
             </p>
             {project.tech_stack && project.tech_stack.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
@@ -233,7 +235,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
                 ))}
                 {project.tech_stack.length > 3 && (
                   <span className="text-[9px] font-bold text-muted-foreground/50 ml-1">
-                    +{project.tech_stack.length - 3} more
+                    +{project.tech_stack.length - 3} {t('project_management.more', 'more')}
                   </span>
                 )}
               </div>
@@ -243,20 +245,20 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
           {/* Core Metrics */}
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="bg-muted/10 rounded-2xl p-3 border border-white/5 group-hover:bg-muted/20 transition-colors">
-              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 block mb-1">Velocity</span>
+              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 block mb-1">{t('project_management.velocity', 'Velocity')}</span>
               <div className="flex items-end gap-1.5">
                 <span className="text-lg font-black leading-none">{completedTasks}</span>
-                <span className="text-[10px] text-muted-foreground/50 font-bold mb-0.5">/ {totalTasks} units</span>
+                <span className="text-[10px] text-muted-foreground/50 font-bold mb-0.5">/ {totalTasks} {t('project_management.units', 'units')}</span>
               </div>
             </div>
             <div className="bg-muted/10 rounded-2xl p-3 border border-white/5 group-hover:bg-muted/20 transition-colors flex flex-col justify-between">
               <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 block mb-1">
-                {project.repository_url ? "Engineering" : "Priority"}
+                {project.repository_url ? t('project_management.engineering', "Engineering") : t('project_management.priority_level', "Priority")}
               </span>
               {project.repository_url ? (
                 <div className="flex items-center gap-2 text-primary">
                   <Github className="h-4 w-4" />
-                  <span className="text-[10px] font-black uppercase truncate max-w-[80px]">Active Repo</span>
+                  <span className="text-[10px] font-black uppercase truncate max-w-[80px]">{t('project_management.active_repo', 'Active Repo')}</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
@@ -294,7 +296,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Completion</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">{t('project_management.completion', 'Completion')}</span>
                 <span className={cn("text-sm font-black italic", status.color)}>{progress}%</span>
               </div>
               <div className="relative h-2 w-full bg-muted/20 rounded-full overflow-hidden p-0.5 border border-white/5">

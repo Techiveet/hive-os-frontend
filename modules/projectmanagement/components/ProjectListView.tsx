@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { GitStatusBadge } from "./GitStatusBadge";
 import { useUser } from "@/hooks/use-user";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/store/use-translation";
 
 interface ProjectListViewProps {
   tasks: Task[];
@@ -31,19 +32,20 @@ const priorityColors: Record<string, string> = {
 
 export const ProjectListView: React.FC<ProjectListViewProps> = ({ tasks, onTaskClick }) => {
   const { user } = useUser();
+  const { t } = useTranslation();
   const isSoftwareDev = user?.business_type?.toLowerCase()?.replace('-', ' ') === 'software development';
 
   return (
     <div className="bg-card border border-border/40 rounded-[2rem] shadow-xl shadow-black/5 overflow-hidden animate-in fade-in duration-500">
       <Table>
-        <TableHeader className="bg-muted/20 border-b border-border/40">
+        <TableHeader id="tour-pm-list-header" className="bg-muted/20 border-b border-border/40">
           <TableRow className="hover:bg-transparent border-none">
-            <TableHead className="w-[40%] font-black uppercase tracking-widest text-[10px] h-14 px-6">Task Identity</TableHead>
-            <TableHead className="font-black uppercase tracking-widest text-[10px] h-14 px-6">Status</TableHead>
-            <TableHead className="font-black uppercase tracking-widest text-[10px] h-14 px-6">Priority</TableHead>
-            <TableHead className="font-black uppercase tracking-widest text-[10px] h-14 px-6">Assigned Team</TableHead>
-            {isSoftwareDev && <TableHead className="font-black uppercase tracking-widest text-[10px] h-14 px-6 text-center">Score</TableHead>}
-            <TableHead className="font-black uppercase tracking-widest text-[10px] h-14 px-6">Target Date</TableHead>
+            <TableHead className="w-[40%] font-black uppercase tracking-widest text-[10px] h-14 px-6">{t('project_management.task_identity', 'Task Identity')}</TableHead>
+            <TableHead className="font-black uppercase tracking-widest text-[10px] h-14 px-6">{t('project_management.status', 'Status')}</TableHead>
+            <TableHead className="font-black uppercase tracking-widest text-[10px] h-14 px-6">{t('project_management.priority', 'Priority')}</TableHead>
+            <TableHead className="font-black uppercase tracking-widest text-[10px] h-14 px-6">{t('project_management.assigned_team', 'Assigned Team')}</TableHead>
+            {isSoftwareDev && <TableHead className="font-black uppercase tracking-widest text-[10px] h-14 px-6 text-center">{t('project_management.score', 'Score')}</TableHead>}
+            <TableHead className="font-black uppercase tracking-widest text-[10px] h-14 px-6">{t('project_management.target_date', 'Target Date')}</TableHead>
             <TableHead className="text-right h-14 px-6"></TableHead>
           </TableRow>
         </TableHeader>
@@ -51,7 +53,7 @@ export const ProjectListView: React.FC<ProjectListViewProps> = ({ tasks, onTaskC
           {tasks.length === 0 ? (
             <TableRow>
               <TableCell colSpan={isSoftwareDev ? 7 : 6} className="h-32 text-center text-muted-foreground">
-                No tasks found in this project.
+                {t('project_management.no_tasks_found', 'No tasks found in this project.')}
               </TableCell>
             </TableRow>
           ) : (
@@ -76,13 +78,13 @@ export const ProjectListView: React.FC<ProjectListViewProps> = ({ tasks, onTaskC
                       )}
                     </div>
                     <span className="text-xs text-muted-foreground line-clamp-1">
-                      {task.description ? task.description.replace(/<[^>]*>/g, '').trim() : 'No description'}
+                      {task.description ? task.description.replace(/<[^>]*>/g, '').trim() : t('project_management.no_description_short', 'No description')}
                     </span>
                   </div>
                 </TableCell>
                 <TableCell className="px-6 py-4">
                   <Badge variant="outline" className="font-bold text-[10px] uppercase tracking-widest bg-muted/50 border-border/40 text-muted-foreground">
-                    {task.column?.name || 'Unknown'}
+                    {task.column?.name || t('project_management.unknown', 'Unknown')}
                   </Badge>
                 </TableCell>
                 <TableCell className="px-6 py-4">
@@ -110,7 +112,7 @@ export const ProjectListView: React.FC<ProjectListViewProps> = ({ tasks, onTaskC
                       ) : null}
                     </div>
                   ) : (
-                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Open</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">{t('project_management.open_task', 'Open')}</span>
                   )}
                 </TableCell>
                 {isSoftwareDev && (
@@ -128,7 +130,7 @@ export const ProjectListView: React.FC<ProjectListViewProps> = ({ tasks, onTaskC
                   <div className="flex items-center gap-2 text-muted-foreground font-bold">
                     <Calendar className="h-3.5 w-3.5" />
                     <span className="text-[10px] uppercase tracking-widest">
-                      {task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : 'No date'}
+                      {task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : t('project_management.no_date', 'No date')}
                     </span>
                   </div>
                 </TableCell>

@@ -539,9 +539,7 @@ export function MobileSidebar() {
               className="flex flex-1 items-center gap-3 overflow-hidden"
             >
               <ListTodo className="h-4 w-4 shrink-0 text-primary" />
-              <span className="truncate font-bold text-foreground">
-                Project Management
-              </span>
+              <span className="truncate font-bold text-foreground">{t("nav.project_management", "Project Management")}</span>
             </Link>
           </SheetClose>
           <button
@@ -568,7 +566,7 @@ export function MobileSidebar() {
                 className={nestedItemClass(pathname === "/dashboard/project-management")}
               >
                 <LayoutDashboard className="h-4 w-4 shrink-0" />
-                <span>Overview</span>
+                <span>{t("nav.pm_overview", "Overview")}</span>
               </Link>
             </SheetClose>
 
@@ -580,7 +578,7 @@ export function MobileSidebar() {
                 )}
               >
                 <KanbanSquare className="h-4 w-4 shrink-0" />
-                <span>Projects</span>
+                <span>{t("nav.pm_projects", "Projects")}</span>
               </Link>
             </SheetClose>
 
@@ -592,7 +590,7 @@ export function MobileSidebar() {
                 )}
               >
                 <CheckCircle className="h-4 w-4 shrink-0" />
-                <span>My Tasks</span>
+                <span>{t("nav.pm_my_tasks", "My Tasks")}</span>
               </Link>
             </SheetClose>
 
@@ -606,7 +604,7 @@ export function MobileSidebar() {
                 }}
               >
                 <Plus className="h-3.5 w-3.5" />
-                Create Project
+                {t("nav.pm_create_project", "Create Project")}
               </Button>
             </div>
           </div>

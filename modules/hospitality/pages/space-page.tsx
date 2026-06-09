@@ -10,10 +10,17 @@ import { useState } from "react";
 import { HospitalityLocation } from "../types";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function SpaceManagementPage() {
   const queryClient = useQueryClient();
   const [selectedLocation, setSelectedLocation] = useState<HospitalityLocation | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   const { data: overview } = useQuery({
     queryKey: ["hospitality", "overview"],
@@ -80,43 +87,53 @@ export default function SpaceManagementPage() {
           <SpatialGridMap 
             zones={zones || []} 
             businessType={businessType}
-            onLocationClick={(loc) => setSelectedLocation(loc)}
+            onLocationClick={(loc) => {
+              setSelectedLocation(loc);
+              setIsDetailsOpen(true);
+            }}
           />
 
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8">
-              <h3 className="text-xl font-black tracking-tight mb-6 flex items-center gap-3">
-                <div className="w-2 h-6 rounded-full bg-primary" />
-                Occupation Summary
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {[
-                  { label: "Available", status: "available", color: "bg-emerald-500" },
-                  { label: "Reserved", status: "reserved", color: "bg-amber-500" },
-                  { label: "Occupied", status: "occupied", color: "bg-destructive" },
-                  { label: "Dirty", status: "dirty", color: "bg-sky-500" },
-                ].map((s) => (
-                  <div key={s.status} className="p-4 rounded-3xl bg-background/50 border border-border/40 text-center">
-                    <div className={`mx-auto w-2 h-2 rounded-full ${s.color} mb-2 shadow-lg`} />
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{s.label}</p>
-                    <p className="text-2xl font-black mt-1">
-                      {allLocations.filter((l: HospitalityLocation) => l.status === s.status).length}
-                    </p>
-                  </div>
-                ))}
-              </div>
+          <div className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8">
+            <h3 className="text-xl font-black tracking-tight mb-6 flex items-center gap-3">
+              <div className="w-2 h-6 rounded-full bg-primary" />
+              Occupation Summary
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                { label: "Available", status: "available", color: "bg-emerald-500" },
+                { label: "Reserved", status: "reserved", color: "bg-amber-500" },
+                { label: "Occupied", status: "occupied", color: "bg-destructive" },
+                { label: "Dirty", status: "dirty", color: "bg-sky-500" },
+              ].map((s) => (
+                <div key={s.status} className="p-4 rounded-3xl bg-background/50 border border-border/40 text-center">
+                  <div className={`mx-auto w-2 h-2 rounded-full ${s.color} mb-2 shadow-lg`} />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{s.label}</p>
+                  <p className="text-2xl font-black mt-1">
+                    {allLocations.filter((l: HospitalityLocation) => l.status === s.status).length}
+                  </p>
+                </div>
+              ))}
             </div>
+          </div>
 
-            <div className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8">
-              <h3 className="text-xl font-black tracking-tight mb-6 flex items-center gap-3">
-                <div className="w-2 h-6 rounded-full bg-amber-500" />
-                Live Details
-              </h3>
-              {selectedLocation ? (
-                <div className="space-y-6">
+          <Dialog open={isDetailsOpen && !!selectedLocation} onOpenChange={(open) => {
+            if (!open) {
+              setIsDetailsOpen(false);
+              setSelectedLocation(null);
+            }
+          }}>
+            <DialogContent className="rounded-[2rem] border border-border/40 bg-card/90 backdrop-blur-2xl p-8 max-w-md shadow-2xl">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-2">
+                  <div className="w-2 h-6 rounded-full bg-amber-500" />
+                  Live Details
+                </DialogTitle>
+              </DialogHeader>
+              {selectedLocation && (
+                <div className="space-y-6 mt-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-2xl font-black tracking-tight">{selectedLocation.label}</h4>
+                      <h4 className="text-xl font-black tracking-tight">{selectedLocation.label}</h4>
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{selectedLocation.table_type}</p>
                     </div>
                     <Badge className="rounded-full px-4 py-1 font-black uppercase text-[10px]">
@@ -144,7 +161,13 @@ export default function SpaceManagementPage() {
                         variant={selectedLocation.status === status ? "default" : "outline"}
                         size="sm"
                         className="rounded-xl text-[10px] font-black uppercase tracking-widest"
-                        onClick={() => statusMutation.mutate({ id: selectedLocation.id, status })}
+                        onClick={() => {
+                          statusMutation.mutate({ id: selectedLocation.id, status }, {
+                            onSuccess: () => {
+                              setSelectedLocation(prev => prev ? { ...prev, status: status as any } : null);
+                            }
+                          });
+                        }}
                         disabled={statusMutation.isPending}
                       >
                         {status}
@@ -152,14 +175,9 @@ export default function SpaceManagementPage() {
                     ))}
                   </div>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-10 text-center opacity-30">
-                  <MapIcon className="h-12 w-12 mb-4" />
-                  <p className="text-sm font-bold uppercase tracking-widest">Select a table<br />to manage</p>
-                </div>
               )}
-            </div>
-          </div>
+            </DialogContent>
+          </Dialog>
         </div>
       )}
     </div>

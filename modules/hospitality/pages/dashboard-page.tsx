@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -14,6 +15,11 @@ import {
   Plus,
   Map as MapIcon,
   Users,
+  Coins,
+  TrendingDown,
+  DollarSign,
+  Gift,
+  Megaphone,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -41,11 +47,15 @@ import {
   Cell,
   PieChart,
   Pie,
+  AreaChart,
+  Area,
 } from "recharts";
 
 const COLORS = ["#6366f1", "#f59e0b", "#ec4899", "#10b981", "#8b5cf6"];
 
 export default function HospitalityDashboardPage() {
+  const [financialPeriod, setFinancialPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
+
   const { data: overview, isLoading, isError } = useQuery({
     queryKey: ["hospitality", "overview"],
     queryFn: fetchHospitalityOverview,
@@ -191,6 +201,143 @@ export default function HospitalityDashboardPage() {
         </div>
       </motion.section>
 
+      {/* Financial Overview Cockpit */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8 shadow-sm space-y-6"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-black tracking-tight flex items-center gap-2">
+              <Coins className="h-6 w-6 text-indigo-500 animate-pulse" />
+              Financial Overview
+            </h2>
+            <p className="text-sm text-muted-foreground font-medium">
+              Monitor sales income, operational expenses, and net revenue.
+            </p>
+          </div>
+          <div className="inline-flex rounded-full border border-border/60 bg-background/50 p-1">
+            {(["daily", "weekly", "monthly"] as const).map((period) => (
+              <button
+                key={period}
+                onClick={() => setFinancialPeriod(period)}
+                className={cn(
+                  "rounded-full px-5 py-1.5 text-xs font-black uppercase tracking-wider transition-all",
+                  financialPeriod === period
+                    ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/80"
+                )}
+              >
+                {period}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+          {/* Income Card */}
+          <div className="relative overflow-hidden rounded-[2rem] border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 p-6 transition-all hover:scale-[1.02]">
+            <div className="flex items-start justify-between">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600/80 dark:text-emerald-400/80">Sales Income</p>
+                <h3 className="text-3xl font-black tracking-tight">
+                  ETB {(overview.financials?.[financialPeriod]?.income || 0).toLocaleString()}
+                </h3>
+                <p className="text-xs text-muted-foreground font-bold">Gross income from closed orders</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-500">
+                <Coins className="h-6 w-6" />
+              </div>
+            </div>
+          </div>
+
+          {/* Expenses Card */}
+          <div className="relative overflow-hidden rounded-[2rem] border border-rose-500/20 bg-gradient-to-br from-rose-500/10 to-rose-500/5 p-6 transition-all hover:scale-[1.02]">
+            <div className="flex items-start justify-between">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-600/80 dark:text-rose-400/80">Total Expenses</p>
+                <h3 className="text-3xl font-black tracking-tight">
+                  ETB {(overview.financials?.[financialPeriod]?.expenses || 0).toLocaleString()}
+                </h3>
+                <p className="text-xs text-muted-foreground font-bold">COGS, purchases & operating costs</p>
+              </div>
+              <div className="rounded-2xl bg-rose-500/10 p-3 text-rose-500">
+                <TrendingDown className="h-6 w-6" />
+              </div>
+            </div>
+          </div>
+
+          {/* Marketing Comps Card */}
+          <div className="relative overflow-hidden rounded-[2rem] border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-amber-500/5 p-6 transition-all hover:scale-[1.02]">
+            <div className="flex items-start justify-between">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600/80 dark:text-amber-400/80">Marketing Comps</p>
+                <h3 className="text-3xl font-black tracking-tight">
+                  ETB {(overview.financials?.[financialPeriod]?.comps || 0).toLocaleString()}
+                </h3>
+                <p className="text-xs text-muted-foreground font-bold">Cost of complimentary items</p>
+              </div>
+              <div className="rounded-2xl bg-amber-500/10 p-3 text-amber-500">
+                <Gift className="h-6 w-6" />
+              </div>
+            </div>
+          </div>
+
+          {/* Net Profit Card */}
+          <div className={cn(
+            "relative overflow-hidden rounded-[2rem] border p-6 transition-all hover:scale-[1.02]",
+            (overview.financials?.[financialPeriod]?.net_revenue || 0) >= 0
+              ? "border-indigo-500/20 bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 text-foreground"
+              : "border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-amber-500/5 text-foreground"
+          )}>
+            <div className="flex items-start justify-between">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600/80 dark:text-indigo-400/80">Net Revenue</p>
+                <h3 className="text-3xl font-black tracking-tight">
+                  ETB {(overview.financials?.[financialPeriod]?.net_revenue || 0).toLocaleString()}
+                </h3>
+                <p className="text-xs text-muted-foreground font-bold">Net take-home profit margins</p>
+              </div>
+              <div className={cn(
+                "rounded-2xl p-3",
+                (overview.financials?.[financialPeriod]?.net_revenue || 0) >= 0 ? "bg-indigo-500/10 text-indigo-500" : "bg-amber-500/10 text-amber-500"
+              )}>
+                <DollarSign className="h-6 w-6" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Comparison Bar Chart */}
+        <div className="h-[200px] w-full pt-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={[
+                {
+                  name: "Financial Comparison",
+                  Income: overview.financials?.[financialPeriod]?.income || 0,
+                  Expenses: overview.financials?.[financialPeriod]?.expenses || 0,
+                  Profit: overview.financials?.[financialPeriod]?.net_revenue || 0,
+                }
+              ]}
+              barGap={12}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" opacity={0.1} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} hide />
+              <YAxis axisLine={false} tickLine={false} fontSize={11} fontWeight={600} tickFormatter={(val) => `ETB ${val.toLocaleString()}`} />
+              <Tooltip 
+                contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                formatter={(val: any) => `ETB ${val.toLocaleString()}`}
+              />
+              <Bar dataKey="Income" fill="#10b981" name="Sales Income" radius={[8, 8, 0, 0]} maxBarSize={80} />
+              <Bar dataKey="Expenses" fill="#f43f5e" name="Total Expenses" radius={[8, 8, 0, 0]} maxBarSize={80} />
+              <Bar dataKey="Profit" fill="#6366f1" name="Net Revenue" radius={[8, 8, 0, 0]} maxBarSize={80} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </motion.section>
+
       <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((card, index) => {
           const Icon = card.icon;
@@ -231,67 +378,346 @@ export default function HospitalityDashboardPage() {
         })}
       </section>
 
-      {isNightclub && overview.analytics && (
-        <div className="grid gap-6 lg:grid-cols-2">
+      {overview.analytics && (
+        <div className="space-y-8">
+          {/* Row 1: Full-width Revenue Trend (Area Chart) */}
           <motion.section
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8 shadow-sm"
           >
             <h3 className="mb-6 text-xl font-black tracking-tight flex items-center gap-2">
               <div className="w-2 h-6 rounded-full bg-indigo-500" />
-              Guest Arrival Status
+              Daily Revenue Trend (Last 7 Days)
             </h3>
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={overview.analytics.guest_arrivals || []}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="count"
-                    nameKey="status"
-                    label={({ status, count }) => `${status}: ${count}`}
-                  >
-                    {(overview.analytics.guest_arrivals || []).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                <AreaChart data={overview.analytics.revenue_trend || []}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" opacity={0.1} />
+                  <XAxis 
+                    dataKey="date" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    fontSize={11} 
+                    fontWeight={600} 
+                    tickFormatter={(val) => {
+                      try {
+                        const d = new Date(val);
+                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+                      } catch(e) {
+                        return val;
+                      }
+                    }}
                   />
-                </PieChart>
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    fontSize={11} 
+                    fontWeight={600} 
+                    tickFormatter={(val) => `ETB ${val.toLocaleString()}`}
+                  />
+                  <Tooltip 
+                    cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '3 3' }}
+                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    formatter={(val: any) => [`ETB ${val.toLocaleString()}`, 'Revenue']}
+                  />
+                  <Area type="monotone" dataKey="revenue" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </motion.section>
 
-          <motion.section
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8 shadow-sm"
-          >
-            <h3 className="mb-6 text-xl font-black tracking-tight flex items-center gap-2">
-              <div className="w-2 h-6 rounded-full bg-amber-500" />
-              Top Promoters (Today)
-            </h3>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={overview.analytics.promoter_stats || []}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" opacity={0.1} />
-                  <XAxis dataKey="promoter.name" axisLine={false} tickLine={false} fontSize={12} fontWeight={600} />
-                  <YAxis axisLine={false} tickLine={false} fontSize={12} fontWeight={600} />
-                  <Tooltip 
-                    cursor={{ fill: 'currentColor', opacity: 0.05 }}
-                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Bar dataKey="total_guests_brought" fill="#6366f1" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+          {/* Row 2: Seating Analytics (Two Columns) */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Column 2a: Seating Status */}
+            <motion.section
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8 shadow-sm"
+            >
+              <h3 className="mb-6 text-xl font-black tracking-tight flex items-center gap-2">
+                <div className="w-2 h-6 rounded-full bg-indigo-500" />
+                {locationLabel} Occupancy Status
+              </h3>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={(overview.analytics.table_status_breakdown || []).filter((item: any) => item.count > 0)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      dataKey="count"
+                      nameKey="status"
+                      label={({ status, count }) => `${status}: ${count}`}
+                    >
+                      {(overview.analytics.table_status_breakdown || []).map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.section>
+
+            {/* Column 2b: Seating Types distribution */}
+            <motion.section
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8 shadow-sm"
+            >
+              <h3 className="mb-6 text-xl font-black tracking-tight flex items-center gap-2">
+                <div className="w-2 h-6 rounded-full bg-pink-500" />
+                Seating Type Distribution
+              </h3>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={(overview.analytics.table_type_breakdown || []).filter((item: any) => item.count > 0)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={0}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      dataKey="count"
+                      nameKey="type"
+                      label={({ type, count }) => `${type}: ${count}`}
+                    >
+                      {(overview.analytics.table_type_breakdown || []).map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.section>
+          </div>
+
+          {/* Row 3: Busy Hours & Reservation Outlook */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Column 3a: Busy Hours */}
+            <motion.section
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8 shadow-sm"
+            >
+              <h3 className="mb-6 text-xl font-black tracking-tight flex items-center gap-2">
+                <div className="w-2 h-6 rounded-full bg-amber-500" />
+                Today's Order Load (By Hour)
+              </h3>
+              <div className="h-[300px] w-full flex items-center justify-center">
+                {(!overview.analytics.busy_hours || overview.analytics.busy_hours.length === 0) ? (
+                  <p className="text-sm text-muted-foreground font-medium">No order activity today yet.</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={overview.analytics.busy_hours || []}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" opacity={0.1} />
+                      <XAxis dataKey="hour" axisLine={false} tickLine={false} fontSize={11} fontWeight={600} />
+                      <YAxis axisLine={false} tickLine={false} fontSize={12} fontWeight={600} />
+                      <Tooltip 
+                        cursor={{ fill: 'currentColor', opacity: 0.05 }}
+                        contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Bar dataKey="count" fill="#f59e0b" name="Orders" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </motion.section>
+
+            {/* Column 3b: Reservations Outlook */}
+            <motion.section
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8 shadow-sm"
+            >
+              <h3 className="mb-6 text-xl font-black tracking-tight flex items-center gap-2">
+                <div className="w-2 h-6 rounded-full bg-emerald-500" />
+                Reservations Forecast (Next 7 Days)
+              </h3>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={overview.analytics.weekly_reservations_trend || []}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" opacity={0.1} />
+                    <XAxis 
+                      dataKey="date" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      fontSize={11} 
+                      fontWeight={600} 
+                      tickFormatter={(val) => {
+                        try {
+                          const d = new Date(val);
+                          return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+                        } catch(e) {
+                          return val;
+                        }
+                      }}
+                    />
+                    <YAxis axisLine={false} tickLine={false} fontSize={12} fontWeight={600} />
+                    <Tooltip 
+                      cursor={{ fill: 'currentColor', opacity: 0.05 }}
+                      contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Bar dataKey="count" fill="#10b981" name="Reservations" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.section>
+          </div>
+
+          {/* Row 4: Nightclub Promoters/Arrivals if applicable */}
+          {isNightclub && (
+            <div className="grid gap-6 lg:grid-cols-2 mb-6">
+              <motion.section
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8 shadow-sm"
+              >
+                <h3 className="mb-6 text-xl font-black tracking-tight flex items-center gap-2">
+                  <div className="w-2 h-6 rounded-full bg-indigo-500" />
+                  Guest Arrival Status
+                </h3>
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={overview.analytics.guest_arrivals || []}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={5}
+                        dataKey="count"
+                        nameKey="status"
+                        label={({ status, count }) => `${status}: ${count}`}
+                      >
+                        {(overview.analytics.guest_arrivals || []).map((entry: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </motion.section>
+
+              <motion.section
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8 shadow-sm"
+              >
+                <h3 className="mb-6 text-xl font-black tracking-tight flex items-center gap-2">
+                  <div className="w-2 h-6 rounded-full bg-amber-500" />
+                  Top Promoters (Today)
+                </h3>
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={overview.analytics.promoter_stats || []}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" opacity={0.1} />
+                      <XAxis dataKey="promoter.name" axisLine={false} tickLine={false} fontSize={12} fontWeight={600} />
+                      <YAxis axisLine={false} tickLine={false} fontSize={12} fontWeight={600} />
+                      <Tooltip 
+                        cursor={{ fill: 'currentColor', opacity: 0.05 }}
+                        contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Bar dataKey="total_guests_brought" fill="#6366f1" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </motion.section>
             </div>
-          </motion.section>
+          )}
+
+          {/* Row 5: Popular Items & Comps Breakdown */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <motion.section
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8 shadow-sm"
+            >
+              <h3 className="mb-6 text-xl font-black tracking-tight flex items-center gap-2">
+                <div className="w-2 h-6 rounded-full bg-violet-500" />
+                Most Popular Menu Items (Sales Volume)
+              </h3>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={overview.analytics.popular_items || []}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" opacity={0.1} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={10} fontWeight={600} />
+                    <YAxis axisLine={false} tickLine={false} fontSize={12} fontWeight={600} />
+                    <Tooltip 
+                      cursor={{ fill: 'currentColor', opacity: 0.05 }}
+                      contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Bar dataKey="quantity" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.section>
+
+            <motion.section
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-[2.5rem] border border-border/40 bg-card/30 backdrop-blur-md p-8 shadow-sm"
+            >
+              <h3 className="mb-6 text-xl font-black tracking-tight flex items-center gap-2">
+                <div className="w-2 h-6 rounded-full bg-amber-500" />
+                Marketing Comps Breakdown (By Reason)
+              </h3>
+              <div className="h-[300px] w-full flex items-center justify-center">
+                {!overview.analytics.comps_breakdown || overview.analytics.comps_breakdown.length === 0 ? (
+                  <div className="text-center space-y-2">
+                    <div className="mx-auto w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center">
+                      <Megaphone className="h-5 w-5 text-muted-foreground/50" />
+                    </div>
+                    <p className="text-sm text-muted-foreground font-medium">No comps tracked yet.</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={overview.analytics.comps_breakdown}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={5}
+                        dataKey="value"
+                        nameKey="reason"
+                        label={({ reason, value }) => `${reason}: ETB ${value.toLocaleString()}`}
+                      >
+                        {overview.analytics.comps_breakdown.map((entry: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        formatter={(val: any) => `ETB ${val.toLocaleString()}`}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </motion.section>
+          </div>
         </div>
       )}
 

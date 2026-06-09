@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/store/use-translation";
+import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
+import { useBusinessType } from "@/hooks/use-business-type";
 import {
   Tooltip,
   TooltipContent,
@@ -135,6 +137,8 @@ export default function InventoryProductsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
+  const { hasModule } = useTenantModuleAccess();
+  const { hasBusinessType } = useBusinessType();
 
   const [statusFilter, setStatusFilter] = React.useState<string>("");
   const [tableQuery, setTableQuery] = React.useState<TableQueryState>(DEFAULT_QUERY);
@@ -310,7 +314,8 @@ export default function InventoryProductsPage() {
   );
 
   const columns = React.useMemo<ColumnDef<ProductRecord>[]>(
-    () => [
+    () => {
+      const cols: ColumnDef<ProductRecord>[] = [
       {
         accessorKey: "image",
         header: "",
@@ -444,15 +449,17 @@ export default function InventoryProductsPage() {
                 <Pencil className="mr-1 h-3.5 w-3.5" />
                 {t("inventory.common.edit", "Edit")}
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="rounded-full border-sky-500/40 bg-sky-500/10 text-sky-600 hover:bg-sky-500/20"
-                onClick={() => openQaDialog(product)}
-              >
-                <ClipboardCheck className="mr-1 h-3.5 w-3.5" />
-                Add To QA
-              </Button>
+              {hasBusinessType("water-bottling") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full border-sky-500/40 bg-sky-500/10 text-sky-600 hover:bg-sky-500/20"
+                  onClick={() => openQaDialog(product)}
+                >
+                  <ClipboardCheck className="mr-1 h-3.5 w-3.5" />
+                  Add To QA
+                </Button>
+              )}
               <WorkflowTrigger
                 type="Modules\\Inventory\\Models\\Product"
                 id={product.id}
@@ -460,39 +467,41 @@ export default function InventoryProductsPage() {
                 status={product.workflow_status}
                 onSuccess={() => queryClient.invalidateQueries({ queryKey: ["inventory", "products"] })}
               />
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex">
-                      <Link
-                        href={`/dashboard/warehouse/locations/shelves?add_product_id=${product.id}`}
-                        className={cn(
-                          "inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
-                          product.qa_status === "qa_passed"
-                            ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
-                            : "pointer-events-none border-slate-300 bg-slate-100 text-slate-400 opacity-60"
-                        )}
-                        onClick={(e) => {
-                          if (product.qa_status !== "qa_passed") {
-                            e.preventDefault();
-                          }
-                        }}
-                      >
-                        <MapPin className="mr-1 h-3.5 w-3.5" />
-                        {t("inventory.products.add_to_shelf", "Add to Shelf")}
-                      </Link>
-                    </div>
-                  </TooltipTrigger>
-                  {product.qa_status !== "qa_passed" && (
-                    <TooltipContent className="rounded-xl border-border bg-background/95 p-3 font-medium text-foreground shadow-xl backdrop-blur-md">
-                      <div className="flex items-center gap-2 text-rose-500">
-                        <AlertTriangle className="h-4 w-4" />
-                        <span>QA approval required before shelf placement.</span>
+              {hasModule("warehouse_management") && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex">
+                        <Link
+                          href={`/dashboard/warehouse/locations/shelves?add_product_id=${product.id}`}
+                          className={cn(
+                            "inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+                            product.qa_status === "qa_passed"
+                              ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
+                              : "pointer-events-none border-slate-300 bg-slate-100 text-slate-400 opacity-60"
+                          )}
+                          onClick={(e) => {
+                            if (product.qa_status !== "qa_passed") {
+                              e.preventDefault();
+                            }
+                          }}
+                        >
+                          <MapPin className="mr-1 h-3.5 w-3.5" />
+                          {t("inventory.products.add_to_shelf", "Add to Shelf")}
+                        </Link>
                       </div>
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              </TooltipProvider>
+                    </TooltipTrigger>
+                    {product.qa_status !== "qa_passed" && (
+                      <TooltipContent className="rounded-xl border-border bg-background/95 p-3 font-medium text-foreground shadow-xl backdrop-blur-md">
+                        <div className="flex items-center gap-2 text-rose-500">
+                          <AlertTriangle className="h-4 w-4" />
+                          <span>QA approval required before shelf placement.</span>
+                        </div>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
+              )}
 
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -524,9 +533,14 @@ export default function InventoryProductsPage() {
         },
         meta: { align: "left" as const },
       },
-    ],
-    [deleteMutation, openDetailSheet, openEdit, openQaDialog, queryClient, t]
-  );
+    ];
+    if (!hasBusinessType("water-bottling")) {
+      return cols.filter((col) => col.id !== "qa_status");
+    }
+    return cols;
+  },
+  [deleteMutation, openDetailSheet, openEdit, openQaDialog, queryClient, t, hasModule, hasBusinessType]
+);
 
   const exportUrl = React.useMemo(() => {
     const params = new URLSearchParams();
@@ -711,6 +725,7 @@ function ProductDetailSheet({
   onAddToQa: (product: ProductRecord) => void;
 }) {
   const queryClient = useQueryClient();
+  const { hasBusinessType } = useBusinessType();
   const { data, isLoading } = useQuery({
     queryKey: ["inventory", "products", "detail", productId],
     queryFn: () => fetchInventoryProduct(productId),
@@ -804,14 +819,16 @@ function ProductDetailSheet({
             <div className="flex items-center gap-3">
               {product ? (
                 <>
-                  <Button
-                    onClick={() => onAddToQa(product)}
-                    variant="outline"
-                    className="rounded-2xl h-12 px-6 font-bold shadow-lg border-sky-500/30 bg-sky-500/10 text-sky-600 hover:bg-sky-500/20 transition-all hover:scale-105 active:scale-95"
-                  >
-                    <ClipboardCheck className="mr-2 h-5 w-5" />
-                    Add To QA
-                  </Button>
+                  {hasBusinessType("water-bottling") && (
+                    <Button
+                      onClick={() => onAddToQa(product)}
+                      variant="outline"
+                      className="rounded-2xl h-12 px-6 font-bold shadow-lg border-sky-500/30 bg-sky-500/10 text-sky-600 hover:bg-sky-500/20 transition-all hover:scale-105 active:scale-95"
+                    >
+                      <ClipboardCheck className="mr-2 h-5 w-5" />
+                      Add To QA
+                    </Button>
+                  )}
                   <WorkflowTrigger
                     type="Modules\\Inventory\\Models\\Product"
                     id={product.id}

@@ -394,6 +394,18 @@ export const getBackendStorageUrl = (url: string | null | undefined): string | n
   return `${getBackendOrigin()}${normalizedPath}`;
 };
 
+export const getPublicServeUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+
+  // Convert private serve URL to public-serve URL for public pages
+  if (typeof url === "string" && url.includes("/files/") && url.includes("/serve")) {
+    const publicUrl = url.replace("/serve", "/public-serve");
+    return getBackendStorageUrl(publicUrl);
+  }
+
+  return getBackendStorageUrl(url);
+};
+
 export const extractStorageRelativePath = (url: string | null | undefined): string | null => {
   if (!url) return null;
 

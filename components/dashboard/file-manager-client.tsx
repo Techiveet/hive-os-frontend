@@ -1133,6 +1133,12 @@ export function FileManagerClient({ tenantName, isPickerMode, onFileSelect, acce
   // --- Creation & Upload States ---
   const [isCreateFolderOpen, setIsCreateFolderOpen] = React.useState(false);
   const [isUploadOpen, setIsUploadOpen] = React.useState(false);
+
+  // Log state changes for debugging
+  React.useEffect(() => {
+    console.log('isUploadOpen changed:', isUploadOpen);
+  }, [isUploadOpen]);
+
   const [selectedFile, setSelectedFile] = React.useState<any | null>(null); 
   const [folderName, setFolderName] = React.useState("");
   const [uploadBaseName, setUploadBaseName] = React.useState("");
@@ -1936,6 +1942,7 @@ export function FileManagerClient({ tenantName, isPickerMode, onFileSelect, acce
                             <Button onClick={() => {
                               setUploadTargetFolder(currentFolderId ? currentFolderId.toString() : "root");
                               setIsUploadOpen(true);
+                              console.log('Upload modal opened');
                             }} className="rounded-xl h-10 px-4 font-bold bg-emerald-500 text-emerald-950 hover:bg-emerald-400 shadow-sm flex-1 sm:flex-none"><UploadCloud className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Upload</span></Button>
                         </>
                     ))}
@@ -2168,7 +2175,7 @@ export function FileManagerClient({ tenantName, isPickerMode, onFileSelect, acce
 
       {/* 🚀 MOVE MODAL */}
       <Dialog open={isMoveModalOpen} onOpenChange={setIsMoveModalOpen}>
-          <DialogContent className="sm:max-w-sm rounded-[2rem] bg-background border-border/50 shadow-2xl">
+          <DialogContent className="sm:max-w-sm rounded-[2rem] bg-background border-border/50 shadow-2xl z-[9999]" overlayClassName="z-[9998]">
               <DialogHeader><DialogTitle>Move Items</DialogTitle></DialogHeader>
               <div className="py-4">
                   <label className="text-[10px] font-black tracking-widest uppercase text-muted-foreground block mb-2">Destination Folder</label>
@@ -2197,7 +2204,7 @@ export function FileManagerClient({ tenantName, isPickerMode, onFileSelect, acce
 
       {/* RENAME MODAL */}
       <Dialog open={!!renameTarget} onOpenChange={(o) => !o && setRenameTarget(null)}>
-          <DialogContent className="sm:max-w-sm rounded-[2rem] bg-background border-border/50 shadow-2xl">
+          <DialogContent className="sm:max-w-sm rounded-[2rem] bg-background border-border/50 shadow-2xl z-[9999]" overlayClassName="z-[9998]">
               <DialogHeader><DialogTitle>Rename Item</DialogTitle></DialogHeader>
               <div className="py-4">
                   <label className="text-[10px] font-black tracking-widest uppercase text-muted-foreground block mb-2">New Name</label>
@@ -2214,7 +2221,7 @@ export function FileManagerClient({ tenantName, isPickerMode, onFileSelect, acce
 
       {/* CREATE FOLDER MODAL */}
       <Dialog open={isCreateFolderOpen} onOpenChange={setIsCreateFolderOpen}>
-        <DialogContent className="sm:max-w-sm rounded-[2rem] bg-background border-border/50 shadow-2xl">
+        <DialogContent className="sm:max-w-sm rounded-[2rem] bg-background border-border/50 shadow-2xl z-[9999]" overlayClassName="z-[9998]">
           <DialogHeader><DialogTitle>Create New Folder</DialogTitle></DialogHeader>
           <form onSubmit={handleCreateFolder}>
             <div className="py-4">
@@ -2255,7 +2262,7 @@ export function FileManagerClient({ tenantName, isPickerMode, onFileSelect, acce
            setSubtitleFile(null);
         }
       }}>
-        <DialogContent className="sm:max-w-5xl md:max-w-[1400px] lg:max-w-[1600px] w-[98vw] md:w-full p-0 overflow-hidden bg-background/95 backdrop-blur-2xl border-border/50 rounded-[2rem] shadow-[0_0_50px_rgba(0,0,0,0.4)] flex flex-col max-h-[95vh]">
+        <DialogContent className="sm:max-w-5xl md:max-w-[1400px] lg:max-w-[1600px] w-[98vw] md:w-full p-0 overflow-hidden bg-background/95 backdrop-blur-2xl border-border/50 rounded-[2rem] shadow-[0_0_50px_rgba(0,0,0,0.4)] flex flex-col max-h-[95vh] z-[9999]" overlayClassName="z-[9998]">
           <DialogTitle className="sr-only">File Preview</DialogTitle>
 
           {selectedFile && (
@@ -2345,7 +2352,7 @@ export function FileManagerClient({ tenantName, isPickerMode, onFileSelect, acce
 
       {/* SUBTITLE UPLOAD MODAL */}
       <Dialog open={isSubtitleModalOpen} onOpenChange={(open) => { setIsSubtitleModalOpen(open); if (!open) setSubtitleFile(null); }}>
-        <DialogContent className="sm:max-w-md w-11/12 rounded-[2rem] bg-background border-border/50 shadow-2xl p-0 overflow-hidden box-border">
+        <DialogContent className="sm:max-w-md w-11/12 rounded-[2rem] bg-background border-border/50 shadow-2xl p-0 overflow-hidden box-border z-[9999]" overlayClassName="z-[9998]">
           <div className="p-6 pb-0 shrink-0"><DialogHeader><div className="flex items-center gap-3 mb-2 min-w-0"><div className="h-10 w-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 shrink-0"><Subtitles className="h-5 w-5" /></div><div className="min-w-0 flex-1"><DialogTitle className="text-xl truncate">Configure Subtitle</DialogTitle><DialogDescription className="text-xs truncate">Set language and label for your caption track.</DialogDescription></div></div></DialogHeader></div>
           <div className="p-6 space-y-5 overflow-y-auto scrollbar-thin min-w-0"><div className="space-y-1.5 min-w-0"><label className="text-[10px] font-black tracking-widest uppercase text-muted-foreground block">Selected File</label><div className="flex items-center bg-muted/50 border border-border/50 h-10 rounded-xl px-3 text-sm font-mono min-w-0 w-full overflow-hidden"><FileText className="h-4 w-4 mr-2 shrink-0 text-emerald-500" /><span className="truncate block w-full">{subtitleFile?.name || "No file selected"}</span></div></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0"><div className="space-y-1.5 min-w-0"><label className="text-[10px] font-black tracking-widest uppercase text-muted-foreground block">Language Code</label><select value={subtitleLang} onChange={(e) => setSubtitleLang(e.target.value)} className="w-full bg-background border border-border/50 h-10 rounded-xl text-sm px-3 focus:ring-2 focus:ring-emerald-500 outline-none"><option value="en">English (en)</option><option value="es">Spanish (es)</option><option value="fr">French (fr)</option><option value="de">German (de)</option><option value="am">Amharic (am)</option><option value="om">Oromo (om)</option></select></div><div className="space-y-1.5 min-w-0"><label className="text-[10px] font-black tracking-widest uppercase text-muted-foreground block">Display Label</label><Input value={subtitleLabel} onChange={(e) => setSubtitleLabel(e.target.value)} placeholder="e.g., English (US)" className="bg-background border-border/50 h-10 rounded-xl text-sm min-w-0 w-full" /></div></div></div>
           <DialogFooter className="p-6 pt-0 flex gap-2 sm:justify-end shrink-0 bg-background"><Button type="button" variant="outline" onClick={() => setIsSubtitleModalOpen(false)} className="rounded-xl flex-1 sm:flex-none">Cancel</Button><Button onClick={submitSubtitle} disabled={uploadSubtitleMut.isPending || !subtitleFile} className="rounded-xl bg-emerald-500 text-emerald-950 font-bold px-6 shadow-md hover:bg-emerald-400 flex-1 sm:flex-none">{uploadSubtitleMut.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading...</> : 'Attach Subtitle'}</Button></DialogFooter>
@@ -2354,7 +2361,7 @@ export function FileManagerClient({ tenantName, isPickerMode, onFileSelect, acce
 
       {/* UPLOAD FILE MODAL */}
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-       <DialogContent className="sm:max-w-md rounded-3xl bg-background border-border/50 overflow-hidden flex flex-col max-h-[90vh] shadow-2xl">
+       <DialogContent className="sm:max-w-md rounded-3xl bg-background border-border/50 overflow-hidden flex flex-col max-h-[90vh] shadow-2xl z-[9999]" overlayClassName="z-[9998]">
           <DialogHeader className="shrink-0 border-b border-border/50 pb-4"><DialogTitle className="flex items-center gap-2"><UploadCloud className="h-5 w-5 text-emerald-500" /> Upload File</DialogTitle></DialogHeader>
           <form id="upload-file-form" onSubmit={handleUploadFile} className="flex-1 overflow-y-auto scrollbar-thin">
             <div className="space-y-5 py-4 px-1">
@@ -2371,7 +2378,7 @@ export function FileManagerClient({ tenantName, isPickerMode, onFileSelect, acce
 
       {/* ADD TO PLAYLIST DIALOG */}
       <Dialog open={isAddToPlaylistOpen} onOpenChange={setIsAddToPlaylistOpen}>
-        <DialogContent className="sm:max-w-md rounded-[3rem] bg-background/80 backdrop-blur-3xl border-border/40 shadow-2xl p-0 overflow-hidden">
+        <DialogContent className="sm:max-w-md rounded-[3rem] bg-background/80 backdrop-blur-3xl border-border/40 shadow-2xl p-0 overflow-hidden z-[9999]" overlayClassName="z-[9998]">
           <div className="p-8 border-b border-border/40 flex items-center justify-between bg-pink-500/5">
             <div>
               <DialogTitle className="flex items-center gap-2 text-2xl font-black tracking-tight"><Music className="h-6 w-6 text-pink-500" /> Add to Playlist</DialogTitle>

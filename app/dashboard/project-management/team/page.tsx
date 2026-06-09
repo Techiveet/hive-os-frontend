@@ -9,6 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Users } from "lucide-react";
 import { projectApi } from "@/modules/projectmanagement/api";
 import { useProjectManagementRealtime } from "@/modules/projectmanagement/hooks/use-project-management-realtime";
+import { useTour } from "@/components/providers/tour-provider";
+import { Button } from "@/components/ui/button";
+import { HelpCircle } from "lucide-react";
+import { useTranslation } from "@/store/use-translation";
 
 type TeamMember = {
   userId: string;
@@ -20,6 +24,13 @@ type TeamMember = {
 };
 
 export default function TeamPage() {
+  const { t } = useTranslation();
+  const { startTour } = useTour();
+  
+  const teamTourSteps = [
+    { target: '#tour-pm-team-header', title: t('tour.team_header_title', 'Team Directory'), content: t('tour.team_header_desc', 'See everyone working across your projects.'), placement: 'bottom' as const },
+    { target: '#tour-pm-team-list', title: t('tour.team_list_title', 'Member Details'), content: t('tour.team_list_desc', 'View roles and project counts per person.'), placement: 'top' as const },
+  ];
   useProjectManagementRealtime();
 
   const { data, isLoading } = useQuery({
@@ -65,23 +76,29 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Team</h1>
-        <p className="text-muted-foreground">See who is working across your active project spaces.</p>
+      <div id="tour-pm-team-header" className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t('project_management.team', 'Team')}</h1>
+          <p className="text-muted-foreground">{t('project_management.team_desc', 'See who is working across your active project spaces.')}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => startTour(teamTourSteps)} className="bg-background/50 backdrop-blur-md rounded-full">
+          <HelpCircle className="h-4 w-4 mr-2" />
+          {t('topbar.system_tour', 'System Tour')}
+        </Button>
       </div>
 
-      <Card>
+      <Card id="tour-pm-team-list">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Users className="h-5 w-5" />
-            Project Members
+            {t('project_management.project_members', 'Project Members')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {members.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground">No project members yet.</div>
+            <div className="py-12 text-center text-muted-foreground">{t('project_management.no_project_members', 'No project members yet.')}</div>
           ) : (
-            members.map((member) => <TeamMemberRow key={member.userId} member={member} />)
+            members.map((member) => <TeamMemberRow key={member.userId} member={member} t={t} />)
           )}
         </CardContent>
       </Card>
@@ -89,7 +106,7 @@ export default function TeamPage() {
   );
 }
 
-function TeamMemberRow({ member }: { member: TeamMember }) {
+function TeamMemberRow({ member, t }: { member: TeamMember, t: any }) {
   const topRole = member.roles.includes("owner")
     ? "owner"
     : member.roles.includes("manager")
@@ -110,7 +127,7 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className="capitalize">{topRole}</Badge>
-        <Badge variant="secondary">{member.projects.length} projects</Badge>
+        <Badge variant="secondary">{member.projects.length} {t('project_management.projects', 'projects')}</Badge>
       </div>
     </div>
   );

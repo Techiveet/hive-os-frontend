@@ -22,7 +22,7 @@ import type { TenantLandingTemplate } from "@/modules/tenancy/landing-template";
 const tenantInvalidationKeys: QueryKey[] = [["tenants"]];
 const userInvalidationKeys: QueryKey[] = [["users"]];
 
-type QueuedUserPrimitive = string | number | boolean;
+type QueuedUserPrimitive = string | number | boolean | null;
 
 const toFormData = (payload: Record<string, QueuedUserPrimitive | undefined>) => {
   const formData = new FormData();
@@ -32,7 +32,11 @@ const toFormData = (payload: Record<string, QueuedUserPrimitive | undefined>) =>
       return;
     }
 
-    formData.append(key, String(value));
+    if (value === null) {
+      formData.append(key, "");
+    } else {
+      formData.append(key, String(value));
+    }
   });
 
   return formData;
@@ -73,6 +77,7 @@ export type UserOfflinePayload = {
   role?: string;
   avatar_path?: string;
   remove_avatar?: "1";
+  hospitality_staff_id?: number | null;
 };
 
 export type UserUpdateOfflinePayload = {

@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useTranslation } from "@/store/use-translation";
 import {
   PieChart,
   Pie,
@@ -205,6 +206,7 @@ const ISSUE_TYPE_COLORS: Record<string, string> = {
 };
 
 export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsProps) {
+  const { t } = useTranslation();
   // 1. Task Priority Distribution
   const priorityData = useMemo(() => {
     const counts = tasks.reduce((acc, task) => {
@@ -1193,13 +1195,13 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
           <div className="space-y-2">
             <div className="flex items-center gap-3">
                <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-               <span className="text-[11px] font-black uppercase tracking-[0.4em] text-primary/70">Predictive Intelligence Engine</span>
+               <span className="text-[11px] font-black uppercase tracking-[0.4em] text-primary/70">{t('project_management.predictive_intelligence_engine', 'Predictive Intelligence Engine')}</span>
             </div>
             <h2 className="text-4xl font-black tracking-tighter text-foreground">
-              Estimated Completion: <span className="text-primary">{predictiveMetrics.finishDate}</span>
+              {t('project_management.estimated_completion', 'Estimated Completion:')} <span className="text-primary">{predictiveMetrics.finishDate}</span>
             </h2>
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-              Based on current velocity of {predictiveMetrics.dailyVelocity} pts/day • {predictiveMetrics.confidence}% Confidence Index
+              {t('project_management.based_on_current_velocity', 'Based on current velocity of {velocity} pts/day • {confidence}% Confidence Index', { velocity: predictiveMetrics.dailyVelocity, confidence: predictiveMetrics.confidence })}
             </p>
           </div>
 
@@ -1300,7 +1302,7 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
                 <span className="text-4xl font-black tracking-tighter text-foreground group-hover:scale-105 transition-transform duration-500 origin-left">
                   {Math.round(healthMetrics.reduce((acc, m) => acc + m.A, 0) / healthMetrics.length)}%
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Efficiency Index</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t('project_management.efficiency_index', 'Efficiency Index')}</span>
               </div>
               <div className="mt-6 flex items-center gap-2">
                 <Badge className={cn(
@@ -1309,7 +1311,7 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
                   project.health === 'yellow' ? "bg-amber-500/10 text-amber-500" : 
                   "bg-rose-500/10 text-rose-500"
                 )}>
-                  {project.health || 'STABLE'} PHASE
+                  {t('project_management.project_phase', '{phase} PHASE', { phase: (project.health || 'STABLE').toUpperCase() })}
                 </Badge>
                 <div className="h-1 flex-1 bg-muted/20 rounded-full overflow-hidden">
                   <motion.div 
@@ -1341,7 +1343,7 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
                 <span className="text-4xl font-black tracking-tighter text-foreground">
                   {Math.round(resourceUtilizationData.reduce((acc, r) => acc + r.load, 0) / (resourceUtilizationData.length || 1))}%
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Average Utilization</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t('project_management.average_utilization', 'Average Utilization')}</span>
               </div>
               <div className="mt-6 flex -space-x-3 overflow-hidden">
                 {project.members?.slice(0, 6).map((m, i) => (
@@ -1377,11 +1379,11 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
                 <span className="text-4xl font-black tracking-tighter text-foreground">
                   {tasks.filter(t => t.column?.is_done).length}
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Tasks Completed</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t('project_management.tasks_completed', 'Tasks Completed')}</span>
               </div>
               <div className="mt-6 flex items-baseline gap-2">
                 <span className="text-xl font-black text-amber-500">{Math.round((tasks.filter(t => t.column?.is_done).length / (tasks.length || 1)) * 100)}%</span>
-                <span className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.2em]">Overall Completion</span>
+                <span className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.2em]">{t('project_management.overall_completion', 'Overall Completion')}</span>
               </div>
             </CardContent>
           </Card>
@@ -1404,7 +1406,7 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
                 <span className="text-4xl font-black tracking-tighter text-foreground">
                   {riskAssessmentData.find(d => d.name === 'Overdue')?.value || 0}
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Critical Blockers</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t('project_management.critical_blockers', 'Critical Blockers')}</span>
               </div>
               <div className="mt-6 flex gap-1">
                 {riskAssessmentData.map((d, i) => (
@@ -1437,7 +1439,7 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
                   <Cpu className="h-4 w-4 text-primary" />
                   Sprint Velocity Engine
                 </CardTitle>
-                <CardDescription className="text-[10px] font-bold uppercase tracking-widest mt-1 opacity-50">Points planned vs. actually delivered</CardDescription>
+                <CardDescription className="text-[10px] font-bold uppercase tracking-widest mt-1 opacity-50">{t('project_management.points_planned_vs_delivered', 'Points planned vs. actually delivered')}</CardDescription>
               </CardHeader>
               <CardContent className="h-[300px] p-8 pt-0">
                 <ResponsiveContainer width="100%" height="100%">
@@ -1447,8 +1449,8 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900 }} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend iconType="circle" />
-                    <Bar dataKey="planned" fill="hsl(var(--muted)/0.5)" radius={[6, 6, 0, 0]} name="Planned Points" />
-                    <Bar dataKey="completed" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} name="Delivered Points" />
+                    <Bar dataKey="planned" fill="hsl(var(--muted)/0.5)" radius={[6, 6, 0, 0]} name={t('project_management.planned_points', 'Planned Points')} />
+                    <Bar dataKey="completed" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} name={t('project_management.delivered_points', 'Delivered Points')} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -1466,11 +1468,11 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
                     <Coins className="h-4 w-4 text-emerald-500" />
                     Financial Intelligence
                   </CardTitle>
-                  <CardDescription className="text-[10px] font-bold uppercase tracking-widest mt-1 opacity-50">Budget utilization & runway analysis</CardDescription>
+                  <CardDescription className="text-[10px] font-bold uppercase tracking-widest mt-1 opacity-50">{t('project_management.budget_utilization_runway_analysis', 'Budget utilization & runway analysis')}</CardDescription>
                 </div>
                 <div className="text-right">
                   <p className="text-xl font-black text-foreground">{financialIntelligence.runwayDays === Infinity ? '∞' : financialIntelligence.runwayDays} Days</p>
-                  <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">Estimated Runway</p>
+                  <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">{t('project_management.estimated_runway', 'Estimated Runway')}</p>
                 </div>
               </div>
             </CardHeader>
@@ -1498,11 +1500,11 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
               </ResponsiveContainer>
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-3xl bg-background/20 border border-border/20">
-                   <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Daily Burn Rate</p>
+                   <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{t('project_management.daily_burn_rate', 'Daily Burn Rate')}</p>
                    <p className="text-lg font-black text-foreground">{project.currency || 'USD'} {financialIntelligence.burnRate.toLocaleString()}</p>
                 </div>
                 <div className="p-4 rounded-3xl bg-background/20 border border-border/20">
-                   <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Utilization</p>
+                   <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{t('project_management.utilization_label', 'Utilization')}</p>
                    <p className="text-lg font-black text-primary">{financialIntelligence.utilization}%</p>
                 </div>
               </div>
@@ -2496,7 +2498,7 @@ export function ProjectOverviewCharts({ project, tasks }: ProjectOverviewChartsP
                   <span className="text-[12px] font-black uppercase tracking-[0.5em] text-primary">Strategic Forecast</span>
                </div>
                <h3 className="text-5xl font-black tracking-tighter text-foreground leading-[0.9]">
-                 Roadmap <br /><span className="text-primary">Intelligence</span>
+                 {t('project_management.roadmap', 'Roadmap')} <br /><span className="text-primary">{t('project_management.intelligence', 'Intelligence')}</span>
                </h3>
                <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest max-w-xs leading-relaxed">
                  Using saved tasks, due dates, story points, and time logs to project delivery health from real project activity.

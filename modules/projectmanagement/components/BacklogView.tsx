@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/store/use-translation";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,7 @@ interface BacklogViewProps {
 }
 
 export function BacklogView({ project, tasks, onTaskClick }: BacklogViewProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [expandedSprints, setExpandedSprints] = useState<Record<string, boolean>>({ backlog: true });
 
@@ -99,10 +101,10 @@ export function BacklogView({ project, tasks, onTaskClick }: BacklogViewProps) {
       <div className="flex items-center justify-between bg-primary/[0.03] p-6 rounded-[2rem] border border-primary/10">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black tracking-tight">Backlog & Sprints</h2>
+            <h2 className="text-xl font-black tracking-tight">{t("project_management.backlog_and_sprints", "Backlog & Sprints")}</h2>
             <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] uppercase tracking-widest px-2">Software Dev</Badge>
           </div>
-          <p className="text-xs text-muted-foreground font-medium mt-1">Manage your product backlog and plan upcoming iterative sprints.</p>
+          <p className="text-xs text-muted-foreground font-medium mt-1">{t("project_management.manage_backlog_desc", "Manage your product backlog and plan upcoming iterative sprints.")}</p>
         </div>
         <Button onClick={() => createSprintMutation.mutate()} className="gap-2 h-10 px-6 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-primary/20">
           <Plus className="h-4 w-4" />
@@ -139,9 +141,9 @@ export function BacklogView({ project, tasks, onTaskClick }: BacklogViewProps) {
               <div className="p-1.5 rounded-lg bg-background border shadow-sm">
                 {expandedSprints['backlog'] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </div>
-              <h3 className="font-black uppercase tracking-widest text-sm">Product Backlog</h3>
+              <h3 className="font-black uppercase tracking-widest text-sm">{t("project_management.product_backlog", "Product Backlog")}</h3>
               <Badge variant="outline" className="ml-2 bg-background font-black text-[10px] rounded-lg">
-                {backlogTasks.length} ITEMS
+                {backlogTasks.length} {t("project_management.items", "ITEMS")}
               </Badge>
             </div>
             <div className="flex items-center gap-2">
@@ -295,6 +297,7 @@ function TaskItem({ task, onClick, sprints, onMove }: {
   sprints: Sprint[],
   onMove: (sprintId: string | null, isBacklog: boolean) => void
 }) {
+  const { t } = useTranslation();
   const priorityColors: Record<string, string> = {
     low: "text-emerald-500 bg-emerald-500/10",
     medium: "text-sky-500 bg-sky-500/10",
@@ -346,7 +349,7 @@ function TaskItem({ task, onClick, sprints, onMove }: {
           "text-[10px] h-5 capitalize border-none",
           task.column?.is_done ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
         )}>
-          {task.column?.name || 'Backlog'}
+          {task.column?.name ? t(`project_management.column_${task.column.name.toLowerCase().replace(/\s+/g, '_')}`, task.column.name) : t('project_management.backlog', 'Backlog')}
         </Badge>
 
         <DropdownMenu>

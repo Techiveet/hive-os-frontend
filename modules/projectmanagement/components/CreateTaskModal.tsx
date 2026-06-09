@@ -72,33 +72,34 @@ import {
   TabsList, 
   TabsTrigger 
 } from "@/components/ui/tabs";
+import { useTranslation } from "@/store/use-translation";
 
 // Dynamic schema function with all fields strictly required
-const createTaskSchema = (projectStartDate?: Date, projectEndDate?: Date) => {
+const createTaskSchema = (projectStartDate?: Date, projectEndDate?: Date, t?: any) => {
   return z.object({
     title: z
       .string()
       .trim()
-      .min(1, "Task title is required")
-      .max(255, "Title cannot exceed 255 characters"),
+      .min(1, t ? t("project_management.task_title_required", "Task title is required") : "Task title is required")
+      .max(255, t ? t("project_management.title_max_length", "Title cannot exceed 255 characters") : "Title cannot exceed 255 characters"),
     description: z
       .string()
       .trim()
-      .min(1, "Description is required to provide context"),
+      .min(1, t ? t("project_management.description_required", "Description is required to provide context") : "Description is required to provide context"),
     priority: z.enum(["low", "medium", "high", "urgent"], {
-      message: "Please select a priority level",
+      message: t ? t("project_management.priority_required", "Please select a priority level") : "Please select a priority level",
     }),
     due_date: z.date({
-      message: "A due date is required",
+      message: t ? t("project_management.due_date_required", "A due date is required") : "A due date is required",
     }),
     assignees: z
       .array(z.string())
-      .min(1, "Please assign at least one team member"),
+      .min(1, t ? t("project_management.assignee_required", "Please assign at least one team member") : "Please assign at least one team member"),
     parent_task_id: z.string().nullable().optional(),
     issue_type: z.enum(["task", "bug", "feature", "improvement", "epic", "refactor", "debt"]).optional(),
     story_points: z.number().nullable().optional(),
     environment: z.string().nullable().optional(),
-    pr_url: z.string().url("Please enter a valid URL").nullable().or(z.literal("")).optional(),
+    pr_url: z.string().url(t ? t("project_management.invalid_url", "Please enter a valid URL") : "Please enter a valid URL").nullable().or(z.literal("")).optional(),
   }).superRefine((data, ctx) => {
     // Custom Zod validation for the due date boundaries
     if (data.due_date && projectStartDate && projectEndDate) {
@@ -109,7 +110,7 @@ const createTaskSchema = (projectStartDate?: Date, projectEndDate?: Date) => {
       if (dueDate < start || dueDate > end) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Due date must be between ${format(start, "PP")} and ${format(end, "PP")}`,
+          message: t ? t("project_management.due_date_between", `Due date must be between {start} and {end}`, { start: format(start, "PP"), end: format(end, "PP") }) : `Due date must be between ${format(start, "PP")} and ${format(end, "PP")}`,
           path: ["due_date"], 
         });
       }
@@ -160,6 +161,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   projectEndDate,
   initialDueDate,
 }) => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { user: activeUser } = useUser();
   const isSoftwareDev = activeUser?.business_type?.toLowerCase()?.replace('-', ' ') === "software development";
@@ -174,8 +176,8 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   );
 
   const formSchema = useMemo(
-    () => createTaskSchema(projectStartDate, projectEndDate),
-    [projectStartDate, projectEndDate]
+    () => createTaskSchema(projectStartDate, projectEndDate, t),
+    [projectStartDate, projectEndDate, t]
   );
 
   const form = useForm<TaskFormValues>({
@@ -240,13 +242,13 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       return projectApi.createTask(payload);
     },
     onSuccess: () => {
-      toast.success("Task created successfully");
+      toast.success(t("project_management.task_created_success", "Task created successfully"));
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       form.reset();
       onClose();
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "An error occurred");
+      toast.error(error instanceof Error ? error.message : t("project_management.error_occurred", "An error occurred"));
     },
     onSettled: () => {
       setIsSubmitting(false);
@@ -264,7 +266,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const handleFileSelect = (file: SelectedMediaFile) => {
     const rawUrl = file?.media_details?.url || file?.url || file?.path;
     if (!rawUrl) {
-      toast.error("Error: Could not extract media path from selection.");
+      toast.error(t("project_management.error_media_path", "Error: Could not extract media path from selection."));
       return;
     }
 
@@ -292,9 +294,9 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
                     <BriefcaseIcon className="h-5 w-5 text-primary" />
                   </div>
-                  <DialogTitle className="text-2xl font-bold font-space tracking-tight">Create New Task</DialogTitle>
+                  <DialogTitle className="text-2xl font-bold font-space tracking-tight">{t("project_management.create_new_task", "Create New Task")}</DialogTitle>
                 </div>
-                <p className="text-sm text-muted-foreground/60 font-medium">Define task requirements and assign ownership</p>
+                <p className="text-sm text-muted-foreground/60 font-medium">{t("project_management.create_task_desc", "Define task requirements and assign ownership")}</p>
               </DialogHeader>
             </div>
 
@@ -312,7 +314,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       >
                         <div className="flex items-center gap-2">
                           <TextQuote className="h-3.5 w-3.5" />
-                          General Details
+                          {t("project_management.general_details", "General Details")}
                         </div>
                       </TabsTrigger>
                       <TabsTrigger 
@@ -321,7 +323,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       >
                         <div className="flex items-center gap-2">
                           <Users className="h-3.5 w-3.5" />
-                          Team & Dependencies
+                          {t("project_management.team_dependencies", "Team & Dependencies")}
                         </div>
                       </TabsTrigger>
                       {isSoftwareDev && (
@@ -331,7 +333,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         >
                           <div className="flex items-center gap-2">
                             <Settings2 className="h-3.5 w-3.5" />
-                            Engineering
+                            {t("project_management.engineering", "Engineering")}
                           </div>
                         </TabsTrigger>
                       )}
@@ -341,7 +343,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       >
                         <div className="flex items-center gap-2">
                           <Paperclip className="h-3.5 w-3.5" />
-                          Attachments
+                          {t("project_management.attachments", "Attachments")}
                         </div>
                       </TabsTrigger>
                     </TabsList>
@@ -355,10 +357,10 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         name="title"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Task Title</FormLabel>
+                            <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t("project_management.task_title", "Task Title")}</FormLabel>
                             <FormControl>
                               <Input 
-                                placeholder="What needs to be done?" 
+                                placeholder={t("project_management.task_title_placeholder", "What needs to be done?")} 
                                 {...field} 
                                 className="h-12 bg-background border-border/40 focus:border-primary/50 focus:ring-primary/20 transition-all text-lg font-semibold" 
                               />
@@ -374,18 +376,18 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                           name="priority"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Priority Level</FormLabel>
+                              <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t("project_management.priority_level", "Priority Level")}</FormLabel>
                               <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
                                   <SelectTrigger className="bg-background border-border/40 h-11 uppercase text-[10px] font-bold tracking-widest">
-                                    <SelectValue placeholder="Select priority" />
+                                    <SelectValue placeholder={t("project_management.select_priority", "Select priority")} />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent className="glass-panel border-white/10">
-                                  <SelectItem value="low" className="text-blue-400">Low Priority</SelectItem>
-                                  <SelectItem value="medium" className="text-yellow-400">Medium Priority</SelectItem>
-                                  <SelectItem value="high" className="text-orange-400">High Priority</SelectItem>
-                                  <SelectItem value="urgent" className="text-red-400 font-bold">Urgent Action</SelectItem>
+                                  <SelectItem value="low" className="text-blue-400">{t("project_management.priority_low", "Low Priority")}</SelectItem>
+                                  <SelectItem value="medium" className="text-yellow-400">{t("project_management.priority_standard", "Medium Priority")}</SelectItem>
+                                  <SelectItem value="high" className="text-orange-400">{t("project_management.priority_high", "High Priority")}</SelectItem>
+                                  <SelectItem value="urgent" className="text-red-400 font-bold">{t("project_management.priority_critical", "Urgent Action")}</SelectItem>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -398,7 +400,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                           name="due_date"
                           render={({ field }) => (
                             <FormItem className="flex flex-col">
-                              <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70 mb-2">Target Deadline</FormLabel>
+                              <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70 mb-2">{t("project_management.target_deadline", "Target Deadline")}</FormLabel>
                               <Popover modal={false}>
                                 <PopoverTrigger asChild>
                                   <FormControl>
@@ -410,7 +412,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         !field.value && "text-muted-foreground"
                                       )}
                                     >
-                                      {field.value ? format(field.value, "PPP") : <span>Select date...</span>}
+                                      {field.value ? format(field.value, "PPP") : <span>{t("project_management.select_date", "Select date...")}</span>}
                                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                     </Button>
                                   </FormControl>
@@ -444,13 +446,13 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         name="description"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Requirements & Context</FormLabel>
+                            <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t("project_management.requirements_context", "Requirements & Context")}</FormLabel>
                             <FormControl>
                               <RichTextEditor 
                                 ref={editorRef}
                                 value={field.value || ""} 
                                 onChange={field.onChange}
-                                placeholder="Add detailed requirements, context, and expected outcomes..." 
+                                placeholder={t("project_management.requirements_placeholder", "Add detailed requirements, context, and expected outcomes...")} 
                                 className="min-h-[200px] bg-background border-border/40 focus-within:border-primary/50 transition-all rounded-xl overflow-hidden" 
                                 onOpenMediaPicker={() => setIsFileManagerOpen(true)}
                               />
@@ -479,7 +481,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
                           return (
                             <FormItem>
-                              <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Project Assignees</FormLabel>
+                              <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t("project_management.project_assignees", "Project Assignees")}</FormLabel>
                               <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen} modal={false}>
                                 <PopoverTrigger asChild>
                                   <FormControl>
@@ -508,11 +510,11 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                               </Badge>
                                             ))
                                         ) : (
-                                          "Assign to team members..."
+                                          t("project_management.assign_team_members", "Assign to team members...")
                                         )}
                                       </div>
                                       <div className="flex items-center gap-3">
-                                         <span className="text-[10px] font-bold text-muted-foreground uppercase">{selectedIds.length} Selected</span>
+                                         <span className="text-[10px] font-bold text-muted-foreground uppercase">{selectedIds.length} {t("project_management.selected", "Selected")}</span>
                                          <ChevronDown className="h-4 w-4 opacity-50" />
                                       </div>
                                     </Button>
@@ -555,22 +557,22 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         name="parent_task_id"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Dependency (Parent Task)</FormLabel>
+                            <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t("project_management.dependency_parent", "Dependency (Parent Task)")}</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value || "none"}>
                               <FormControl>
                                 <SelectTrigger className="bg-background border-border/40 h-12 px-4 font-semibold">
-                                  <SelectValue placeholder="Link to a parent task..." />
+                                  <SelectValue placeholder={t("project_management.link_parent_task", "Link to a parent task...")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent className="glass-panel border-white/10 max-h-60 overflow-y-auto">
-                                <SelectItem value="none" className="font-medium text-muted-foreground">Independent Task</SelectItem>
+                                <SelectItem value="none" className="font-medium text-muted-foreground">{t("project_management.independent_task", "Independent Task")}</SelectItem>
                                 {siblingTasks.map((task) => (
                                   <SelectItem key={task.id} value={task.id} className="font-semibold">{task.title}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                             <p className="text-[10px] font-medium text-muted-foreground/50 mt-2 italic">
-                              Dependencies define the workflow sequence in the Project Timeline.
+                              {t("project_management.dependencies_desc", "Dependencies define the workflow sequence in the Project Timeline.")}
                             </p>
                             <FormMessage />
                           </FormItem>
@@ -588,8 +590,8 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                 <Terminal className="w-4 h-4" />
                               </div>
                               <div>
-                                <h4 className="text-xs font-black uppercase tracking-widest text-foreground/80">Task Classification</h4>
-                                <p className="text-[10px] text-muted-foreground/60 font-bold">Define the technical nature of this task</p>
+                                <h4 className="text-xs font-black uppercase tracking-widest text-foreground/80">{t("project_management.task_classification", "Task Classification")}</h4>
+                                <p className="text-[10px] text-muted-foreground/60 font-bold">{t("project_management.task_class_desc", "Define the technical nature of this task")}</p>
                               </div>
                             </div>
 
@@ -598,7 +600,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                               name="issue_type"
                               render={({ field }) => (
                                 <FormItem className="space-y-4">
-                                  <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Issue Type</FormLabel>
+                                  <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t("project_management.issue_type", "Issue Type")}</FormLabel>
                                   <div className="grid grid-cols-2 gap-3">
                                     {Object.entries(ISSUE_TYPE_CONFIG).map(([value, config]) => (
                                       <button
@@ -613,7 +615,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         )}
                                       >
                                         <config.icon className="w-3.5 h-3.5" />
-                                        {config.label}
+                                        {t(`project_management.issue_${value}`, config.label)}
                                       </button>
                                     ))}
                                   </div>
@@ -627,14 +629,14 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                               name="story_points"
                               render={({ field }) => (
                                 <FormItem className="space-y-4">
-                                  <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Complexity (Story Points)</FormLabel>
+                                  <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t("project_management.complexity_story_points", "Complexity (Story Points)")}</FormLabel>
                                   <div className="space-y-4">
                                     <FormControl>
                                       <div className="relative group">
                                         <Zap className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
                                         <Input 
                                           type="number" 
-                                          placeholder="e.g. 5" 
+                                          placeholder={t("project_management.story_points_placeholder", "e.g. 5")} 
                                           {...field} 
                                           onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
                                           value={field.value || ""}
@@ -672,8 +674,8 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                 <Globe className="w-4 h-4" />
                               </div>
                               <div>
-                                <h4 className="text-xs font-black uppercase tracking-widest text-foreground/80">Environment & Tracking</h4>
-                                <p className="text-[10px] text-muted-foreground/60 font-bold">Traceability and deployment context</p>
+                                <h4 className="text-xs font-black uppercase tracking-widest text-foreground/80">{t("project_management.environment_tracking", "Environment & Tracking")}</h4>
+                                <p className="text-[10px] text-muted-foreground/60 font-bold">{t("project_management.env_tracking_desc", "Traceability and deployment context")}</p>
                               </div>
                             </div>
 
@@ -683,34 +685,34 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                 name="environment"
                                 render={({ field }) => (
                                   <FormItem className="space-y-3">
-                                    <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Target Environment</FormLabel>
+                                    <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t("project_management.target_environment", "Target Environment")}</FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value || "none"}>
                                       <FormControl>
                                         <SelectTrigger className="bg-background h-14 border-border/40 focus:border-primary/50 transition-all rounded-2xl font-bold text-sm">
                                           <div className="flex items-center gap-3">
                                             <Cpu className="w-4 h-4 text-muted-foreground/40" />
-                                            <SelectValue placeholder="Target environment" />
+                                            <SelectValue placeholder={t("project_management.target_environment", "Target Environment")} />
                                           </div>
                                         </SelectTrigger>
                                       </FormControl>
                                       <SelectContent className="bg-background border-border/40 rounded-2xl shadow-2xl">
-                                        <SelectItem value="none" className="font-medium opacity-50">Agnostic / Local</SelectItem>
+                                        <SelectItem value="none" className="font-medium opacity-50">{t("project_management.agnostic_local", "Agnostic / Local")}</SelectItem>
                                         <SelectItem value="development" className="focus:bg-primary/10 py-3">
                                           <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                            <span className="font-bold">Development</span>
+                                            <span className="font-bold">{t("project_management.env_development", "Development")}</span>
                                           </div>
                                         </SelectItem>
                                         <SelectItem value="staging" className="focus:bg-primary/10 py-3">
                                           <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full bg-amber-500" />
-                                            <span className="font-bold">Staging</span>
+                                            <span className="font-bold">{t("project_management.env_staging", "Staging")}</span>
                                           </div>
                                         </SelectItem>
                                         <SelectItem value="production" className="focus:bg-primary/10 py-3">
                                           <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full bg-rose-500" />
-                                            <span className="font-bold text-rose-400">Production</span>
+                                            <span className="font-bold text-rose-400">{t("project_management.env_production", "Production")}</span>
                                           </div>
                                         </SelectItem>
                                       </SelectContent>
@@ -725,7 +727,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                 name="pr_url"
                                 render={({ field }) => (
                                   <FormItem className="space-y-3">
-                                    <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Pull Request Reference</FormLabel>
+                                    <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t("project_management.pr_reference", "Pull Request Reference")}</FormLabel>
                                     <div className="relative group/input">
                                       <FormControl>
                                         <Input 
@@ -753,14 +755,14 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         <div className="p-4 rounded-full bg-primary/10 mb-4 group-hover:scale-110 transition-transform">
                           <Paperclip className="h-8 w-8 text-primary" />
                         </div>
-                        <h4 className="text-lg font-bold mb-2">Digital Asset Library</h4>
-                        <p className="text-sm text-muted-foreground/60 max-w-[280px] mb-8 leading-relaxed">Select technical documentation, design specs, or media assets from your cloud storage.</p>
+                        <h4 className="text-lg font-bold mb-2">{t("project_management.digital_asset_library", "Digital Asset Library")}</h4>
+                        <p className="text-sm text-muted-foreground/60 max-w-[280px] mb-8 leading-relaxed">{t("project_management.digital_asset_desc", "Select technical documentation, design specs, or media assets from your cloud storage.")}</p>
                         <Button 
                           type="button" 
                           onClick={() => setIsFileManagerOpen(true)}
                           className="bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-widest text-xs px-8 py-6 rounded-2xl shadow-xl shadow-primary/20"
                         >
-                          Open Asset Manager
+                          {t("project_management.open_asset_manager", "Open Asset Manager")}
                         </Button>
                       </div>
                     </TabsContent>
@@ -776,7 +778,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     disabled={isSubmitting}
                     className="font-bold hover:bg-white/5"
                   >
-                    Cancel
+                    {t("project_management.cancel", "Cancel")}
                   </Button>
                   <Button 
                     type="submit" 
@@ -786,10 +788,10 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     {isSubmitting ? (
                       <div className="flex items-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Synchronizing...</span>
+                        <span>{t("project_management.synchronizing", "Synchronizing...")}</span>
                       </div>
                     ) : (
-                      "Establish Task"
+                      t("project_management.establish_task", "Establish Task")
                     )}
                   </Button>
                 </div>
@@ -803,7 +805,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       {isFileManagerOpen && (
         <Dialog open={isFileManagerOpen} onOpenChange={setIsFileManagerOpen} modal={false}>
           <DialogContent className="flex h-[85vh] w-[95vw] max-w-6xl flex-col gap-0 overflow-hidden rounded-[2.5rem] border-border/50 bg-background p-0 shadow-2xl z-[100]">
-            <DialogTitle className="sr-only">Select Media for Task</DialogTitle>
+            <DialogTitle className="sr-only">{t("project_management.select_media_task", "Select Media for Task")}</DialogTitle>
             <div className="flex-1 overflow-hidden relative file-picker-wrapper">
               <style
                 dangerouslySetInnerHTML={{

@@ -16,6 +16,13 @@ export type TenantLandingRendering = {
   asset_base_url: string;
 };
 
+export type TenantLandingHeroSlide = {
+  image: string;
+  title: string;
+  subtitle: string;
+  badge: string;
+};
+
 export type TenantLandingHero = {
   eyebrow: string;
   title: string;
@@ -25,6 +32,7 @@ export type TenantLandingHero = {
   secondary_label: string;
   secondary_href: string;
   announcement?: string;
+  slides?: TenantLandingHeroSlide[];
 };
 
 export type TenantLandingStat = {
@@ -36,6 +44,7 @@ export type TenantLandingCard = {
   kicker: string;
   title: string;
   description: string;
+  image?: string;
 };
 
 export type TenantLandingSpotlightItem = {
@@ -64,6 +73,15 @@ export type TenantLandingFinalCta = {
   secondary_href: string;
 };
 
+export type TenantLandingMenus = {
+  eyebrow?: string;
+  title?: string;
+  description_eyebrow?: string;
+  description?: string;
+  image_url?: string;
+  model_3d_url?: string;
+};
+
 export type TenantLandingTemplateMeta = {
   business_type?: string;
   business_label?: string;
@@ -84,6 +102,7 @@ export type TenantLandingTemplate = {
   testimonials: TenantLandingTestimonial[];
   final_cta: TenantLandingFinalCta;
   rendering: TenantLandingRendering;
+  menus?: TenantLandingMenus;
 };
 
 export type TenantLandingTemplateVariant = {
@@ -191,6 +210,12 @@ export const FALLBACK_TENANT_LANDING_TEMPLATE: TenantLandingTemplate = {
     js: "",
     asset_base_url: "",
   },
+  menus: {
+    eyebrow: "Menus",
+    title: "Explore Our Menus in 3D",
+    description_eyebrow: "Interactive Experience",
+    description: "Interact directly with our signature dishes in high-fidelity 3D, or select from our exquisite main courses.",
+  },
 };
 
 export const FALLBACK_TENANT_BUSINESS_TYPES: TenantBusinessTypeDefinition[] = [
@@ -230,7 +255,18 @@ export const resolveLandingTemplate = (
       is_custom: typeof candidateMeta?.is_custom === "boolean" ? candidateMeta.is_custom : undefined,
     },
     theme: { ...fallback.theme, ...(candidate.theme ?? {}) },
-    hero: { ...fallback.hero, ...(candidate.hero ?? {}) },
+    hero: {
+      ...fallback.hero,
+      ...(candidate.hero ?? {}),
+      slides: Array.isArray(candidate.hero?.slides) && candidate.hero.slides.length > 0
+        ? candidate.hero.slides.map((slide) => ({
+            image: String(slide?.image ?? ""),
+            title: String(slide?.title ?? ""),
+            subtitle: String(slide?.subtitle ?? ""),
+            badge: String(slide?.badge ?? ""),
+          }))
+        : (fallback.hero?.slides ?? undefined),
+    },
     stats: Array.isArray(candidate.stats) && candidate.stats.length > 0
       ? candidate.stats.map((item) => ({
           value: String(item?.value ?? ""),
@@ -242,6 +278,7 @@ export const resolveLandingTemplate = (
           kicker: String(item?.kicker ?? ""),
           title: String(item?.title ?? ""),
           description: String(item?.description ?? ""),
+          image: item?.image ? String(item.image) : undefined,
         }))
       : cloneTemplate(fallback).highlights,
     spotlight: {
@@ -263,6 +300,12 @@ export const resolveLandingTemplate = (
       : cloneTemplate(fallback).testimonials,
     final_cta: { ...fallback.final_cta, ...(candidate.final_cta ?? {}) },
     rendering: resolveLandingRendering(candidate.rendering, fallback.rendering),
+    menus: {
+      eyebrow: typeof candidate.menus?.eyebrow === "string" ? candidate.menus.eyebrow : (fallback.menus?.eyebrow ?? "Menus"),
+      title: typeof candidate.menus?.title === "string" ? candidate.menus.title : (fallback.menus?.title ?? "Explore Our Menus in 3D"),
+      description_eyebrow: typeof candidate.menus?.description_eyebrow === "string" ? candidate.menus.description_eyebrow : (fallback.menus?.description_eyebrow ?? "Interactive Experience"),
+      description: typeof candidate.menus?.description === "string" ? candidate.menus.description : (fallback.menus?.description ?? "Interact directly with our signature dishes in high-fidelity 3D, or select from our exquisite main courses."),
+    },
   };
 };
 

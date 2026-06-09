@@ -7,6 +7,10 @@ import type {
   HospitalityEvent,
   HospitalityMenuItem,
   HospitalityOverview,
+  HospitalityMenuCategory,
+  HospitalityStaffShift,
+  HospitalityWaitlistEntry,
+  HospitalityFeedback,
 } from "@/modules/hospitality/types";
 
 type Paginated<T> = {
@@ -67,22 +71,86 @@ export const fetchHospitalityMenuItems = async (params: Record<string, unknown> 
 export const createHospitalityMenuItem = async (payload: Record<string, unknown>) =>
   (await api.post<HospitalityMenuItem>("/hospitality/menu-items", payload)).data;
 
+export const updateHospitalityMenuItem = async (id: number, payload: Record<string, unknown>) =>
+  (await api.put<HospitalityMenuItem>(`/hospitality/menu-items/${id}`, payload)).data;
+
+export const deleteHospitalityMenuItem = async (id: number) =>
+  (await api.delete(`/hospitality/menu-items/${id}`)).data;
+
+export const fetchHospitalityMenuCategories = async (params: Record<string, unknown> = {}) =>
+  unwrapList<HospitalityMenuCategory>((await api.get("/hospitality/menu-categories", { params })).data);
+
+export const fetchHospitalityStaffShifts = async (params: Record<string, unknown> = {}) =>
+  unwrapList<HospitalityStaffShift>((await api.get("/hospitality/staff-shifts", { params })).data);
+
+export const createHospitalityStaffShift = async (payload: Record<string, unknown>) =>
+  (await api.post<HospitalityStaffShift>("/hospitality/staff-shifts", payload)).data;
+
+export const updateHospitalityStaffShift = async (id: number, payload: Record<string, unknown>) =>
+  (await api.put<HospitalityStaffShift>(`/hospitality/staff-shifts/${id}`, payload)).data;
+
+export const deleteHospitalityStaffShift = async (id: number) =>
+  (await api.delete(`/hospitality/staff-shifts/${id}`)).data;
+
 export const fetchHospitalityEvents = async (params: Record<string, unknown> = {}) =>
   unwrapList<HospitalityEvent>((await api.get("/hospitality/events", { params })).data);
 
 export const createHospitalityEvent = async (payload: Record<string, unknown>) =>
   (await api.post<HospitalityEvent>("/hospitality/events", payload)).data;
 
+export const updateHospitalityEvent = async (id: number, payload: Record<string, unknown>) =>
+  (await api.put<HospitalityEvent>(`/hospitality/events/${id}`, payload)).data;
+
+export const deleteHospitalityEvent = async (id: number) =>
+  (await api.delete(`/hospitality/events/${id}`)).data;
+
 export const fetchHospitalityCustomers = async (params: Record<string, unknown> = {}) =>
   unwrapList<HospitalityCustomer>((await api.get("/hospitality/customers", { params })).data);
+
+export const createHospitalityCustomer = async (payload: Record<string, unknown>) =>
+  (await api.post<HospitalityCustomer>("/hospitality/customers", payload)).data;
+
+export const updateHospitalityCustomer = async (id: number, payload: Record<string, unknown>) =>
+  (await api.put<HospitalityCustomer>(`/hospitality/customers/${id}`, payload)).data;
+
+export const deleteHospitalityCustomer = async (id: number) =>
+  (await api.delete(`/hospitality/customers/${id}`)).data;
+
+export const fetchHospitalityCustomerHistory = async (id: number) =>
+  (await api.get(`/hospitality/customers/${id}/history`)).data;
+
+export const fetchHospitalityWaitlist = async (params: Record<string, unknown> = {}) =>
+  unwrapList<HospitalityWaitlistEntry>((await api.get("/hospitality/waitlist", { params })).data);
+
+export const createHospitalityWaitlistEntry = async (payload: Record<string, unknown>) =>
+  (await api.post<HospitalityWaitlistEntry>("/hospitality/waitlist", payload)).data;
+
+export const updateHospitalityWaitlistEntry = async (id: number, payload: Record<string, unknown>) =>
+  (await api.put<HospitalityWaitlistEntry>(`/hospitality/waitlist/${id}`, payload)).data;
+
+export const seatHospitalityWaitlistEntry = async (id: number, location_id: number) =>
+  (await api.post(`/hospitality/waitlist/${id}/seat`, { location_id })).data;
+
+export const fetchHospitalityFeedback = async (params: Record<string, unknown> = {}) =>
+  unwrapList<HospitalityFeedback>((await api.get("/hospitality/feedback", { params })).data);
+
+export const updateHospitalityFeedback = async (id: number, payload: Record<string, unknown>) =>
+  (await api.put<HospitalityFeedback>(`/hospitality/feedback/${id}`, payload)).data;
+
+export const deleteHospitalityFeedback = async (id: number) =>
+  (await api.delete(`/hospitality/feedback/${id}`)).data;
+
 
 export const splitHospitalityBill = async (orderId: number, payload: Record<string, unknown>) =>
   (await api.post(`/hospitality/service-orders/${orderId}/split-bill`, payload)).data;
 
+export const closeHospitalityOrder = async (orderId: number) =>
+  (await api.post(`/hospitality/service-orders/${orderId}/close`)).data;
+
 export const fetchHospitalityBills = async (orderId: number) =>
   (await api.get(`/hospitality/service-orders/${orderId}/bills`)).data;
 export const fetchFloorPlan = async (params: Record<string, unknown> = {}) =>
-  (await api.get("/hospitality/space/floor-plan", { params })).data;
+  (await api.get("/hospitality/space/zones", { params })).data;
 
 export const updateLocationStatus = async (id: number, status: string) =>
   (await api.patch(`/hospitality/space/locations/${id}/status`, { status })).data;

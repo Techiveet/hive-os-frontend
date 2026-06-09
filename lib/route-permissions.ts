@@ -158,11 +158,11 @@ if (matchesPrefix(path, "/dashboard/hospitality")) {
   }
 
 if (matchesPrefix(path, "/dashboard/inventory")) {
-    return hasSubscribedModule(access, "warehouse_management");
+    return hasSubscribedModule(access, "inventory_control");
   }
 
   if (matchesPrefix(path, "/dashboard/warehouse")) {
-    return hasSubscribedModule(access, "inventory_control");
+    return hasSubscribedModule(access, "warehouse_management");
   }
 
   if (matchesPrefix(path, "/dashboard/workflow")) {

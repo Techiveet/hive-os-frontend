@@ -46,6 +46,7 @@ import {
 } from "@/lib/runtime-context";
 import { resolveLandingTemplate } from "@/modules/tenancy/landing-template";
 import { TenantBusinessLanding } from "@/modules/tenancy/components/tenant-business-landing";
+import { RestaurantLandingTemplate } from "@/modules/tenancy/components/restaurant-landing-template";
 
 interface LandingUIProps {
   initialPortalName: string;
@@ -237,7 +238,7 @@ function LandingUI({
     retry: 1,
   });
 
-  const { data: tenantLandingData } = useQuery({
+  const { data: tenantLandingData, isLoading: isLoadingTenantLanding } = useQuery({
     queryKey: ["tenantPublicLanding", detectedTenantSlug],
     queryFn: async () => {
       const res = await fetch(`${getBackendApiRoot()}/tenant/public/landing`, {
@@ -413,6 +414,35 @@ function LandingUI({
   ];
 
   if (isTenantExperience) {
+    if (isLoadingTenantLanding) {
+      return (
+        <div className="flex h-screen w-screen items-center justify-center bg-[#080510]">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-[#FF1A43] border-t-transparent" />
+            <p className="text-white/60 font-black tracking-widest text-xs uppercase">Loading Savory Lounge...</p>
+          </div>
+        </div>
+      );
+    }
+
+    const businessType = tenantLandingPayload?.business_type;
+    const isRestaurant = businessType === "restaurant" || detectedTenantSlug === "savory-lounge";
+
+    if (isRestaurant) {
+      return (
+        <RestaurantLandingTemplate 
+          brandSettings={brandSettings}
+          template={resolveLandingTemplate(tenantLandingPayload?.landing_page_template)}
+          tenantName={
+            tenantLandingPayload?.tenant?.name ||
+            brandSettings?.app_title ||
+            detectedTenantSlug ||
+            t('landing.common.tenant_workspace', "Tenant Workspace")
+          }
+        />
+      );
+    }
+
     return (
       <TenantBusinessLanding
         brandSettings={brandSettings}

@@ -6,7 +6,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
 import {
   Calendar, Eye, EyeOff, Loader2, Mail, Pencil, PlusCircle, 
-  RefreshCw, Shield, Trash2, UserCog, Upload, ImageIcon, Filter, X, AlertCircle, Zap, VenetianMask
+  RefreshCw, Shield, Trash2, UserCog, Upload, ImageIcon, Filter, X, AlertCircle, Zap, VenetianMask,
+  Check, ChevronsUpDown
 } from "lucide-react"; 
 
 import {
@@ -23,6 +24,8 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { DataTable, type CompanySettingsInfo, type BrandingSettingsInfo } from "@/components/datatable/data-table";
 import { useOfflineMutation } from "@/hooks/use-offline-mutation";
 import { isOfflineMutationQueuedResult } from "@/lib/offline/mutation-queue";
@@ -35,6 +38,7 @@ import {
   updateUserOfflineMutationDefinition,
 } from "@/modules/shared/offline-mutations";
 import { fetchRoles, fetchUsers } from "@/modules/identity/api";
+import api from "@/modules/shared/api/http";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -56,6 +60,22 @@ export type UserForClient = {
     roleId: string | null;
     role: { key: string; name: string };
   }[];
+  hospitalityStaff?: {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    phone?: string;
+  } | null;
+};
+
+const staffRoleToSystemRole: Record<string, string> = {
+  manager: "Hospitality Manager",
+  host: "Hospitality Host",
+  waiter: "Hospitality Waiter",
+  chef: "Hospitality Chef",
+  bartender: "Hospitality Waiter",
+  security: "Employee",
 };
 
 type Props = {
@@ -155,6 +175,7 @@ export function UsersTabClient(props: Props) {
         roleId: String(r.id),
         role: { key: r.name, name: r.name },
       })),
+      hospitalityStaff: u.hospitality_staff || null,
     }),
     [getStorageUrl]
   );
@@ -174,6 +195,7 @@ export function UsersTabClient(props: Props) {
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
   const [viewDialogOpen, setViewDialogOpen] = React.useState(false);
   const [isFileManagerOpen, setIsFileManagerOpen] = React.useState(false);
+  const [comboboxOpen, setComboboxOpen] = React.useState(false);
 
   const [editingUser, setEditingUser] = React.useState<UserForClient | null>(null);
   const [viewUser, setViewUser] = React.useState<UserForClient | null>(null);
@@ -184,6 +206,7 @@ export function UsersTabClient(props: Props) {
   const [formPassword, setFormPassword] = React.useState("");
   const [formRoleId, setFormRoleId] = React.useState<string>("");
   const [showPassword, setShowPassword] = React.useState(false);
+  const [formHospitalityStaffId, setFormHospitalityStaffId] = React.useState<string>("");
   
   const [formAvatarPath, setFormAvatarPath] = React.useState<string | null>(null); 
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
@@ -241,6 +264,36 @@ export function UsersTabClient(props: Props) {
     queryFn: () => fetchRoles(tenantId),
   });
 
+  const { data: unlinkedStaff = [] } = useQuery({
+    queryKey: ["hospitality", "unlinked-staff", tenantId, editingUser?.id],
+    queryFn: async () => {
+      try {
+        const params = editingUser?.id ? { ignore_user_id: editingUser.id } : {};
+        const res = await api.get("/hospitality/staff/unlinked", { params });
+        return res.data?.data || [];
+      } catch (err) {
+        console.error("Failed to fetch unlinked staff", err);
+        return [];
+      }
+    },
+    enabled: !!createDialogOpen && !!tenantId,
+  });
+
+  const staffOptions = React.useMemo(() => {
+    const options = [...unlinkedStaff];
+    if (isEdit && editingUser?.hospitalityStaff) {
+      const exists = options.some((s: any) => s.id === editingUser.hospitalityStaff?.id);
+      if (!exists) {
+        options.push(editingUser.hospitalityStaff);
+      }
+    }
+    return options;
+  }, [unlinkedStaff, isEdit, editingUser]);
+
+  const selectedStaff = React.useMemo(() => {
+    return staffOptions.find((s: any) => String(s.id) === formHospitalityStaffId);
+  }, [staffOptions, formHospitalityStaffId]);
+
   const assignableRoles = React.useMemo(() => {
     let rawRoles: any[] = [];
     if (rolesData?.data && Array.isArray(rolesData.data)) rawRoles = rolesData.data;
@@ -278,8 +331,9 @@ export function UsersTabClient(props: Props) {
         }
         localStorage.setItem('hive_token', data.data.token);
         persistHiveContext(data.data.context ?? null, data.data.context_signature ?? null);
+        window.dispatchEvent(new Event('hive_session_changed'));
         toast.success(t('users.impersonating', 'Impersonating user...'));
-        
+
         window.location.href = '/dashboard';
       }
     },
@@ -292,6 +346,7 @@ export function UsersTabClient(props: Props) {
     definition: createUserOfflineMutationDefinition,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["hospitality", "unlinked-staff"] });
       toast.success(t('users.user_provisioned', 'User provisioned'));
       setCreateDialogOpen(false);
     },
@@ -299,18 +354,25 @@ export function UsersTabClient(props: Props) {
       toast.info("Offline: the new user has been queued and will provision automatically once the network returns.");
       setCreateDialogOpen(false);
     },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || t('global.operation_failed', "An unexpected error occurred."));
+    },
   });
 
   const updateMut = useOfflineMutation<any, Error, UserUpdateOfflinePayload>({
     definition: updateUserOfflineMutationDefinition,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["hospitality", "unlinked-staff"] });
       toast.success(t('users.user_updated', 'User updated'));
       setCreateDialogOpen(false);
     },
     onQueued: () => {
       toast.info("Offline: user updates have been queued and will sync automatically when the connection returns.");
       setCreateDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || t('global.operation_failed', "An unexpected error occurred."));
     },
   });
 
@@ -319,6 +381,9 @@ export function UsersTabClient(props: Props) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
     onQueued: () => {
       toast.info("Offline: the access change has been queued and will sync automatically.");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || t('global.operation_failed', "Failed to update status"));
     },
   });
 
@@ -354,15 +419,16 @@ export function UsersTabClient(props: Props) {
         return;
       }
       toast.success(`${t('users.access', 'User access')} ${currentStatus ? t('global.locked', 'locked') : t('global.restored', 'restored')}`);
-    } catch (error) { toast.error(t('global.operation_failed', "Failed to update status")); }
+    } catch {
+      // toggleMut.onError already surfaces a toast for non-offline failures.
+    }
   }, [toggleMut, t]);
 
   const handleDeleteRows = React.useCallback(async (rows: UserForClient[]) => {
     const validRows = rows.filter(r => r.id !== '1');
-    // 🚀 THE FIX: Removed the 'return' so it returns void
     if (validRows.length === 0) {
         toast.error(t('users.purge_protected_err', "Cannot purge protected accounts."));
-        return; 
+        return;
     }
     try {
       const results = await Promise.all(validRows.map((r) => deleteMut.mutateAsync(Number(r.id))));
@@ -374,8 +440,8 @@ export function UsersTabClient(props: Props) {
       } else {
         toast.info(`${queuedCount} account deletion${queuedCount === 1 ? "" : "s"} queued. The rest were processed immediately.`);
       }
-    } catch (error) {
-      toast.error(t('global.operation_failed', "Operation failed."));
+    } catch {
+      // deleteMut.onError already surfaces a toast for non-offline failures.
     }
   }, [deleteMut, t]);
 
@@ -383,6 +449,7 @@ export function UsersTabClient(props: Props) {
     setFormName(""); setFormEmail(""); setFormPassword(""); 
     setFormRoleId(assignableRoles.length > 0 ? assignableRoles[0].id : "");
     setFormAvatarPath(null); setPreviewUrl(null); setIsAvatarRemoved(false); setShowPassword(false);
+    setFormHospitalityStaffId("");
     setFieldErrors({}); 
   }, [assignableRoles]);
 
@@ -402,6 +469,7 @@ export function UsersTabClient(props: Props) {
     setIsAvatarRemoved(false);
     setFormRoleId(u.userRoles[0]?.roleId || (assignableRoles.length > 0 ? assignableRoles[0].id : ""));
     setFormPassword(""); 
+    setFormHospitalityStaffId(u.hospitalityStaff ? String(u.hospitalityStaff.id) : "");
     setFieldErrors({}); 
     setCreateDialogOpen(true);
   }, [assignableRoles, isProtectedUser, t]);
@@ -446,6 +514,12 @@ export function UsersTabClient(props: Props) {
     if (formAvatarPath) payload.avatar_path = formAvatarPath;
     else if (isAvatarRemoved) payload.remove_avatar = "1";
 
+    if (formHospitalityStaffId !== undefined) {
+      payload.hospitality_staff_id = formHospitalityStaffId === "none" || formHospitalityStaffId === ""
+        ? null
+        : Number(formHospitalityStaffId);
+    }
+
     try {
       if (isEdit && editingUser) {
         const updatePayload: UserUpdateOfflinePayload = {
@@ -456,15 +530,16 @@ export function UsersTabClient(props: Props) {
       } else {
         await createMut.mutateAsync(payload);
       }
-    } catch (error: any) { 
+    } catch (error: any) {
       if (error?.response?.status === 422 && error?.response?.data?.errors) {
         const errors = error.response.data.errors;
         const formattedErrors: Record<string, string> = {};
         Object.keys(errors).forEach(key => formattedErrors[key] = errors[key][0]);
         setFieldErrors(formattedErrors);
-      } else toast.error(error?.response?.data?.message || t('global.operation_failed', "An unexpected error occurred."));
+      }
+      // Non-422 errors are surfaced by the mutation's onError handler.
     }
-  }, [formName, formEmail, formPassword, formRoleId, formAvatarPath, isAvatarRemoved, isEdit, editingUser, assignableRoles, tenantId, updateMut, createMut, fieldErrors, t]);
+  }, [formName, formEmail, formPassword, formRoleId, formAvatarPath, isAvatarRemoved, isEdit, editingUser, assignableRoles, tenantId, updateMut, createMut, fieldErrors, t, formHospitalityStaffId]);
 
   const getPrimaryRoleName = React.useCallback((u: any) => {
     if (u.role && typeof u.role === "string") return u.role;
@@ -751,6 +826,91 @@ export function UsersTabClient(props: Props) {
               <Separator />
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {tenantId && staffOptions.length > 0 && (
+                  <div className="sm:col-span-2 space-y-1.5 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/10 p-4 rounded-2xl">
+                    <Label htmlFor="hospitality_staff_id" className="text-indigo-500 dark:text-indigo-400 font-bold flex items-center gap-1.5 text-xs uppercase tracking-wider">
+                      <VenetianMask className="h-4 w-4" /> Link to Hospitality Staff Profile (Optional)
+                    </Label>
+                    <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={comboboxOpen}
+                          className="w-full justify-between text-left bg-background/80 h-11 border-indigo-500/20 focus:ring-indigo-500 rounded-xl px-3 font-normal"
+                        >
+                          {selectedStaff ? (
+                            <div className="flex flex-col text-left">
+                              <span className="font-semibold text-foreground text-sm">{selectedStaff.name}</span>
+                              <span className="text-[10px] text-muted-foreground capitalize">
+                                Role: {selectedStaff.role} • {selectedStaff.email}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">Select a staff profile to auto-fill...</span>
+                          )}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[450px] p-0 rounded-xl border-border/50 shadow-xl" align="start">
+                        <Command className="rounded-xl">
+                          <CommandInput placeholder="Search staff by name, email or role..." />
+                          <CommandList className="max-h-[250px] overflow-y-auto">
+                            <CommandEmpty>No staff profile found.</CommandEmpty>
+                            <CommandGroup>
+                              {isEdit && (
+                                <CommandItem
+                                  value="none"
+                                  onSelect={() => {
+                                    setFormHospitalityStaffId("none");
+                                    setComboboxOpen(false);
+                                  }}
+                                  className="cursor-pointer py-2 text-destructive font-semibold flex items-center justify-between"
+                                >
+                                  <span>None (Unlink Staff Profile)</span>
+                                  {formHospitalityStaffId === "none" && <Check className="h-4 w-4" />}
+                                </CommandItem>
+                              )}
+                              {staffOptions.map((s: any) => (
+                                <CommandItem
+                                  key={s.id}
+                                  value={`${s.name} ${s.email} ${s.role} ${s.id}`}
+                                  onSelect={() => {
+                                    const val = String(s.id);
+                                    setFormHospitalityStaffId(val);
+                                    setComboboxOpen(false);
+                                    setFormName(s.name || "");
+                                    setFormEmail(s.email || "");
+                                    // Try to auto-select clearance level
+                                    const systemRoleName = staffRoleToSystemRole[s.role];
+                                    if (systemRoleName) {
+                                      const matchedRoleObj = assignableRoles.find((r: any) => r.name === systemRoleName);
+                                      if (matchedRoleObj) {
+                                        setFormRoleId(matchedRoleObj.id);
+                                      }
+                                    }
+                                  }}
+                                  className="cursor-pointer py-2 flex items-center justify-between"
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-foreground text-sm">{s.name}</span>
+                                    <span className="text-[10px] text-muted-foreground capitalize">
+                                      Role: {s.role} • {s.email}
+                                    </span>
+                                  </div>
+                                  {formHospitalityStaffId === String(s.id) && <Check className="h-4 w-4 text-indigo-500" />}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <p className="text-[10px] text-muted-foreground/80 mt-1">Linking a staff profile will automatically fill in their details and connect them to shifts/tables.</p>
+                  </div>
+                )}
+
                 <div className="sm:col-span-2 space-y-1.5">
                   <Label htmlFor="name" className={cn(fieldErrors.name && "text-destructive")}>{t('users.full_name', 'Full Name')} <span className="text-destructive">*</span></Label>
                   <Input id="name" value={formName} onChange={(e) => { setFormName(e.target.value); validateField("name", e.target.value); }} required placeholder="e.g. Sarah Connor" className={cn("bg-muted/30 h-11 transition-all", fieldErrors.name && "border-destructive focus-visible:ring-destructive")} />

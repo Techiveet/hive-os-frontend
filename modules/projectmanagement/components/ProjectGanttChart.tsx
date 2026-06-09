@@ -27,6 +27,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import { useTranslation } from "@/store/use-translation";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -116,6 +117,7 @@ function csvEscape(value: string | number | null | undefined) {
 }
 
 export const ProjectGanttChart: React.FC<ProjectGanttChartProps> = ({ project, tasks, onTaskClick }) => {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "all">("all");
@@ -231,24 +233,24 @@ export const ProjectGanttChart: React.FC<ProjectGanttChartProps> = ({ project, t
 
   return (
     <div className="flex h-full min-h-[500px] sm:min-h-[620px] flex-col overflow-hidden rounded-xl border bg-card shadow-sm relative">
-      <div className="border-b bg-muted/20 p-4">
+      <div id="tour-pm-gantt-toolbar" className="border-b bg-muted/20 p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-bold">Project Schedule</h2>
-              <Badge className="border-none bg-violet-500/10 text-violet-600">{completionRate}% complete</Badge>
-              {overdueCount > 0 && <Badge className="border-none bg-rose-500/10 text-rose-600">{overdueCount} overdue</Badge>}
-              {atRiskCount > 0 && <Badge className="border-none bg-amber-500/10 text-amber-600">{atRiskCount} at risk</Badge>}
+              <h2 className="text-lg font-bold">{t('project_management.project_schedule', 'Project Schedule')}</h2>
+              <Badge className="border-none bg-violet-500/10 text-violet-600">{t('project_management.percent_complete', '{percent}% complete').replace('{percent}', completionRate.toString())}</Badge>
+              {overdueCount > 0 && <Badge className="border-none bg-rose-500/10 text-rose-600">{t('project_management.count_overdue', '{count} overdue').replace('{count}', overdueCount.toString())}</Badge>}
+              {atRiskCount > 0 && <Badge className="border-none bg-amber-500/10 text-amber-600">{t('project_management.count_at_risk', '{count} at risk').replace('{count}', atRiskCount.toString())}</Badge>}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              {format(rangeStart, "MMM d, yyyy")} - {format(rangeEnd, "MMM d, yyyy")} · {timelineTasks.length} tasks
+              {format(rangeStart, "MMM d, yyyy")} - {format(rangeEnd, "MMM d, yyyy")} · {t('project_management.task_count', '{count} tasks').replace('{count}', timelineTasks.length.toString())}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
             <Button variant="outline" size="sm" className="h-9 gap-2 shrink-0 bg-background" onClick={exportCsv} disabled={filteredTasks.length === 0}>
               <Download className="h-4 w-4 text-primary" />
-              <span className="hidden sm:inline">Export CSV</span>
-              <span className="sm:hidden">Export</span>
+              <span className="hidden sm:inline">{t('project_management.export_csv', 'Export CSV')}</span>
+              <span className="sm:hidden">{t('project_management.export', 'Export')}</span>
             </Button>
             <div className="flex items-center rounded-lg border bg-background p-1 gap-1">
               <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" onClick={() => setZoom("compact")} aria-label="Zoom out">
@@ -267,16 +269,16 @@ export const ProjectGanttChart: React.FC<ProjectGanttChartProps> = ({ project, t
         </div>
 
         <div className="mt-4 grid gap-3 grid-cols-2 lg:grid-cols-4">
-          <Metric icon={CheckCircle2} label="Completion" value={`${completionRate}%`} progress={completionRate} />
-          <Metric icon={CalendarClock} label="Scheduled" value={`${scheduledRate}%`} progress={scheduledRate} />
-          <Metric icon={AlertTriangle} label="Overdue" value={overdueCount} tone={overdueCount > 0 ? "danger" : "good"} />
-          <Metric icon={TimerReset} label="Unscheduled" value={unscheduledCount} tone={unscheduledCount > 0 ? "warning" : "good"} />
+          <Metric icon={CheckCircle2} label={t('project_management.completion', 'Completion')} value={`${completionRate}%`} progress={completionRate} />
+          <Metric icon={CalendarClock} label={t('project_management.scheduled', 'Scheduled')} value={`${scheduledRate}%`} progress={scheduledRate} />
+          <Metric icon={AlertTriangle} label={t('project_management.overdue', 'Overdue')} value={overdueCount} tone={overdueCount > 0 ? "danger" : "good"} />
+          <Metric icon={TimerReset} label={t('project_management.unscheduled', 'Unscheduled')} value={unscheduledCount} tone={unscheduledCount > 0 ? "warning" : "good"} />
         </div>
 
         <div className="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_180px_180px_180px]">
           <div className="relative group">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks, assignees..." className="pl-9 bg-background border-border/50 focus:border-primary/50" />
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('project_management.search_tasks_assignees', 'Search tasks, assignees...')} className="pl-9 bg-background border-border/50 focus:border-primary/50" />
           </div>
           <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
             <SelectTrigger>
@@ -284,11 +286,11 @@ export const ProjectGanttChart: React.FC<ProjectGanttChartProps> = ({ project, t
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All tasks</SelectItem>
-              <SelectItem value="scheduled">Scheduled</SelectItem>
-              <SelectItem value="unscheduled">Unscheduled</SelectItem>
-              <SelectItem value="overdue">Overdue</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="all">{t('project_management.all_tasks', 'All tasks')}</SelectItem>
+              <SelectItem value="scheduled">{t('project_management.scheduled', 'Scheduled')}</SelectItem>
+              <SelectItem value="unscheduled">{t('project_management.unscheduled', 'Unscheduled')}</SelectItem>
+              <SelectItem value="overdue">{t('project_management.overdue', 'Overdue')}</SelectItem>
+              <SelectItem value="completed">{t('project_management.completed', 'Completed')}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={priorityFilter} onValueChange={(value) => setPriorityFilter(value as TaskPriority | "all")}>
@@ -297,11 +299,11 @@ export const ProjectGanttChart: React.FC<ProjectGanttChartProps> = ({ project, t
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All priority</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="urgent">Urgent</SelectItem>
+              <SelectItem value="all">{t('project_management.all_priority', 'All priority')}</SelectItem>
+              <SelectItem value="low">{t('project_management.priority_low', 'Low')}</SelectItem>
+              <SelectItem value="medium">{t('project_management.priority_medium', 'Medium')}</SelectItem>
+              <SelectItem value="high">{t('project_management.priority_high', 'High')}</SelectItem>
+              <SelectItem value="urgent">{t('project_management.priority_urgent', 'Urgent')}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={groupMode} onValueChange={(value) => setGroupMode(value as GroupMode)}>
@@ -310,9 +312,9 @@ export const ProjectGanttChart: React.FC<ProjectGanttChartProps> = ({ project, t
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="status">Group status</SelectItem>
-              <SelectItem value="assignee">Group assignee</SelectItem>
-              <SelectItem value="priority">Group priority</SelectItem>
+              <SelectItem value="status">{t('project_management.group_status', 'Group status')}</SelectItem>
+              <SelectItem value="assignee">{t('project_management.group_assignee', 'Group assignee')}</SelectItem>
+              <SelectItem value="priority">{t('project_management.group_priority', 'Group priority')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -322,12 +324,12 @@ export const ProjectGanttChart: React.FC<ProjectGanttChartProps> = ({ project, t
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-muted-foreground">
           <CalendarClock className="h-10 w-10" />
           <div>
-            <p className="font-semibold text-foreground">No tasks to schedule yet</p>
-            <p className="mt-1 text-sm">Create tasks with due dates to build a delivery plan.</p>
+            <p className="font-semibold text-foreground">{t('project_management.no_tasks_to_schedule', 'No tasks to schedule yet')}</p>
+            <p className="mt-1 text-sm">{t('project_management.create_tasks_with_due_dates', 'Create tasks with due dates to build a delivery plan.')}</p>
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-auto relative custom-scrollbar">
+        <div id="tour-pm-gantt-chart" className="flex-1 overflow-auto relative custom-scrollbar">
           <div className="min-w-[980px] relative">
             {/* Dependency Lines Layer */}
             <svg 
@@ -391,8 +393,8 @@ export const ProjectGanttChart: React.FC<ProjectGanttChartProps> = ({ project, t
             </svg>
             <div className="sticky top-0 z-20 grid grid-cols-[320px_1fr] border-b bg-card">
               <div className="border-r p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Work item</p>
-                <p className="text-xs text-muted-foreground">{filteredTasks.length} visible · {zoomConfig[zoom].label}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('project_management.work_item', 'Work item')}</p>
+                <p className="text-xs text-muted-foreground">{t('project_management.count_visible', '{count} visible').replace('{count}', filteredTasks.length.toString())} · {zoomConfig[zoom].label}</p>
               </div>
               <div className="overflow-hidden">
                 <div className="relative h-16" style={{ width: chartWidth }}>
@@ -417,14 +419,14 @@ export const ProjectGanttChart: React.FC<ProjectGanttChartProps> = ({ project, t
 
             {groupedTasks.length === 0 ? (
               <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-                No tasks match the current filters.
+                {t('project_management.no_tasks_match_filters', 'No tasks match the current filters.')}
               </div>
             ) : (
               groupedTasks.map(([group, groupTasks]) => (
                 <div key={group}>
                   <div className="sticky top-16 z-10 grid grid-cols-[320px_1fr] border-b bg-muted/40">
                     <div className="border-r px-4 py-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">{group}</div>
-                    <div className="px-4 py-2 text-xs text-muted-foreground">{groupTasks.length} tasks</div>
+                    <div className="px-4 py-2 text-xs text-muted-foreground">{t('project_management.task_count', '{count} tasks').replace('{count}', groupTasks.length.toString())}</div>
                   </div>
                   {groupTasks.map((task) => (
                     <TimelineRow
@@ -435,6 +437,7 @@ export const ProjectGanttChart: React.FC<ProjectGanttChartProps> = ({ project, t
                       rowHeight={zoomConfig[zoom].rowHeight}
                       paddedStart={paddedStart}
                       onTaskClick={onTaskClick}
+                      t={t}
                     />
                   ))}
                 </div>
@@ -449,7 +452,7 @@ export const ProjectGanttChart: React.FC<ProjectGanttChartProps> = ({ project, t
                 <div className="relative" style={{ width: chartWidth }}>
                   <div className="absolute bottom-0 top-[-9999px] w-px bg-rose-500" style={{ left: todayLeft }} />
                   <div className="absolute -top-6 rounded-sm bg-rose-500 px-2 py-0.5 text-[10px] font-bold text-white" style={{ left: Math.max(0, todayLeft - 18) }}>
-                    Today
+                    {t('project_management.today', 'Today')}
                   </div>
                 </div>
               </div>
@@ -504,6 +507,7 @@ function TimelineRow({
   rowHeight,
   paddedStart,
   onTaskClick,
+  t,
 }: {
   task: TimelineTask;
   chartWidth: number;
@@ -511,6 +515,7 @@ function TimelineRow({
   rowHeight: number;
   paddedStart: Date;
   onTaskClick?: (task: Task) => void;
+  t: (key: string, defaultValue: string) => string;
 }) {
   const startOffset = task.inferred_start ? Math.max(0, differenceInCalendarDays(task.inferred_start, paddedStart)) : 0;
   const endOffset = task.inferred_end ? Math.max(startOffset + 1, differenceInCalendarDays(endOfDay(task.inferred_end), paddedStart)) : startOffset + 1;
@@ -549,7 +554,7 @@ function TimelineRow({
               <UserRound className="h-3 w-3" />
               {(task.assignees ?? []).length > 0
                 ? (task.assignees ?? []).map((a) => a.name.split(' ')[0]).join(', ')
-                : 'Unassigned'}
+                : t('project_management.unassigned', 'Unassigned')}
             </p>
           </div>
         </div>
@@ -564,7 +569,7 @@ function TimelineRow({
       >
         {task.isUnscheduled ? (
           <div className="absolute top-1/2 ml-4 flex h-8 -translate-y-1/2 items-center rounded-md border border-dashed bg-background px-3 text-xs font-semibold text-muted-foreground">
-            Needs due date
+            {t('project_management.needs_due_date', 'Needs due date')}
           </div>
         ) : (
           <div
@@ -581,7 +586,7 @@ function TimelineRow({
         )}
         {task.isOverdue && task.inferred_end && (
           <div className="absolute top-2 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700" style={{ left: Math.min(chartWidth - 72, left + width + 8) }}>
-            Late
+            {t('project_management.late', 'Late')}
           </div>
         )}
       </div>

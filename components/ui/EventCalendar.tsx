@@ -35,6 +35,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/store/use-translation";
 import { toEthiopianDate, formatEthiopian } from "@/lib/ethiopian-calendar";
 import { 
   DropdownMenu, 
@@ -61,6 +62,7 @@ interface EventCalendarProps {
 }
 
 export function EventCalendar({ events, onEventClick, onDayClick, className }: EventCalendarProps) {
+  const { t, locale } = useTranslation();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState("");
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -110,16 +112,16 @@ export function EventCalendar({ events, onEventClick, onDayClick, className }: E
           </div>
           <div>
             <h2 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              {format(currentMonth, "MMMM yyyy")}
+              {t(`project_management.month_${format(currentMonth, "MMMM").toLowerCase()}`, format(currentMonth, "MMMM"))} {format(currentMonth, "yyyy")}
               {showEthiopian && (
                 <span className="ml-3 text-sm font-medium text-primary/60 border-l pl-3 border-border/50">
-                  {formatEthiopian(currentMonth, "en")}
+                  {formatEthiopian(currentMonth, locale as 'en' | 'am')}
                 </span>
               )}
             </h2>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-              <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold">Project Timeline</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold">{t("project_management.project_timeline", "Project Timeline")}</p>
             </div>
           </div>
         </div>
@@ -128,7 +130,7 @@ export function EventCalendar({ events, onEventClick, onDayClick, className }: E
           <div className="relative w-48 md:w-64">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input 
-              placeholder="Search tasks..." 
+              placeholder={t("project_management.search_tasks", "Search tasks...")} 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-9 pl-9 bg-background/50 border-border/40 focus:border-primary/40 rounded-xl transition-all"
@@ -141,7 +143,7 @@ export function EventCalendar({ events, onEventClick, onDayClick, className }: E
             </Button>
             <div className="w-px h-4 bg-border mx-1" />
             <Button variant="ghost" size="sm" onClick={goToToday} className="h-8 px-3 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-muted transition-colors">
-              Today
+              {t("project_management.today", "Today")}
             </Button>
             <div className="w-px h-4 bg-border mx-1" />
             <Button variant="ghost" size="icon" onClick={nextMonth} className="h-8 w-8 rounded-lg hover:bg-muted transition-colors">
@@ -157,7 +159,7 @@ export function EventCalendar({ events, onEventClick, onDayClick, className }: E
               "h-10 w-10 rounded-xl border-border/40 transition-all",
               showEthiopian ? "bg-primary/10 text-primary border-primary/30" : "hover:bg-muted"
             )}
-            title="Toggle Ethiopian Calendar"
+            title={t("project_management.toggle_ethiopian_calendar", "Toggle Ethiopian Calendar")}
           >
             <Globe className="h-4 w-4" />
           </Button>
@@ -175,7 +177,7 @@ export function EventCalendar({ events, onEventClick, onDayClick, className }: E
 
       {/* Weekdays Header */}
       <div className="grid grid-cols-7 border-b bg-muted/10 backdrop-blur-sm">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+        {[t("project_management.sun", "Sun"), t("project_management.mon", "Mon"), t("project_management.tue", "Tue"), t("project_management.wed", "Wed"), t("project_management.thu", "Thu"), t("project_management.fri", "Fri"), t("project_management.sat", "Sat")].map((day) => (
           <div key={day} className="py-4 text-center text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground/60 border-r border-border/20 last:border-r-0">
             {day}
           </div>

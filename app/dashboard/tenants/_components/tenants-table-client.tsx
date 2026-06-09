@@ -500,8 +500,8 @@ const { data: subscriptionCatalogData } = useQuery({
                 toast.info(`${queuedCount} node deletion${queuedCount === 1 ? "" : "s"} queued. The rest were processed immediately.`);
             }
             triggerAudit('deleted', `Operator executed destructive bulk purge sequence on ${rows.length} nodes`);
-        } catch (error) {
-            toast.error(t('global.operation_failed', "Operation failed."));
+        } catch {
+            // deleteMut.onError already surfaces a toast for non-offline failures.
         }
     }, [deleteMut, triggerAudit, t]);
 

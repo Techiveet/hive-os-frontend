@@ -10,8 +10,20 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { projectApi } from "@/modules/projectmanagement/api";
 import { useProjectManagementRealtime } from "@/modules/projectmanagement/hooks/use-project-management-realtime";
+import { useTour } from "@/components/providers/tour-provider";
+import { Button } from "@/components/ui/button";
+import { HelpCircle } from "lucide-react";
+import { useTranslation } from "@/store/use-translation";
 
 export default function ProjectReportsPage() {
+  const { t } = useTranslation();
+  const { startTour } = useTour();
+  
+  const reportsTourSteps = [
+    { target: '#tour-pm-reports-header', title: t('tour.reports_header_title', 'Executive Analytics'), content: t('tour.reports_header_desc', 'High-level aggregated data for all projects.'), placement: 'bottom' as const },
+    { target: '#tour-pm-reports-health', title: t('tour.reports_health_title', 'Portfolio Health'), content: t('tour.reports_health_desc', 'Track macro-level completion and risk factors.'), placement: 'top' as const },
+    { target: '#tour-pm-reports-attention', title: t('tour.reports_attention_title', 'Delivery Attention'), content: t('tour.reports_attention_desc', 'Identify bottlenecked or overdue initiatives quickly.'), placement: 'top' as const },
+  ];
   useProjectManagementRealtime();
 
   const { data: summary, isLoading } = useQuery({
@@ -53,49 +65,55 @@ export default function ProjectReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-        <p className="text-muted-foreground">Track project health and delivery progress.</p>
+      <div id="tour-pm-reports-header" className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t('project_management.reports', 'Reports')}</h1>
+          <p className="text-muted-foreground">{t('project_management.reports_desc', 'Track project health and delivery progress.')}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => startTour(reportsTourSteps)} className="bg-background/50 backdrop-blur-md rounded-full">
+          <HelpCircle className="h-4 w-4 mr-2" />
+          {t('topbar.system_tour', 'System Tour')}
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <ReportMetric title="Total" value={stats.total} icon={Briefcase} />
-        <ReportMetric title="Active" value={stats.active} icon={TrendingUp} />
-        <ReportMetric title="Planning" value={stats.planning} icon={Clock} />
-        <ReportMetric title="Completed" value={stats.completed} icon={CheckCircle2} />
+        <ReportMetric title={t('project_management.total', 'Total')} value={stats.total} icon={Briefcase} />
+        <ReportMetric title={t('project_management.active', 'Active')} value={stats.active} icon={TrendingUp} />
+        <ReportMetric title={t('project_management.planning', 'Planning')} value={stats.planning} icon={Clock} />
+        <ReportMetric title={t('project_management.completed', 'Completed')} value={stats.completed} icon={CheckCircle2} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <ReportMetric title="Avg Progress" value={`${averageProgress}%`} icon={BarChart3} />
-        <ReportMetric title="Due This Week" value={dueSoonProjects.length} icon={CalendarClock} />
-        <ReportMetric title="Overdue Projects" value={overdueProjects.length} icon={AlertTriangle} />
+        <ReportMetric title={t('project_management.avg_progress', 'Avg Progress')} value={`${averageProgress}%`} icon={BarChart3} />
+        <ReportMetric title={t('project_management.due_this_week', 'Due This Week')} value={dueSoonProjects.length} icon={CalendarClock} />
+        <ReportMetric title={t('project_management.overdue_projects', 'Overdue Projects')} value={overdueProjects.length} icon={AlertTriangle} />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
+          <CardTitle id="tour-pm-reports-health" className="flex items-center gap-2 text-lg">
             <BarChart3 className="h-5 w-5" />
-            Portfolio Health
+            {t('project_management.portfolio_health', 'Portfolio Health')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span>Completion rate</span>
+              <span>{t('project_management.completion_rate', 'Completion rate')}</span>
               <span className="font-medium">{completionRate}%</span>
             </div>
             <Progress value={completionRate} />
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span>Active workload</span>
+              <span>{t('project_management.active_workload', 'Active workload')}</span>
               <span className="font-medium">{activeRate}%</span>
             </div>
             <Progress value={activeRate} />
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span>Portfolio risk</span>
+              <span>{t('project_management.portfolio_risk', 'Portfolio risk')}</span>
               <span className="font-medium">{Math.round(portfolioRisk)}%</span>
             </div>
             <Progress value={portfolioRisk} />
@@ -105,9 +123,9 @@ export default function ProjectReportsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
+          <CardTitle id="tour-pm-reports-attention" className="flex items-center gap-2 text-lg">
             <AlertTriangle className="h-5 w-5" />
-            Delivery Attention
+            {t('project_management.delivery_attention', 'Delivery Attention')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -121,14 +139,14 @@ export default function ProjectReportsPage() {
               >
                 <div>
                   <p className="font-semibold">{project.name}</p>
-                  <p className="text-sm text-muted-foreground">{project.end_date ? `Due ${new Date(project.end_date).toLocaleDateString()}` : "No due date"}</p>
+                  <p className="text-sm text-muted-foreground">{project.end_date ? `${t('project_management.due', 'Due ')} ${new Date(project.end_date).toLocaleDateString()}` : t('project_management.no_due_date', 'No due date')}</p>
                 </div>
                 <Badge className={`${overdue ? "bg-rose-500/10 text-rose-600" : "bg-amber-500/10 text-amber-600"} border-none`}>
-                  {overdue ? "Overdue" : "Due soon"}
+                  {overdue ? t('project_management.overdue', 'Overdue') : t('project_management.due_soon', 'Due soon')}
                 </Badge>
                 <div className="min-w-32">
                   <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-                    <span>Progress</span>
+                    <span>{t('project_management.progress', 'Progress')}</span>
                     <span>{project.progress || 0}%</span>
                   </div>
                   <Progress value={project.progress || 0} className="h-1.5" />
@@ -138,7 +156,7 @@ export default function ProjectReportsPage() {
           })}
           {overdueProjects.length === 0 && dueSoonProjects.length === 0 && (
             <div className="rounded-md border border-dashed py-10 text-center text-sm text-muted-foreground">
-              No projects need delivery attention right now.
+              {t('project_management.no_delivery_attention', 'No projects need delivery attention right now.')}
             </div>
           )}
         </CardContent>

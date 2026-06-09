@@ -1,0 +1,1527 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  GalleryHorizontalEnd,
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  Image as ImageIcon,
+  X,
+  Save,
+  Eye,
+  EyeOff,
+  ArrowLeft,
+  ArrowRight,
+  Sparkles,
+  RefreshCcw,
+  ExternalLink,
+  Box,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { SecureAssetImage } from "@/components/ui/secure-asset-image";
+import { FileManagerClient } from "@/components/dashboard/file-manager-client";
+import { usePermissions } from "@/hooks/use-permissions";
+import { getAuthHeaders, getBackendApiRoot } from "@/lib/runtime-context";
+import {
+  resolveLandingTemplate,
+  resolveBusinessTypeCatalog,
+  FALLBACK_TENANT_BUSINESS_TYPES,
+  type TenantLandingHeroSlide,
+  type TenantBusinessTypeDefinition,
+  type TenantLandingTemplate,
+  type TenantLandingCard,
+  type TenantLandingMenus,
+} from "@/modules/tenancy/landing-template";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import {
+  fetchHospitalityMenuItems,
+  updateHospitalityMenuItem,
+  deleteHospitalityMenuItem,
+} from "@/modules/hospitality/api";
+import type { HospitalityMenuItem } from "@/modules/hospitality/types";
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function getErrorMessage(error: unknown, fallback = "Something went wrong."): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
+}
+
+async function apiFetch(endpoint: string, options: RequestInit = {}) {
+  const url = `${getBackendApiRoot()}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  const headers: HeadersInit = getAuthHeaders(
+    options.body && typeof options.body === "string" ? { "Content-Type": "application/json" } : {},
+  );
+
+  const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } });
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}.`;
+    try {
+      const payload = await response.json();
+      if (payload?.message) message = payload.message;
+    } catch {
+      /* keep fallback */
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+// ─── blank slide factory ───────────────────────────────────────────────────────
+
+const blankSlide = (): TenantLandingHeroSlide => ({
+  image: "",
+  title: "",
+  subtitle: "",
+  badge: "",
+});
+
+const PRESET_SLIDES: TenantLandingHeroSlide[] = [
+  {
+    image: "",
+    title: "Feel the Night Energy.",
+    subtitle: "Step into Addis Ababa's premier luxury lounge. Unwind with artisanal mixology, live beats, and a vibrant crowd.",
+    badge: "The Ultimate Nightlife Destination",
+  },
+  {
+    image: "",
+    title: "Exquisite VIP Lounges.",
+    subtitle: "Indulge in premium bottle service, private tables, and a bespoke sensory experience tailored for the elite.",
+    badge: "Exclusive VIP Experience",
+  },
+  {
+    image: "",
+    title: "Palate of the Night.",
+    subtitle: "Savor gourmet late-night bites and hand-mixed signature cocktails crafted by master mixologists.",
+    badge: "Artisanal Cocktails & Grills",
+  },
+];
+
+// ─── slide card ───────────────────────────────────────────────────────────────
+
+function SlideCard({
+  slide,
+  index,
+  total,
+  onEdit,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+}: {
+  slide: TenantLandingHeroSlide;
+  index: number;
+  total: number;
+  onEdit: () => void;
+  onDelete: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
+  const hasImage = Boolean(slide.image);
+
+  return (
+    <div className="group relative rounded-2xl border bg-card overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
+      {/* Image strip */}
+      <div className="relative h-44 bg-gradient-to-br from-[#120820] to-[#1a0a30] overflow-hidden">
+        {hasImage ? (
+          <SecureAssetImage
+            src={slide.image}
+            alt={slide.title || `Slide ${index + 1}`}
+            className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-white/30">
+            <ImageIcon className="h-10 w-10" />
+            <span className="text-xs font-medium">No image set</span>
+          </div>
+        )}
+
+        {/* Dark overlay with slide number */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+
+        {/* Order badge */}
+        <div className="absolute top-3 left-3 h-7 w-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white font-black text-xs border border-white/20">
+          {index + 1}
+        </div>
+
+        {/* Move controls */}
+        <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={onMoveUp}
+            disabled={index === 0}
+            className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/80 disabled:opacity-30 disabled:cursor-not-allowed border border-white/20 transition-colors"
+            title="Move up"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={onMoveDown}
+            disabled={index === total - 1}
+            className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/80 disabled:opacity-30 disabled:cursor-not-allowed border border-white/20 transition-colors"
+            title="Move down"
+          >
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* Badge + title overlay */}
+        <div className="absolute bottom-0 left-0 right-0 p-3">
+          {slide.badge && (
+            <span className="inline-block text-[9px] font-black uppercase tracking-widest text-[#FF1A43] bg-[#FF1A43]/15 border border-[#FF1A43]/30 px-2 py-0.5 rounded-full mb-1">
+              {slide.badge}
+            </span>
+          )}
+          {slide.title && (
+            <p className="text-white font-black text-sm leading-tight line-clamp-1">{slide.title}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-4">
+        {slide.subtitle ? (
+          <p className="text-muted-foreground text-xs leading-relaxed line-clamp-2">{slide.subtitle}</p>
+        ) : (
+          <p className="text-muted-foreground/40 text-xs italic">No subtitle</p>
+        )}
+
+        <div className="flex items-center gap-2 mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onEdit}
+            className="flex-1 h-8 text-[10px] font-black uppercase tracking-widest text-indigo-600 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 dark:text-indigo-400 dark:border-indigo-800 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/70 rounded-lg"
+          >
+            <Pencil className="mr-1 h-3 w-3" />
+            Edit
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDelete}
+            className="h-8 w-8 p-0 text-[10px] font-black text-rose-500 border-rose-200 bg-rose-50 hover:bg-rose-100 dark:text-rose-400 dark:border-rose-800 dark:bg-rose-950/40 dark:hover:bg-rose-950/70 rounded-lg"
+            title="Remove slide"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── live preview ──────────────────────────────────────────────────────────────
+
+function SliderPreview({ slides, active }: { slides: TenantLandingHeroSlide[]; active: number }) {
+  const slide = slides[active];
+  if (!slide) return null;
+  const hasImage = Boolean(slide.image);
+
+  return (
+    <div className="relative h-56 rounded-2xl overflow-hidden bg-[#080510] border border-white/10 shadow-2xl">
+      {hasImage ? (
+        <SecureAssetImage
+          src={slide.image}
+          alt={slide.title || "Slide preview"}
+          className="absolute inset-0 w-full h-full object-cover object-center"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1a0a30] to-[#0a0015]" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/10" />
+
+      {/* Ambient glows */}
+      <div className="absolute top-0 left-1/4 w-40 h-40 bg-[#FF1A43]/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-40 h-40 bg-[#7B16D9]/20 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="absolute bottom-0 left-0 right-0 p-5">
+        {slide.badge && (
+          <span className="inline-block text-[9px] font-black uppercase tracking-widest text-[#FF1A43] bg-[#FF1A43]/15 border border-[#FF1A43]/30 px-2.5 py-1 rounded-full mb-2">
+            {slide.badge}
+          </span>
+        )}
+        <h3 className="text-white font-black text-xl leading-tight">{slide.title || "Slide Title"}</h3>
+        {slide.subtitle && (
+          <p className="text-white/60 text-xs mt-1 line-clamp-2">{slide.subtitle}</p>
+        )}
+      </div>
+
+      {/* Slide counter dots */}
+      <div className="absolute top-3 right-3 flex gap-1">
+        {slides.map((_, i) => (
+          <div
+            key={i}
+            className={`h-1.5 rounded-full transition-all duration-300 ${
+              i === active ? "w-5 bg-[#FF1A43]" : "w-1.5 bg-white/30"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── main page ─────────────────────────────────────────────────────────────────
+
+export default function HeroSliderPage() {
+  const queryClient = useQueryClient();
+  const { hasAnyPermission, hasPermission } = usePermissions();
+  const canBrowseAssetLibrary = hasAnyPermission(["view_storage", "manage_storage"]);
+  const canManageStorage = hasPermission("manage_storage");
+
+  // ── slides state ──
+  const [slides, setSlides] = useState<TenantLandingHeroSlide[]>([]);
+  const [isDirty, setIsDirty] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [showPreview, setShowPreview] = useState(true);
+
+  // ── highlights/specialties state ──
+  const [highlights, setHighlights] = useState<TenantLandingCard[]>([]);
+  const [activeTab, setActiveTab] = useState("slider");
+
+  // ── menus section state ──
+  const [menus, setMenus] = useState<TenantLandingMenus>({
+    eyebrow: "",
+    title: "",
+    description_eyebrow: "",
+    description: "",
+  });
+
+  const DEFAULT_HIGHLIGHTS: TenantLandingCard[] = [
+    { kicker: "Our Specialties", title: "Crafted with passion, served with perfection.", description: "Every dish tells a story of local sourcing, seasonal inspiration, and meticulous preparation. Discover flavors that linger long after the last bite." },
+    { kicker: "", title: "Artisan Steaks", description: "Dry-aged to perfection for minimum 28 days." },
+    { kicker: "", title: "Fresh Catch", description: "Sourced daily from local sustainable fisheries." },
+    { kicker: "", title: "Handcrafted Pasta", description: "Made fresh every morning using traditional methods." }
+  ];
+
+  const loadPresets = () => {
+    if (
+      confirm(
+        "This will load the default Savory Lounge slide templates. Existing slides will be overwritten. Proceed?"
+      )
+    ) {
+      setSlides(PRESET_SLIDES);
+      setIsDirty(true);
+      setPreviewIndex(0);
+      toast.success(
+        "Loaded Savory Lounge presets! Don't forget to upload/attach images and click Save Changes."
+      );
+    }
+  };
+
+  // ── raw catalog state (needed for backward compatibility or placeholder) ──
+  const [rawCatalog, setRawCatalog] = useState<TenantBusinessTypeDefinition[]>([]);
+  const [currentTemplate, setCurrentTemplate] = useState<TenantLandingTemplate | null>(null);
+
+  // ── edit dialog ──
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState<TenantLandingHeroSlide>(blankSlide());
+
+  // ── media picker ──
+  // For per-menu-item targets we use the pattern "menu_item_image_<id>" or "menu_item_model_<id>"
+  const [mediaPickerTarget, setMediaPickerTarget] = useState<"slide" | "specialties" | "menus_image" | "menus_model" | string | null>(null);
+
+  // ── menu items (for the Menus Section tab) ──
+  const { data: menuItemsData, isLoading: isLoadingMenuItems } = useQuery({
+    queryKey: ["hospitality", "menu-items", "all"],
+    queryFn: () => fetchHospitalityMenuItems({ per_page: 50, sortCol: "sort_order", sortDir: "asc" }),
+  });
+  const allMenuItems: HospitalityMenuItem[] = Array.isArray(menuItemsData) ? menuItemsData : (menuItemsData as any)?.rows ?? [];
+
+  const updateMenuItemMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      updateHospitalityMenuItem(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hospitality", "menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["tenantPublicMenuItems"] });
+      toast.success("Menu item updated");
+    },
+    onError: () => toast.error("Failed to update menu item"),
+  });
+
+  const deleteMenuItemMutation = useMutation({
+    mutationFn: deleteHospitalityMenuItem,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hospitality", "menu-items"] });
+      queryClient.invalidateQueries({ queryKey: ["tenantPublicMenuItems"] });
+      toast.success("Menu item deleted");
+    },
+    onError: () => toast.error("Failed to delete menu item"),
+  });
+
+  // ── menu items pagination & selection ──
+  const [selectedMenuItemIds, setSelectedMenuItemIds] = useState<number[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+
+  const totalItems = allMenuItems.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  
+  const paginatedItems = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return allMenuItems.slice(startIndex, startIndex + itemsPerPage);
+  }, [allMenuItems, currentPage, itemsPerPage]);
+
+  // Adjust page if current page becomes empty after deletion
+  useEffect(() => {
+    if (currentPage > 1 && paginatedItems.length === 0) {
+      setCurrentPage(currentPage - 1);
+    }
+  }, [paginatedItems.length, currentPage]);
+
+  const isAllPageSelected = paginatedItems.length > 0 && paginatedItems.every(item => selectedMenuItemIds.includes(item.id));
+
+  const toggleSelectAllPage = () => {
+    if (isAllPageSelected) {
+      setSelectedMenuItemIds(prev => prev.filter(id => !paginatedItems.some(item => item.id === id)));
+    } else {
+      setSelectedMenuItemIds(prev => {
+        const newIds = [...prev];
+        paginatedItems.forEach(item => {
+          if (!newIds.includes(item.id)) {
+            newIds.push(item.id);
+          }
+        });
+        return newIds;
+      });
+    }
+  };
+
+  const toggleSelectItem = (id: number) => {
+    setSelectedMenuItemIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedMenuItemIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete the ${selectedMenuItemIds.length} selected item(s)?`)) return;
+
+    try {
+      await Promise.all(selectedMenuItemIds.map(id => deleteMenuItemMutation.mutateAsync(id)));
+      setSelectedMenuItemIds([]);
+      toast.success("Selected menu items deleted successfully");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete some menu items");
+    }
+  };
+
+  // ── fetch current template ──
+  const { data: queryData, isLoading, isError, refetch } = useQuery({
+    queryKey: ["hospitality", "hero-slider-settings"],
+    queryFn: () => apiFetch("/settings/landing"),
+    throwOnError: false,
+    retry: 1,
+  });
+
+  // Sync loaded data into slides and highlights state
+  useEffect(() => {
+    if (!queryData?.data) return;
+    const template = resolveLandingTemplate(queryData.data.landing_page_template ?? {});
+    setCurrentTemplate(template);
+    setSlides(template.hero?.slides ?? []);
+    
+    // Ensure highlights array has at least 4 items, pre-populate if needed
+    let loadedHighlights = template.highlights ?? [];
+    if (!Array.isArray(loadedHighlights) || loadedHighlights.length < 4) {
+      const merged = [...(Array.isArray(loadedHighlights) ? loadedHighlights : [])];
+      for (let i = merged.length; i < 4; i++) {
+        merged.push(DEFAULT_HIGHLIGHTS[i]);
+      }
+      loadedHighlights = merged;
+    }
+    setHighlights(loadedHighlights);
+
+    setMenus(template.menus ?? {
+      eyebrow: "Menus",
+      title: "Explore Our Menus in 3D",
+      description_eyebrow: "Interactive Experience",
+      description: "Interact directly with our signature dishes in high-fidelity 3D, or select from our exquisite main courses.",
+    });
+    setIsDirty(false);
+  }, [queryData]);
+
+  // ── save mutation ──
+  const saveMutation = useMutation({
+    mutationFn: async (payload: { 
+      nextSlides: TenantLandingHeroSlide[]; 
+      nextHighlights: TenantLandingCard[];
+      nextMenus: TenantLandingMenus;
+    }) => {
+      const nextTemplate = {
+        ...currentTemplate,
+        hero: {
+          ...currentTemplate?.hero,
+          slides: payload.nextSlides,
+        },
+        highlights: payload.nextHighlights,
+        menus: payload.nextMenus,
+      };
+
+      return apiFetch("/settings/landing", {
+        method: "POST",
+        body: JSON.stringify({
+          business_type: queryData?.data?.business_type,
+          landing_page_template: nextTemplate,
+        }),
+      });
+    },
+    onSuccess: (response: any) => {
+      const updatedTemplate = resolveLandingTemplate(
+        response?.data?.landing_page_template ?? currentTemplate,
+      );
+      setCurrentTemplate(updatedTemplate);
+      setSlides(updatedTemplate.hero?.slides ?? []);
+      setHighlights(updatedTemplate.highlights ?? []);
+      setMenus(updatedTemplate.menus ?? {
+        eyebrow: "Menus",
+        title: "Explore Our Menus in 3D",
+        description_eyebrow: "Interactive Experience",
+        description: "Interact directly with our signature dishes in high-fidelity 3D, or select from our exquisite main courses.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["hospitality", "hero-slider-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["tenant-landing-page-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["tenantPublicLanding"] });
+      toast.success("Landing page settings saved successfully!");
+      setIsDirty(false);
+    },
+    onError: (err: any) => {
+      toast.error(getErrorMessage(err, "Failed to save settings."));
+    },
+  });
+
+  // ── cycle preview index when slides change ──
+  useEffect(() => {
+    if (previewIndex >= slides.length && slides.length > 0) {
+      setPreviewIndex(slides.length - 1);
+    }
+  }, [slides.length, previewIndex]);
+
+  // ── auto-cycle preview ──
+  useEffect(() => {
+    if (!showPreview || slides.length < 2) return;
+    const id = setInterval(() => {
+      setPreviewIndex((i) => (i + 1) % slides.length);
+    }, 3500);
+    return () => clearInterval(id);
+  }, [showPreview, slides.length]);
+
+  // ── helpers ──
+  const openAddDialog = () => {
+    setEditingIndex(null);
+    setFormData(blankSlide());
+    setIsDialogOpen(true);
+  };
+
+  const openEditDialog = (index: number) => {
+    setEditingIndex(index);
+    setFormData({ ...slides[index] });
+    setIsDialogOpen(true);
+  };
+
+  const handleDialogSave = () => {
+    if (!formData.title.trim()) {
+      toast.error("Please enter a slide title.");
+      return;
+    }
+
+    setSlides((prev) => {
+      const next = [...prev];
+      if (editingIndex === null) {
+        next.push({ ...formData });
+      } else {
+        next[editingIndex] = { ...formData };
+      }
+      return next;
+    });
+    setIsDirty(true);
+    setIsDialogOpen(false);
+  };
+
+  const handleDelete = (index: number) => {
+    if (!confirm("Remove this slide from the hero slider?")) return;
+    setSlides((prev) => prev.filter((_, i) => i !== index));
+    setIsDirty(true);
+  };
+
+  const handleMove = (index: number, dir: "up" | "down") => {
+    setSlides((prev) => {
+      const next = [...prev];
+      const target = dir === "up" ? index - 1 : index + 1;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+    setIsDirty(true);
+  };
+
+  const handleFileSelect = (file: any) => {
+    const url = file.media_details?.public_url || file.media_details?.url || file.url || file.path;
+    if (mediaPickerTarget === "slide") {
+      setFormData((prev) => ({ ...prev, image: url }));
+      toast.success("Image selected for slide");
+    } else if (mediaPickerTarget === "specialties") {
+      const next = [...highlights];
+      if (!next[0]) next[0] = { kicker: "", title: "", description: "" };
+      next[0].image = url;
+      setHighlights(next);
+      setIsDirty(true);
+      toast.success("Image selected for specialties section");
+    } else if (mediaPickerTarget === "menus_image") {
+      setMenus((prev) => ({ ...prev, image_url: url }));
+      setIsDirty(true);
+      toast.success("Image selected for menus section");
+    } else if (mediaPickerTarget === "menus_model") {
+      setMenus((prev) => ({ ...prev, model_3d_url: url }));
+      setIsDirty(true);
+      toast.success("3D model selected for menus section");
+    } else if (typeof mediaPickerTarget === "string" && mediaPickerTarget.startsWith("menu_item_image_")) {
+      const itemId = Number(mediaPickerTarget.replace("menu_item_image_", ""));
+      updateMenuItemMutation.mutate({ id: itemId, payload: { image_url: url } });
+      toast.success("Image saved to menu item");
+    } else if (typeof mediaPickerTarget === "string" && mediaPickerTarget.startsWith("menu_item_model_")) {
+      const itemId = Number(mediaPickerTarget.replace("menu_item_model_", ""));
+      updateMenuItemMutation.mutate({ id: itemId, payload: { model_3d_url: url } });
+      toast.success("3D model saved to menu item");
+    }
+    setMediaPickerTarget(null);
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center gap-3 flex-col">
+        <Loader2 className="h-8 w-8 animate-spin text-[#FF1A43]" />
+        <p className="text-muted-foreground text-sm">Loading slider settings…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8 p-6 max-w-7xl mx-auto">
+
+      {/* ── Header ── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#FF1A43] to-[#7B16D9] shadow-lg shadow-[#FF1A43]/30">
+              <GalleryHorizontalEnd className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight">Hero Slider</h1>
+              <p className="text-muted-foreground text-sm">
+                Manage the full-screen slides shown on your landing page.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {isError && (
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="rounded-full gap-1.5">
+              <RefreshCcw className="h-3.5 w-3.5" />
+              Retry
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowPreview((v) => !v)}
+            className="rounded-full gap-1.5"
+          >
+            {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {showPreview ? "Hide" : "Show"} Preview
+          </Button>
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground border rounded-full px-3 py-1.5 transition-colors"
+          >
+            <ExternalLink className="h-3 w-3" />
+            View Live
+          </a>
+          <Button
+            onClick={() => saveMutation.mutate({ nextSlides: slides, nextHighlights: highlights, nextMenus: menus })}
+            disabled={!isDirty || saveMutation.isPending}
+            className="rounded-full px-6 gap-2 bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] hover:from-[#e0173a] hover:to-[#6912be] text-white shadow-lg shadow-[#FF1A43]/25 disabled:opacity-50 transition-all"
+          >
+            {saveMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {isDirty ? "Save Changes" : "Saved"}
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Unsaved changes banner ── */}
+      {isDirty && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 text-amber-700 dark:text-amber-400">
+          <Sparkles className="h-4 w-4 shrink-0" />
+          <p className="text-sm font-medium">
+            You have unsaved changes. Click <strong>Save Changes</strong> to publish them to your landing page.
+          </p>
+        </div>
+      )}
+
+      {/* ── Error banner ── */}
+      {isError && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/30 px-4 py-3 text-rose-700 dark:text-rose-400 text-sm">
+          Could not load slider settings. Working in offline mode — changes will overwrite existing data when saved.
+        </div>
+      )}
+
+      {/* ── Tabs Container ── */}
+      <Tabs defaultValue="slider" value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 max-w-[500px] mb-6">
+          <TabsTrigger value="slider">Hero Slides</TabsTrigger>
+          <TabsTrigger value="specialties">Specialties Section</TabsTrigger>
+          <TabsTrigger value="menus">Menus Section</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="slider" className="outline-none">
+          {/* ── Layout: preview + grid ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-8 items-start">
+
+            {/* Left: slides grid */}
+            <div className="space-y-6">
+              {/* Stats bar */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Badge variant="outline" className="rounded-full px-3 font-bold text-xs">
+                    {slides.length} slide{slides.length !== 1 ? "s" : ""}
+                  </Badge>
+                  {slides.length === 0 && (
+                    <span className="text-xs text-muted-foreground">Add at least one slide to activate the hero.</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={loadPresets}
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full gap-1.5 border-[#7B16D9] text-[#7B16D9] hover:bg-[#7B16D9]/10"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Load Savory Lounge Presets
+                  </Button>
+                  <Button
+                    onClick={openAddDialog}
+                    size="sm"
+                    className="rounded-full gap-1.5 bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] hover:from-[#e0173a] hover:to-[#6912be] text-white shadow-md shadow-[#FF1A43]/20"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Slide
+                  </Button>
+                </div>
+              </div>
+
+              {/* Slides grid */}
+              {slides.length === 0 ? (
+                <div
+                  onClick={openAddDialog}
+                  className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-muted-foreground/20 bg-muted/20 h-56 gap-3 cursor-pointer hover:border-[#FF1A43]/40 hover:bg-[#FF1A43]/5 transition-all group"
+                >
+                  <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center group-hover:bg-[#FF1A43]/10 transition-colors">
+                    <GalleryHorizontalEnd className="h-6 w-6 text-muted-foreground group-hover:text-[#FF1A43] transition-colors" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-sm text-muted-foreground group-hover:text-foreground transition-colors">No slides yet</p>
+                    <p className="text-xs text-muted-foreground/60 mt-0.5">Click to add your first hero slide</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {slides.map((slide, i) => (
+                    <SlideCard
+                      key={i}
+                      slide={slide}
+                      index={i}
+                      total={slides.length}
+                      onEdit={() => openEditDialog(i)}
+                      onDelete={() => handleDelete(i)}
+                      onMoveUp={() => handleMove(i, "up")}
+                      onMoveDown={() => handleMove(i, "down")}
+                    />
+                  ))}
+
+                  {/* Add new placeholder */}
+                  <button
+                    onClick={openAddDialog}
+                    className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-muted-foreground/20 h-full min-h-[220px] gap-2 cursor-pointer hover:border-[#FF1A43]/40 hover:bg-[#FF1A43]/5 transition-all group text-muted-foreground/40 hover:text-[#FF1A43]"
+                  >
+                    <Plus className="h-7 w-7 transition-transform group-hover:scale-110" />
+                    <span className="text-xs font-bold">Add Slide</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Tips */}
+              <div className="rounded-xl bg-muted/40 border px-5 py-4 space-y-2">
+                <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Tips</p>
+                <ul className="space-y-1.5 text-xs text-muted-foreground list-none">
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#FF1A43] font-black mt-0.5">→</span>
+                    Use landscape images at <strong>1920×1080px</strong> or wider for the best result.
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#FF1A43] font-black mt-0.5">→</span>
+                    Keep titles under <strong>5 words</strong> and subtitles under <strong>20 words</strong> for mobile readability.
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#FF1A43] font-black mt-0.5">→</span>
+                    The <strong>Badge</strong> appears as a small label above the title (e.g. "VIP Experience").
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#FF1A43] font-black mt-0.5">→</span>
+                    Use the <strong>arrows</strong> on each card to reorder slides. Order matters — first slide plays first.
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Right: live preview */}
+            {showPreview && slides.length > 0 && (
+              <div className="sticky top-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Live Preview</p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPreviewIndex((i) => (i - 1 + slides.length) % slides.length)}
+                      className="h-6 w-6 rounded-full border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+                    >
+                      <ArrowLeft className="h-3 w-3" />
+                    </button>
+                    <span className="text-xs text-muted-foreground px-1 tabular-nums">
+                      {previewIndex + 1} / {slides.length}
+                    </span>
+                    <button
+                      onClick={() => setPreviewIndex((i) => (i + 1) % slides.length)}
+                      className="h-6 w-6 rounded-full border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+                    >
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+                <SliderPreview slides={slides} active={previewIndex} />
+                <p className="text-[10px] text-muted-foreground/60 text-center">
+                  Auto-cycles every 3.5 s · {slides.length} slide{slides.length !== 1 ? "s" : ""} total
+                </p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="specialties" className="space-y-6 outline-none">
+          <div className="rounded-2xl border bg-card p-6 shadow-sm space-y-6">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight text-foreground">Section Header</h2>
+              <p className="text-muted-foreground text-xs">Customize the Specialties section introduction header.</p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="specialties-eyebrow" className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                  Section Eyebrow
+                </Label>
+                <Input
+                  id="specialties-eyebrow"
+                  placeholder="e.g. Our Specialties"
+                  value={highlights[0]?.kicker || ""}
+                  onChange={(e) => {
+                    const next = [...highlights];
+                    if (!next[0]) next[0] = { kicker: "", title: "", description: "" };
+                    next[0].kicker = e.target.value;
+                    setHighlights(next);
+                    setIsDirty(true);
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="specialties-title" className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                  Section Title
+                </Label>
+                <Input
+                  id="specialties-title"
+                  placeholder="e.g. Crafted with passion, served with perfection."
+                  value={highlights[0]?.title || ""}
+                  onChange={(e) => {
+                    const next = [...highlights];
+                    if (!next[0]) next[0] = { kicker: "", title: "", description: "" };
+                    next[0].title = e.target.value;
+                    setHighlights(next);
+                    setIsDirty(true);
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                Section Description (Rich Text)
+              </Label>
+              <RichTextEditor
+                value={highlights[0]?.description || ""}
+                onChange={(html) => {
+                  const next = [...highlights];
+                  if (!next[0]) next[0] = { kicker: "", title: "", description: "" };
+                  next[0].description = html;
+                  setHighlights(next);
+                  setIsDirty(true);
+                }}
+                placeholder="Write a descriptive introduction about your venue and delicacies..."
+              />
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <Label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                Section Main Image
+              </Label>
+              <div className="relative h-60 max-w-lg rounded-xl overflow-hidden border bg-gradient-to-br from-[#120820] to-[#1a0a30] group">
+                {highlights[0]?.image ? (
+                  <>
+                    <SecureAssetImage
+                      src={highlights[0].image}
+                      alt="Specialties preview"
+                      className="w-full h-full object-cover object-center"
+                    />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setMediaPickerTarget("specialties")}
+                        className="rounded-full text-xs shadow-lg"
+                      >
+                        Change Image
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          const next = [...highlights];
+                          if (next[0]) {
+                            next[0].image = "";
+                            setHighlights(next);
+                            setIsDirty(true);
+                          }
+                        }}
+                        className="rounded-full text-xs shadow-lg"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setMediaPickerTarget("specialties")}
+                    className="w-full h-full flex flex-col items-center justify-center gap-2 text-white/30 hover:text-white/60 transition-colors"
+                  >
+                    <ImageIcon className="h-8 w-8" />
+                    <span className="text-xs font-medium">Click to choose from Media Library</span>
+                  </button>
+                )}
+              </div>
+              {highlights[0]?.image && (
+                <p className="text-[10px] text-muted-foreground truncate">{highlights[0].image}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border bg-card p-6 shadow-sm space-y-6">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight text-foreground">Specialty List Items</h2>
+              <p className="text-muted-foreground text-xs">Configure the three key specialties/highlights listed under the description.</p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-3">
+              {[1, 2, 3].map((num) => (
+                <div key={num} className="p-5 border rounded-xl bg-background/50 space-y-4">
+                  <Badge variant="outline" className="font-bold text-xs uppercase tracking-widest text-[#FF1A43] bg-[#FF1A43]/5 border-[#FF1A43]/20">
+                    Specialty 0{num}
+                  </Badge>
+
+                  <div className="space-y-2">
+                    <Label htmlFor={`item-${num}-title`} className="text-xs font-bold text-muted-foreground">
+                      Title
+                    </Label>
+                    <Input
+                      id={`item-${num}-title`}
+                      placeholder={`Specialty 0${num} Title`}
+                      value={highlights[num]?.title || ""}
+                      onChange={(e) => {
+                        const next = [...highlights];
+                        if (!next[num]) next[num] = { kicker: "", title: "", description: "" };
+                        next[num].title = e.target.value;
+                        setHighlights(next);
+                        setIsDirty(true);
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor={`item-${num}-desc`} className="text-xs font-bold text-muted-foreground">
+                      Description
+                    </Label>
+                    <Textarea
+                      id={`item-${num}-desc`}
+                      placeholder={`Describe this specialty item...`}
+                      rows={3}
+                      value={highlights[num]?.description || ""}
+                      onChange={(e) => {
+                        const next = [...highlights];
+                        if (!next[num]) next[num] = { kicker: "", title: "", description: "" };
+                        next[num].description = e.target.value;
+                        setHighlights(next);
+                        setIsDirty(true);
+                      }}
+                      maxLength={150}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="menus" className="space-y-6 outline-none">
+          {/* ── Text Content ── */}
+          <div className="rounded-3xl border border-white/[0.08] bg-card p-6 md:p-8 space-y-6">
+            <div>
+              <h3 className="text-lg font-bold text-foreground">Interactive 3D Menus Section</h3>
+              <p className="text-muted-foreground text-xs">
+                Configure the headings and descriptions for your interactive 3D dishes showcase section.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                  Section Subtitle / Eyebrow
+                </Label>
+                <Input
+                  value={menus?.eyebrow || ""}
+                  onChange={(e) => {
+                    setMenus({ ...menus, eyebrow: e.target.value });
+                    setIsDirty(true);
+                  }}
+                  placeholder="e.g. Menus"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                  Section Main Title
+                </Label>
+                <Input
+                  value={menus?.title || ""}
+                  onChange={(e) => {
+                    setMenus({ ...menus, title: e.target.value });
+                    setIsDirty(true);
+                  }}
+                  placeholder="e.g. Explore Our Menus in 3D"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                Description Column Content
+              </Label>
+              <Textarea
+                value={menus?.description || ""}
+                onChange={(e) => {
+                  setMenus({ ...menus, description: e.target.value });
+                  setIsDirty(true);
+                }}
+                placeholder="e.g. Interact directly with our signature dishes..."
+                rows={3}
+              />
+            </div>
+          </div>
+
+          {/* ── Per-Item Media Cards ── */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-muted/40 p-4 rounded-2xl border border-border/60">
+              <div>
+                <h3 className="text-base font-black tracking-tight">Menu Item Media</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Each item shown in the 3D showcase gets its own image and 3D model.
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                {allMenuItems.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={toggleSelectAllPage}
+                      className="h-8 text-xs font-bold px-3 rounded-lg"
+                    >
+                      {isAllPageSelected ? "Deselect Page" : "Select Page"}
+                    </Button>
+                    {selectedMenuItemIds.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleBulkDelete}
+                        className="h-8 text-xs font-black uppercase tracking-wider px-3 rounded-lg flex items-center gap-1.5 shadow-[0_0_15px_rgba(239,68,68,0.25)]"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete Selected ({selectedMenuItemIds.length})
+                      </Button>
+                    )}
+                  </div>
+                )}
+                <Badge variant="outline" className="rounded-full px-3 py-1 font-bold text-xs bg-background">
+                  {allMenuItems.length} item{allMenuItems.length !== 1 ? "s" : ""}
+                </Badge>
+              </div>
+            </div>
+
+            {isLoadingMenuItems ? (
+              <div className="flex items-center justify-center h-40 gap-3">
+                <Loader2 className="h-6 w-6 animate-spin text-[#FF1A43]" />
+                <span className="text-sm text-muted-foreground">Loading menu items…</span>
+              </div>
+            ) : allMenuItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-muted-foreground/20 h-40 gap-2 text-muted-foreground/50">
+                <ImageIcon className="h-8 w-8" />
+                <p className="text-sm font-medium">No menu items found</p>
+                <p className="text-xs">Add items on the Menu Management page first.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                  {paginatedItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`group rounded-2xl border overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 relative ${
+                        selectedMenuItemIds.includes(item.id)
+                          ? "border-[#7B16D9] ring-2 ring-[#7B16D9]/20 bg-[#7B16D9]/5"
+                          : "bg-card border-border"
+                      }`}
+                    >
+                      {/* Checkbox selector */}
+                      <div className="absolute top-2 left-2 z-20 bg-black/40 backdrop-blur-md p-1.5 rounded-lg border border-white/10 flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedMenuItemIds.includes(item.id)}
+                          onChange={() => toggleSelectItem(item.id)}
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-[#7B16D9]"
+                        />
+                      </div>
+
+                      {/* Delete button (single delete) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete "${item.name}"?`)) {
+                            deleteMenuItemMutation.mutate(item.id);
+                          }
+                        }}
+                        className="absolute top-2 right-2 z-20 p-1.5 bg-rose-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-rose-600 shadow-md border border-rose-600/20"
+                        title="Delete menu item"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+
+                      {/* Image strip */}
+                      <div className="relative h-40 bg-gradient-to-br from-[#120820] to-[#1a0a30] overflow-hidden">
+                        {item.image_url ? (
+                          <SecureAssetImage
+                            src={item.image_url}
+                            alt={item.name}
+                            className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-full gap-2 text-white/30">
+                            <ImageIcon className="h-8 w-8" />
+                            <span className="text-[10px] font-medium">No image</span>
+                          </div>
+                        )}
+
+                        {/* Dark overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+
+                        {/* 3D badge */}
+                        {item.model_3d_url && (
+                          <div className="absolute top-2 right-2 group-hover:right-10 transition-all duration-200 flex items-center gap-1 bg-[#7B16D9]/80 backdrop-blur-sm text-white text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full border border-[#7B16D9] z-10">
+                            <Box className="h-2.5 w-2.5" />
+                            3D
+                          </div>
+                        )}
+
+                        {/* Item info overlay */}
+                        <div className="absolute bottom-0 left-0 right-0 p-3">
+                          {item.category?.name && (
+                            <span className="inline-block text-[9px] font-black uppercase tracking-widest text-[#FF1A43] bg-[#FF1A43]/15 border border-[#FF1A43]/30 px-2 py-0.5 rounded-full mb-1">
+                              {item.category.name}
+                            </span>
+                          )}
+                          <p className="text-white font-black text-sm leading-tight line-clamp-1">{item.name}</p>
+                        </div>
+                      </div>
+
+                      {/* Body: uploaders */}
+                      <div className="p-4 space-y-3">
+                        {/* Image uploader row */}
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                            <ImageIcon className="h-3 w-3" /> Image
+                          </Label>
+                          <div className="flex gap-1.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setMediaPickerTarget(`menu_item_image_${item.id}`)}
+                              className="flex-1 h-8 text-[10px] font-black uppercase tracking-widest text-indigo-600 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 dark:text-indigo-400 dark:border-indigo-800 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/70 rounded-lg"
+                            >
+                              <ImageIcon className="mr-1 h-3 w-3" />
+                              {item.image_url ? "Replace" : "Upload"}
+                            </Button>
+                            {item.image_url && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => updateMenuItemMutation.mutate({ id: item.id, payload: { image_url: null } })}
+                                className="h-8 w-8 p-0 text-rose-500 border-rose-200 bg-rose-50 hover:bg-rose-100 dark:text-rose-400 dark:border-rose-800 dark:bg-rose-950/40 rounded-lg"
+                                title="Remove image"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 3D model uploader row */}
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                            <Box className="h-3 w-3" /> 3D Model
+                          </Label>
+                          <div className="flex gap-1.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setMediaPickerTarget(`menu_item_model_${item.id}`)}
+                              className="flex-1 h-8 text-[10px] font-black uppercase tracking-widest border-[#7B16D9]/30 text-[#7B16D9] bg-[#7B16D9]/5 hover:bg-[#7B16D9]/15 rounded-lg"
+                            >
+                              <Box className="mr-1 h-3 w-3" />
+                              {item.model_3d_url ? "Replace" : "Upload"}
+                            </Button>
+                            {item.model_3d_url && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => updateMenuItemMutation.mutate({ id: item.id, payload: { model_3d_url: null } })}
+                                className="h-8 w-8 p-0 text-rose-500 border-rose-200 bg-rose-50 hover:bg-rose-100 dark:text-rose-400 dark:border-rose-800 dark:bg-rose-950/40 rounded-lg"
+                                title="Remove 3D model"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between border-t border-border/50 pt-5 mt-4">
+                    <p className="text-xs text-muted-foreground font-medium">
+                      Showing <span className="font-bold text-foreground">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
+                      <span className="font-bold text-foreground">
+                        {Math.min(currentPage * itemsPerPage, totalItems)}
+                      </span>{" "}
+                      of <span className="font-bold text-foreground">{totalItems}</span> items
+                    </p>
+                    
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(prev => prev - 1)}
+                        className="h-9 px-3 font-bold rounded-xl"
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-1.5" />
+                        Previous
+                      </Button>
+                      
+                      <div className="flex items-center gap-1.5">
+                        {Array.from({ length: totalPages }).map((_, idx) => {
+                          const pageNum = idx + 1;
+                          return (
+                            <Button
+                              key={pageNum}
+                              type="button"
+                              variant={currentPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setCurrentPage(pageNum)}
+                              className={`h-9 w-9 p-0 font-bold rounded-xl ${
+                                currentPage === pageNum
+                                  ? "bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] hover:from-[#FF1A43] hover:to-[#7B16D9] text-white border-none"
+                                  : ""
+                              }`}
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(prev => prev + 1)}
+                        className="h-9 px-3 font-bold rounded-xl"
+                      >
+                        Next
+                        <ArrowRight className="h-4 w-4 ml-1.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* ── Edit / Add Dialog ── */}
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) setIsDialogOpen(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto rounded-[2rem]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GalleryHorizontalEnd className="h-4 w-4 text-[#FF1A43]" />
+              {editingIndex === null ? "Add New Slide" : `Edit Slide ${editingIndex + 1}`}
+            </DialogTitle>
+            <DialogDescription>
+              {editingIndex === null
+                ? "Configure the content and image for your new hero slide."
+                : "Update the slide content and image."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* Image picker */}
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                Background Image
+              </Label>
+              <div className="relative h-40 rounded-xl overflow-hidden border bg-gradient-to-br from-[#120820] to-[#1a0a30] group">
+                {formData.image ? (
+                  <>
+                    <SecureAssetImage
+                      src={formData.image}
+                      alt="Preview"
+                      className="w-full h-full object-cover object-center"
+                    />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setMediaPickerTarget("slide")}
+                        className="rounded-full text-xs shadow-lg"
+                      >
+                        Change Image
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setFormData((p) => ({ ...p, image: "" }))}
+                        className="rounded-full text-xs shadow-lg"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setMediaPickerTarget("slide")}
+                    className="w-full h-full flex flex-col items-center justify-center gap-2 text-white/30 hover:text-white/60 transition-colors"
+                  >
+                    <ImageIcon className="h-8 w-8" />
+                    <span className="text-xs font-medium">Click to choose from Media Library</span>
+                  </button>
+                )}
+              </div>
+              {formData.image && (
+                <p className="text-[10px] text-muted-foreground truncate">{formData.image}</p>
+              )}
+            </div>
+
+            {/* Badge */}
+            <div className="space-y-2">
+              <Label htmlFor="slide-badge" className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                Badge Label <span className="normal-case font-normal opacity-60">(optional)</span>
+              </Label>
+              <Input
+                id="slide-badge"
+                placeholder="e.g. VIP Experience, Exclusive Night Out"
+                value={formData.badge}
+                onChange={(e) => setFormData((p) => ({ ...p, badge: e.target.value }))}
+                maxLength={60}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Appears as a small highlight label above the title. Keep it short.
+              </p>
+            </div>
+
+            {/* Title */}
+            <div className="space-y-2">
+              <Label htmlFor="slide-title" className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                Title <span className="text-[#FF1A43]">*</span>
+              </Label>
+              <Input
+                id="slide-title"
+                placeholder="e.g. Feel the Night Energy."
+                value={formData.title}
+                onChange={(e) => setFormData((p) => ({ ...p, title: e.target.value }))}
+                maxLength={80}
+                required
+              />
+            </div>
+
+            {/* Subtitle */}
+            <div className="space-y-2">
+              <Label htmlFor="slide-subtitle" className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                Subtitle <span className="normal-case font-normal opacity-60">(optional)</span>
+              </Label>
+              <Textarea
+                id="slide-subtitle"
+                placeholder="e.g. Step into Addis Ababa's premier luxury lounge…"
+                value={formData.subtitle}
+                onChange={(e) => setFormData((p) => ({ ...p, subtitle: e.target.value }))}
+                rows={3}
+                maxLength={200}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Short description shown below the title. 20 words max recommended.
+              </p>
+            </div>
+
+            {/* Inline preview — show whenever there's any content to preview */}
+            {(formData.image || formData.title || formData.badge) && (
+              <div className="rounded-xl overflow-hidden border">
+                <SliderPreview slides={[formData]} active={0} />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsDialogOpen(false)}
+              className="rounded-full"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDialogSave}
+              className="rounded-full px-6 bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] hover:from-[#e0173a] hover:to-[#6912be] text-white"
+            >
+              {editingIndex === null ? "Add Slide" : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Media Picker Dialog ── */}
+      <Dialog
+        open={mediaPickerTarget !== null}
+        onOpenChange={(next) => {
+          if (!next) setMediaPickerTarget(null);
+        }}
+      >
+        <DialogContent className="flex h-[80vh] max-w-[1000px] flex-col p-0 overflow-hidden rounded-[2rem]">
+          <div className="flex items-center justify-between border-b px-6 py-4 bg-background/50 backdrop-blur-md">
+            <div>
+              <DialogTitle>Media Library</DialogTitle>
+              <DialogDescription>
+                {mediaPickerTarget === "specialties"
+                  ? "Select a main image for the specialties section"
+                  : mediaPickerTarget === "menus_image"
+                  ? "Select a showcase image for the menus section"
+                  : mediaPickerTarget === "menus_model"
+                  ? "Select a 3D model (.glb / .gltf) for the menus section"
+                  : "Select an image for this slide"}
+              </DialogDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMediaPickerTarget(null)}
+              className="rounded-full"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="file-picker-wrapper relative flex-1 overflow-hidden">
+            <style
+              dangerouslySetInnerHTML={{
+                __html: `
+                .file-picker-wrapper > div > div:nth-child(1),
+                .file-picker-wrapper > div > div:nth-child(2) > div:nth-child(2) { display: none !important; }
+                .file-picker-wrapper > div { height: 100% !important; min-height: 100% !important; margin: 0 !important; }
+              `,
+              }}
+            />
+            <FileManagerClient
+              isPickerMode={true}
+              onFileSelect={handleFileSelect}
+              access={{ canRead: canBrowseAssetLibrary, canManage: canManageStorage }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

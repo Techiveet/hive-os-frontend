@@ -41,6 +41,7 @@ import { Project, ProjectStatus, TaskPriority, ProjectAttachment } from "../type
 import { FileManagerClient } from "@/components/dashboard/file-manager-client";
 import { FileIcon, PaperclipIcon, UploadIcon, Layout, Calendar as CalendarDays, Users as UsersGroup, Wallet, Cpu as CpuIcon, Paperclip, Settings, Info, BarChart3 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTranslation } from "@/store/use-translation";
 
 type ProjectAssetSelection = {
   id?: number | null;
@@ -89,6 +90,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   project,
   initialTab = "general",
 }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [name, setName] = useState(project?.name || "");
   const [description, setDescription] = useState(project?.description || "");
@@ -370,10 +372,10 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                 </div>
                 <div>
                   <DialogTitle className="text-2xl font-black tracking-tight text-foreground/90">
-                    {project ? "Update Architecture" : "Initialize Workspace"}
+                    {project ? t('project_management.update_architecture', 'Update Architecture') : t('project_management.initialize_workspace', 'Initialize Workspace')}
                   </DialogTitle>
                   <DialogDescription className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                    {project ? "Refining project parameters and resource allocation" : "Configure project environment and strategic benchmarks"}
+                    {project ? t('project_management.refining_project_desc', 'Refining project parameters and resource allocation') : t('project_management.configure_project_desc', 'Configure project environment and strategic benchmarks')}
                   </DialogDescription>
                 </div>
               </div>
@@ -386,33 +388,33 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                     value="general" 
                     className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-14 px-1 gap-2 text-[10px] font-black uppercase tracking-[0.15em] transition-all"
                   >
-                    <Info className="h-4 w-4" /> General
+                    <Info className="h-4 w-4" /> {t('project_management.general', 'General')}
                   </TabsTrigger>
                   <TabsTrigger 
                     value="team" 
                     className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-14 px-1 gap-2 text-[10px] font-black uppercase tracking-[0.15em] transition-all"
                   >
-                    <UsersGroup className="h-4 w-4" /> Team
+                    <UsersGroup className="h-4 w-4" /> {t('project_management.team', 'Team')}
                   </TabsTrigger>
                   <TabsTrigger 
                     value="financials" 
                     className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-14 px-1 gap-2 text-[10px] font-black uppercase tracking-[0.15em] transition-all"
                   >
-                    <Wallet className="h-4 w-4" /> Financials
+                    <Wallet className="h-4 w-4" /> {t('project_management.financials', 'Financials')}
                   </TabsTrigger>
                   {isSoftwareDev && (
                     <TabsTrigger 
                       value="engineering" 
                       className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-14 px-1 gap-2 text-[10px] font-black uppercase tracking-[0.15em] transition-all"
                     >
-                      <CpuIcon className="h-4 w-4" /> Engineering
+                      <CpuIcon className="h-4 w-4" /> {t('project_management.engineering', 'Engineering')}
                     </TabsTrigger>
                   )}
                   <TabsTrigger 
                     value="attachments" 
                     className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none h-14 px-1 gap-2 text-[10px] font-black uppercase tracking-[0.15em] transition-all"
                   >
-                    <Paperclip className="h-4 w-4" /> Assets
+                    <Paperclip className="h-4 w-4" /> {t('project_management.assets', 'Assets')}
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -424,26 +426,26 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                     <div className="bg-primary/[0.03] border border-primary/10 rounded-3xl p-6 space-y-4">
                       <div className="flex items-center gap-2">
                         <Settings className="h-3.5 w-3.5 text-primary" />
-                        <Label className="text-primary font-black text-[9px] uppercase tracking-[0.2em]">Blueprint Selection</Label>
+                        <Label className="text-primary font-black text-[9px] uppercase tracking-[0.2em]">{t('project_management.blueprint_selection', 'Blueprint Selection')}</Label>
                       </div>
                       <Select 
                         value={selectedTemplateId || "none"} 
                         onValueChange={(val) => {
                           setSelectedTemplateId(val === "none" ? null : val);
                           if (val !== "none") {
-                            const t = templates.find(temp => temp.id === val);
-                            if (t) {
-                              setName(t.name + " (Copy)");
-                              setDescription(t.description || "");
+                            const tModel = templates.find(temp => temp.id === val);
+                            if (tModel) {
+                              setName(tModel.name + " (Copy)");
+                              setDescription(tModel.description || "");
                             }
                           }
                         }}
                       >
                         <SelectTrigger className="w-full bg-background border-primary/10 h-12 rounded-2xl focus:ring-primary/20 shadow-sm">
-                          <SelectValue placeholder="Initialize from a project blueprint..." />
+                          <SelectValue placeholder={t('project_management.initialize_blueprint', 'Initialize from a project blueprint...')} />
                         </SelectTrigger>
                         <SelectContent className="rounded-2xl border-primary/10 shadow-2xl">
-                          <SelectItem value="none" className="text-xs font-bold">Standard Project (Manual Configuration)</SelectItem>
+                          <SelectItem value="none" className="text-xs font-bold">{t('project_management.standard_project', 'Standard Project (Manual Configuration)')}</SelectItem>
                           {templates.map((temp) => (
                             <SelectItem key={temp.id} value={temp.id} className="text-xs font-bold">
                               {temp.name}
@@ -457,7 +459,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-3">
                       <Label htmlFor="name" className={cn("text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70", errors.name && "text-destructive")}>
-                        Project Identity <span className="text-destructive">*</span>
+                        {t('project_management.project_identity', 'Project Identity')} <span className="text-destructive">*</span>
                       </Label>
                       <div className="relative group">
                         <BriefcaseIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
@@ -468,7 +470,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                             setName(e.target.value);
                             if (errors.name) setErrors(prev => ({ ...prev, name: "" }));
                           }}
-                          placeholder="Project name..."
+                          placeholder={t('project_management.project_name_placeholder', 'Project name...')}
                           className={cn("pl-11 h-14 bg-muted/10 border-border/40 rounded-2xl focus:ring-primary/20 transition-all font-bold text-sm", errors.name && "border-destructive focus-ring-destructive/20")}
                         />
                       </div>
@@ -476,14 +478,14 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                     </div>
 
                     <div className="space-y-3">
-                      <Label htmlFor="client" className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Stakeholder / Client</Label>
+                      <Label htmlFor="client" className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t('project_management.stakeholder_client', 'Stakeholder / Client')}</Label>
                       <div className="relative group">
                         <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
                         <Input
                           id="client"
                           value={clientStakeholder}
                           onChange={(e) => setClientStakeholder(e.target.value)}
-                          placeholder="Client identity..."
+                          placeholder={t('project_management.client_identity_placeholder', 'Client identity...')}
                           className="pl-11 h-14 bg-muted/10 border-border/40 rounded-2xl focus:ring-primary/20 transition-all font-bold text-sm"
                         />
                       </div>
@@ -491,7 +493,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                   </div>
 
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Strategic Intent (Description)</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t('project_management.strategic_intent', 'Strategic Intent (Description)')}</Label>
                     <RichTextEditor 
                       value={description} 
                       onChange={setDescription} 
@@ -502,7 +504,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-3">
                       <Label className={cn("text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70", errors.status && "text-destructive")}>
-                        Lifecycle Status <span className="text-destructive">*</span>
+                        {t('project_management.lifecycle_status', 'Lifecycle Status')} <span className="text-destructive">*</span>
                       </Label>
                       <Select 
                         value={status} 
@@ -512,21 +514,21 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                         }}
                       >
                         <SelectTrigger className={cn("h-14 bg-muted/10 border-border/40 rounded-2xl font-bold text-xs", errors.status && "border-destructive")}>
-                          <SelectValue placeholder="Lifecycle phase" />
+                          <SelectValue placeholder={t('project_management.lifecycle_phase', 'Lifecycle phase')} />
                         </SelectTrigger>
                         <SelectContent className="rounded-2xl border-border/40 shadow-2xl">
-                          <SelectItem value="planning" className="text-xs font-bold">Planning</SelectItem>
-                          <SelectItem value="active" className="text-xs font-bold">Active Production</SelectItem>
-                          <SelectItem value="on_hold" className="text-xs font-bold">On Hold</SelectItem>
-                          <SelectItem value="completed" className="text-xs font-bold">Delivered / Completed</SelectItem>
-                          <SelectItem value="archived" className="text-xs font-bold text-muted-foreground">Archived</SelectItem>
+                          <SelectItem value="planning" className="text-xs font-bold">{t('project_management.status_planning', 'Planning')}</SelectItem>
+                          <SelectItem value="active" className="text-xs font-bold">{t('project_management.status_active_prod', 'Active Production')}</SelectItem>
+                          <SelectItem value="on_hold" className="text-xs font-bold">{t('project_management.status_on_hold', 'On Hold')}</SelectItem>
+                          <SelectItem value="completed" className="text-xs font-bold">{t('project_management.status_delivered', 'Delivered / Completed')}</SelectItem>
+                          <SelectItem value="archived" className="text-xs font-bold text-muted-foreground">{t('project_management.status_archived', 'Archived')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-3">
                       <Label className={cn("text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70", errors.priority && "text-destructive")}>
-                        Priority Vector <span className="text-destructive">*</span>
+                        {t('project_management.priority_vector', 'Priority Vector')} <span className="text-destructive">*</span>
                       </Label>
                       <Select 
                         value={priority} 
@@ -536,13 +538,13 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                         }}
                       >
                         <SelectTrigger className={cn("h-14 bg-muted/10 border-border/40 rounded-2xl font-bold text-xs", errors.priority && "border-destructive")}>
-                          <SelectValue placeholder="Priority weight" />
+                          <SelectValue placeholder={t('project_management.priority_weight', 'Priority weight')} />
                         </SelectTrigger>
                         <SelectContent className="rounded-2xl border-border/40 shadow-2xl">
-                          <SelectItem value="low" className="text-xs font-bold">Low Priority</SelectItem>
-                          <SelectItem value="medium" className="text-xs font-bold">Standard Priority</SelectItem>
-                          <SelectItem value="high" className="text-xs font-bold">High Priority</SelectItem>
-                          <SelectItem value="urgent" className="text-xs font-black text-destructive">Critical / Urgent</SelectItem>
+                          <SelectItem value="low" className="text-xs font-bold">{t('project_management.priority_low', 'Low Priority')}</SelectItem>
+                          <SelectItem value="medium" className="text-xs font-bold">{t('project_management.priority_standard', 'Standard Priority')}</SelectItem>
+                          <SelectItem value="high" className="text-xs font-bold">{t('project_management.priority_high', 'High Priority')}</SelectItem>
+                          <SelectItem value="urgent" className="text-xs font-black text-destructive">{t('project_management.priority_critical', 'Critical / Urgent')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -559,14 +561,14 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                         />
                       </div>
                       <div className="grid gap-1 leading-tight">
-                        <Label htmlFor="is_template" className="text-xs font-black uppercase tracking-widest text-foreground/80">Save as Blueprint</Label>
-                        <p className="text-[10px] text-muted-foreground/60 font-bold">Encapsulate this configuration as a reusable template.</p>
+                        <Label htmlFor="is_template" className="text-xs font-black uppercase tracking-widest text-foreground/80">{t('project_management.save_as_blueprint', 'Save as Blueprint')}</Label>
+                        <p className="text-[10px] text-muted-foreground/60 font-bold">{t('project_management.save_as_blueprint_desc', 'Encapsulate this configuration as a reusable template.')}</p>
                       </div>
                     </div>
 
                     <div className="space-y-3">
                       <Label htmlFor="tags" className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70 flex items-center gap-2">
-                        <TagIcon className="h-3.5 w-3.5" /> Project Taxonomies (Tags)
+                        <TagIcon className="h-3.5 w-3.5" /> {t('project_management.project_taxonomies', 'Project Taxonomies (Tags)')}
                       </Label>
                       <div className="flex flex-wrap gap-2 p-3 bg-muted/10 border border-border/40 rounded-2xl min-h-[56px] items-center">
                         {tags.map((tag) => (
@@ -589,7 +591,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                           value={tagInput}
                           onChange={(e) => setTagInput(e.target.value)}
                           onKeyDown={handleAddTag}
-                          placeholder="Add tag..."
+                          placeholder={t('project_management.add_tag', 'Add tag...')}
                           className="bg-transparent outline-none text-xs font-bold placeholder:text-muted-foreground/30 flex-1 min-w-[80px]"
                         />
                       </div>
@@ -603,7 +605,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-3">
                       <Label className={cn("text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70", errors.start_date && "text-destructive")}>
-                        Commencement Date <span className="text-destructive">*</span>
+                        {t('project_management.commencement_date', 'Commencement Date')} <span className="text-destructive">*</span>
                       </Label>
                       <Popover>
                         <PopoverTrigger asChild>
@@ -616,7 +618,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                             )}
                           >
                             <CalendarIcon className="mr-3 h-4 w-4 text-primary/60" />
-                            {startDate ? format(startDate, "PPP") : <span className="text-xs uppercase tracking-widest">Select Date</span>}
+                            {startDate ? format(startDate, "PPP") : <span className="text-xs uppercase tracking-widest">{t('project_management.select_date', 'Select Date')}</span>}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0 rounded-3xl border-border/40 shadow-2xl" align="start">
@@ -636,7 +638,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 
                     <div className="space-y-3">
                       <Label className={cn("text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70", errors.end_date && "text-destructive")}>
-                        Conclusion Target <span className="text-destructive">*</span>
+                        {t('project_management.conclusion_target', 'Conclusion Target')} <span className="text-destructive">*</span>
                       </Label>
                       <Popover>
                         <PopoverTrigger asChild>
@@ -649,7 +651,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                             )}
                           >
                             <CalendarIcon className="mr-3 h-4 w-4 text-primary/60" />
-                            {endDate ? format(endDate, "PPP") : <span className="text-xs uppercase tracking-widest">Select Date</span>}
+                            {endDate ? format(endDate, "PPP") : <span className="text-xs uppercase tracking-widest">{t('project_management.select_date', 'Select Date')}</span>}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0 rounded-3xl border-border/40 shadow-2xl" align="start">
@@ -670,7 +672,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                     <div className="space-y-6">
                       <div className="space-y-3">
                         <Label className={cn("text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70", errors.project_manager_ids && "text-destructive")}>
-                          Project Leadership (Managers) <span className="text-destructive">*</span>
+                          {t('project_management.project_leadership', 'Project Leadership (Managers)')} <span className="text-destructive">*</span>
                         </Label>
                         <Combobox
                           value={projectManagerIds}
@@ -690,12 +692,12 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                   </ComboboxChip>
                                 );
                               })}
-                              <ComboboxChipsInput placeholder="Assign leadership..." className="text-xs font-bold" />
+                              <ComboboxChipsInput placeholder={t('project_management.assign_leadership', 'Assign leadership...')} className="text-xs font-bold" />
                             </ComboboxChips>
                           </div>
                           <ComboboxContent anchor={managerAnchor} className="rounded-2xl border-border/40 shadow-2xl">
                             <ComboboxList>
-                              <ComboboxEmpty>No personnel found.</ComboboxEmpty>
+                              <ComboboxEmpty>{t('project_management.no_personnel_found', 'No personnel found.')}</ComboboxEmpty>
                               {users.map((user: any) => (
                                 <ComboboxItem key={user.id} value={String(user.id)} className="rounded-xl font-bold text-xs">
                                   {user.name}
@@ -709,7 +711,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 
                       <div className="space-y-3">
                         <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">
-                          Operational Team (Members)
+                          {t('project_management.operational_team', 'Operational Team (Members)')}
                         </Label>
                         <Combobox
                           value={assignedTo}
@@ -726,12 +728,12 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                   </ComboboxChip>
                                 );
                               })}
-                              <ComboboxChipsInput placeholder="Deploy team members..." className="text-xs font-bold" />
+                              <ComboboxChipsInput placeholder={t('project_management.deploy_team', 'Deploy team members...')} className="text-xs font-bold" />
                             </ComboboxChips>
                           </div>
                           <ComboboxContent anchor={assignedAnchor} className="rounded-2xl border-border/40 shadow-2xl">
                             <ComboboxList>
-                              <ComboboxEmpty>No personnel found.</ComboboxEmpty>
+                              <ComboboxEmpty>{t('project_management.no_personnel_found', 'No personnel found.')}</ComboboxEmpty>
                               {users.map((user: any) => (
                                 <ComboboxItem key={user.id} value={String(user.id)} className="rounded-xl font-bold text-xs">
                                   {user.name}
@@ -749,7 +751,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-3">
                       <Label htmlFor="budget" className={cn("text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70", errors.budget && "text-destructive")}>
-                        Project Capital Allocation <span className="text-destructive">*</span>
+                        {t('project_management.project_capital_allocation', 'Project Capital Allocation')} <span className="text-destructive">*</span>
                       </Label>
                       <div className="relative group">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/40 group-focus-within:text-primary transition-colors flex items-center justify-center font-bold text-lg">$</div>
@@ -769,11 +771,11 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 
                     <div className="space-y-3">
                       <Label htmlFor="currency" className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">
-                        Operational Currency
+                        {t('project_management.operational_currency', 'Operational Currency')}
                       </Label>
                       <Select value={currency} onValueChange={setCurrency}>
                         <SelectTrigger id="currency" className="h-14 rounded-2xl bg-muted/10 border-border/40 font-bold text-sm px-5">
-                          <SelectValue placeholder="Select currency" />
+                          <SelectValue placeholder={t('project_management.select_currency', 'Select currency')} />
                         </SelectTrigger>
                         <SelectContent className="rounded-2xl border-border/40 shadow-2xl">
                           <SelectItem value="USD" className="rounded-xl font-bold">USD - United States Dollar</SelectItem>
@@ -788,7 +790,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
                     <div className="space-y-3">
                       <Label htmlFor="hourlyRate" className={cn("text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70", errors.hourly_rate && "text-destructive")}>
-                        Resource Hourly Rate
+                        {t('project_management.resource_hourly_rate', 'Resource Hourly Rate')}
                       </Label>
                       <div className="relative group">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/40 group-focus-within:text-primary transition-colors flex items-center justify-center font-bold text-lg">$</div>
@@ -808,7 +810,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 
                     <div className="space-y-3">
                       <Label htmlFor="estimatedHours" className={cn("text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70", errors.estimated_hours && "text-destructive")}>
-                        Projected Labor Hours
+                        {t('project_management.projected_labor_hours', 'Projected Labor Hours')}
                       </Label>
                       <div className="relative group">
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/40 group-focus-within:text-primary transition-colors">
@@ -822,7 +824,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                             setEstimatedHours(e.target.value);
                             if (errors.estimated_hours) setErrors(prev => ({ ...prev, estimated_hours: "" }));
                           }}
-                          placeholder="Total hours..."
+                          placeholder={t('project_management.total_hours_placeholder', 'Total hours...')}
                           className={cn("pl-11 h-14 rounded-2xl bg-muted/10 border-border/40 font-bold text-sm transition-all focus:bg-background", errors.estimated_hours && "border-destructive focus-visible:ring-destructive")}
                         />
                       </div>
@@ -835,15 +837,15 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                         <BarChart3 className="w-4 h-4" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-black uppercase tracking-widest text-foreground/80">Revenue Intelligence</h4>
-                        <p className="text-[10px] text-muted-foreground/60 font-bold">Define the projected financial outcome for ROI analysis</p>
+                        <h4 className="text-xs font-black uppercase tracking-widest text-foreground/80">{t('project_management.revenue_intelligence', 'Revenue Intelligence')}</h4>
+                        <p className="text-[10px] text-muted-foreground/60 font-bold">{t('project_management.revenue_intelligence_desc', 'Define the projected financial outcome for ROI analysis')}</p>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       <div className="space-y-3">
                         <Label htmlFor="estimatedRevenue" className={cn("text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70", errors.estimated_revenue && "text-destructive")}>
-                          Target Project Revenue
+                          {t('project_management.target_project_revenue', 'Target Project Revenue')}
                         </Label>
                         <div className="relative group">
                           <div className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/40 group-focus-within:text-primary transition-colors flex items-center justify-center font-bold text-lg">$</div>
@@ -859,7 +861,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                             className={cn("pl-11 h-14 rounded-2xl bg-muted/10 border-border/40 font-bold text-sm transition-all focus:bg-background", errors.estimated_revenue && "border-destructive focus-visible:ring-destructive")}
                           />
                         </div>
-                        <p className="text-[9px] text-muted-foreground/50 font-bold px-1 uppercase tracking-tight italic">Used for ROI and Profitability Margin calculations.</p>
+                        <p className="text-[9px] text-muted-foreground/50 font-bold px-1 uppercase tracking-tight italic">{t('project_management.used_for_roi', 'Used for ROI and Profitability Margin calculations.')}</p>
                       </div>
                     </div>
                   </div>
@@ -874,13 +876,13 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                               <Github className="w-4 h-4" />
                             </div>
                             <div>
-                              <h4 className="text-xs font-black uppercase tracking-widest text-foreground/80">Source Control</h4>
-                              <p className="text-[10px] text-muted-foreground/60 font-bold">Connect your development repository</p>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-foreground/80">{t('project_management.source_control', 'Source Control')}</h4>
+                              <p className="text-[10px] text-muted-foreground/60 font-bold">{t('project_management.source_control_desc', 'Connect your development repository')}</p>
                             </div>
                           </div>
 
                           <div className="space-y-3">
-                            <Label htmlFor="repo_url" className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Repository URL</Label>
+                            <Label htmlFor="repo_url" className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t('project_management.repository_url', 'Repository URL')}</Label>
                             <div className="relative group">
                               <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
                               <Input 
@@ -900,8 +902,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                               <Cpu className="w-4 h-4" />
                             </div>
                             <div>
-                              <h4 className="text-xs font-black uppercase tracking-widest text-foreground/80">Technology Stack</h4>
-                              <p className="text-[10px] text-muted-foreground/60 font-bold">Define the core technical parameters</p>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-foreground/80">{t('project_management.technology_stack', 'Technology Stack')}</h4>
+                              <p className="text-[10px] text-muted-foreground/60 font-bold">{t('project_management.technology_stack_desc', 'Define the core technical parameters')}</p>
                             </div>
                           </div>
 
@@ -926,14 +928,14 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                 ))
                               ) : (
                                 <div className="flex items-center justify-center w-full">
-                                  <span className="text-[10px] text-muted-foreground/40 font-bold uppercase tracking-widest italic">No technologies defined yet</span>
+                                  <span className="text-[10px] text-muted-foreground/40 font-bold uppercase tracking-widest italic">{t('project_management.no_technologies', 'No technologies defined yet')}</span>
                                 </div>
                               )}
                             </div>
                             <div className="relative group">
                               <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
                               <Input 
-                                placeholder="Type technology (e.g. Next.js) and press Enter" 
+                                placeholder={t('project_management.type_technology_placeholder', 'Type technology (e.g. Next.js) and press Enter')} 
                                 value={techInput}
                                 onChange={(e) => setTechInput(e.target.value)}
                                 onKeyDown={(e) => {
@@ -958,8 +960,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Project Documentation</Label>
-                        <p className="text-[10px] text-muted-foreground/50 font-medium">Attach specifications, contracts, and briefs</p>
+                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">{t('project_management.project_documentation', 'Project Documentation')}</Label>
+                        <p className="text-[10px] text-muted-foreground/50 font-medium">{t('project_management.project_documentation_desc', 'Attach specifications, contracts, and briefs')}</p>
                       </div>
                       <Button 
                         type="button" 
@@ -969,7 +971,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                         className="h-10 px-4 gap-2 rounded-xl border-primary/20 text-primary hover:bg-primary/5 transition-all font-bold text-xs"
                       >
                         <PaperclipIcon className="h-3.5 w-3.5" />
-                        Access Library
+                        {t('project_management.access_library', 'Access Library')}
                       </Button>
                     </div>
                     
@@ -1003,8 +1005,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                         <div className="h-14 w-14 rounded-full bg-muted/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                           <UploadIcon className="h-6 w-6" />
                         </div>
-                        <p className="text-xs font-black uppercase tracking-widest mb-1">No Assets Deployed</p>
-                        <p className="text-[10px] font-medium">Click to synchronize project files</p>
+                        <p className="text-xs font-black uppercase tracking-widest mb-1">{t('project_management.no_assets_deployed', 'No Assets Deployed')}</p>
+                        <p className="text-[10px] font-medium">{t('project_management.sync_project_files', 'Click to synchronize project files')}</p>
                       </div>
                     )}
                   </div>
@@ -1020,7 +1022,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                   onClick={() => onOpenChange(false)}
                   className="h-12 px-8 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-muted"
                 >
-                  Cancel
+                  {t('project_management.cancel', 'Cancel')}
                 </Button>
                 <Button 
                   type="submit" 
@@ -1030,10 +1032,10 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                   {mutation.isPending || spawnMutation.isPending ? (
                     <>
                       <Loader2 className="mr-3 h-4 w-4 animate-spin" />
-                      Processing
+                      {t('project_management.processing', 'Processing')}
                     </>
                   ) : (
-                    project ? "Commit Changes" : "Initialize Project"
+                    project ? t('project_management.commit_changes', 'Commit Changes') : t('project_management.initialize_project', 'Initialize Project')
                   )}
                 </Button>
               </DialogFooter>

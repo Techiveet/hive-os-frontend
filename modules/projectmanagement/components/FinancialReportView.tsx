@@ -52,6 +52,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/store/use-translation";
 
 interface FinancialReportViewProps {
   projectId: string;
@@ -61,6 +62,7 @@ interface FinancialReportViewProps {
 type Scenario = "Standard" | "Aggressive" | "Lean" | "Optimal";
 
 export function FinancialReportView({ projectId, onConfigureBudget }: FinancialReportViewProps) {
+  const { t } = useTranslation();
   const [selectedScenario, setSelectedScenario] = useState<Scenario>("Standard");
 
   const { data: report, isLoading, error } = useQuery({
@@ -291,12 +293,12 @@ const cumulativeData = useMemo(() => {
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-32 -mt-32 blur-3xl transition-opacity group-hover:opacity-100 opacity-50" />
         <div className="relative z-10 mb-4 lg:mb-0">
           <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
-            Financial Intelligence
-            <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] uppercase tracking-widest px-2">ENTERPRISE v2.0</Badge>
+            {t('project_management.financial_intelligence', 'Financial Intelligence')}
+            <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] uppercase tracking-widest px-2">{t('project_management.enterprise_v2', 'ENTERPRISE v2.0')}</Badge>
           </h2>
           <p className="text-xs text-muted-foreground font-medium mt-1 uppercase tracking-wider opacity-70 flex items-center gap-2">
             <Sparkles className="h-3 w-3 text-primary" />
-            Predictive AI Engine Active
+            {t('project_management.predictive_ai_active', 'Predictive AI Engine Active')}
           </p>
         </div>
 
@@ -313,7 +315,7 @@ const cumulativeData = useMemo(() => {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {s}
+                {t('project_management.' + (s === 'Optimal' ? 'optimal_status' : s.toLowerCase()), s)}
               </button>
             ))}
           </div>
@@ -326,7 +328,7 @@ const cumulativeData = useMemo(() => {
               onClick={onConfigureBudget}
             >
               <Settings className="h-3.5 w-3.5" />
-              Configure
+              {t('project_management.configure', 'Configure')}
             </Button>
           )}
           <Badge 
@@ -337,7 +339,7 @@ const cumulativeData = useMemo(() => {
                 : "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
             )}
           >
-            {isOverBudget ? "Critical" : "Stable"}
+            {isOverBudget ? t('project_management.critical_status', 'Critical') : t('project_management.stable_status', 'Stable')}
           </Badge>
         </div>
       </motion.div>
@@ -345,14 +347,14 @@ const cumulativeData = useMemo(() => {
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard 
-          title="Total Accrued" 
+          title={t('project_management.total_accrued', 'Total Accrued')} 
           value={`${report.currency} ${(report.total_costs || 0).toLocaleString()}`} 
           subValue={`${report.total_hours || 0} Total Hours`}
           icon={<DollarSign className="h-5 w-5 text-emerald-500" />}
           delay={0.1}
         />
         <StatsCard 
-          title="Net Available" 
+          title={t('project_management.net_available', 'Net Available')} 
           value={`${report.currency} ${(report.remaining_budget || 0).toLocaleString()}`} 
           subValue={`${Math.max(0, Math.round(100 - budgetUsedPercent))}% of Total`}
           icon={<TrendingUp className="h-5 w-5 text-blue-500" />}
@@ -360,14 +362,14 @@ const cumulativeData = useMemo(() => {
           delay={0.2}
         />
         <StatsCard 
-          title="Project Velocity" 
+          title={t('project_management.project_velocity_title', 'Project Velocity')} 
           value={`${report.currency} ${report.hourly_rate || 0}`} 
           subValue="Current Hourly Baseline"
           icon={<Activity className="h-5 w-5 text-amber-500" />}
           delay={0.3}
         />
         <StatsCard 
-          title="ROI Estimate" 
+          title={t('project_management.roi_estimate', 'ROI Estimate')} 
           value={`${(report.roi || 0).toFixed(1)}%`} 
           subValue="Projected Yield"
           icon={<Zap className="h-5 w-5 text-violet-500" />}
@@ -384,7 +386,7 @@ const cumulativeData = useMemo(() => {
                 <div>
                   <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
                     <LineChartIcon className="h-4 w-4 text-primary" />
-                    Budget Forecasting
+                    {t('project_management.budget_forecasting', 'Budget Forecasting')}
                   </CardTitle>
                   <CardDescription className="text-xs">Predictive trajectory based on {selectedScenario} scenario.</CardDescription>
                 </div>
@@ -486,7 +488,7 @@ const cumulativeData = useMemo(() => {
             <CardHeader className="border-b border-border/40 bg-muted/20">
               <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-emerald-500" />
-                Profitability Index
+                {t('project_management.profitability_index', 'Profitability Index')}
               </CardTitle>
               <CardDescription className="text-xs">Weekly gross margin vs. operational cost.</CardDescription>
             </CardHeader>
@@ -539,7 +541,7 @@ const cumulativeData = useMemo(() => {
             <CardHeader className="border-b border-border/40 bg-muted/20">
               <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
                 <Target className="h-4 w-4 text-violet-500" />
-                Projected ROI Yield
+                {t('project_management.projected_roi_yield', 'Projected ROI Yield')}
               </CardTitle>
               <CardDescription className="text-xs">Cumulative value generation over time.</CardDescription>
             </CardHeader>
@@ -603,7 +605,7 @@ const cumulativeData = useMemo(() => {
             <CardHeader className="border-b border-border/40 bg-muted/20">
               <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-rose-500" />
-                Risk Intelligence Matrix
+                {t('project_management.risk_intelligence_matrix', 'Risk Intelligence Matrix')}
               </CardTitle>
               <CardDescription className="text-xs">Financial vulnerability scoring by category.</CardDescription>
             </CardHeader>
@@ -649,7 +651,7 @@ const cumulativeData = useMemo(() => {
         <motion.div variants={itemVariants}>
           <Card className="rounded-[2rem] border-border/40 shadow-xl shadow-black/5 bg-card overflow-hidden">
             <CardHeader className="border-b border-border/40 bg-muted/20">
-              <CardTitle className="text-sm font-black uppercase tracking-widest">Resource Costing</CardTitle>
+              <CardTitle className="text-sm font-black uppercase tracking-widest">{t('project_management.resource_costing', 'Resource Costing')}</CardTitle>
               <CardDescription className="text-xs">Individual contribution and expense ratio.</CardDescription>
             </CardHeader>
             <CardContent className="p-8">
@@ -707,7 +709,7 @@ const cumulativeData = useMemo(() => {
         <motion.div variants={itemVariants}>
           <Card className="rounded-[2rem] border-border/40 shadow-xl shadow-black/5 bg-card overflow-hidden h-full">
             <CardHeader className="border-b border-border/40 bg-muted/20">
-              <CardTitle className="text-sm font-black uppercase tracking-widest">Intelligence Matrix</CardTitle>
+              <CardTitle className="text-sm font-black uppercase tracking-widest">{t('project_management.intelligence_matrix', 'Intelligence Matrix')}</CardTitle>
               <CardDescription className="text-xs">Balanced project performance across core metrics.</CardDescription>
             </CardHeader>
             <CardContent className="p-8 flex items-center justify-center">
@@ -756,7 +758,7 @@ const cumulativeData = useMemo(() => {
             <CardHeader className="border-b border-border/40 bg-muted/20">
               <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
                 <Layers className="h-4 w-4 text-primary" />
-                Burn Rate Distribution
+                {t('project_management.burn_rate_distribution', 'Burn Rate Distribution')}
               </CardTitle>
               <CardDescription className="text-xs">Operational cost breakdown by department.</CardDescription>
             </CardHeader>
@@ -818,7 +820,7 @@ const cumulativeData = useMemo(() => {
               </div>
             </div>
             <CardHeader className="border-b border-border/40 bg-muted/20">
-              <CardTitle className="text-sm font-black uppercase tracking-widest">Project Runway</CardTitle>
+              <CardTitle className="text-sm font-black uppercase tracking-widest">{t('project_management.project_runway', 'Project Runway')}</CardTitle>
               <CardDescription className="text-xs">Predicted budget depletion timeline.</CardDescription>
             </CardHeader>
             <CardContent className="p-8 flex-1 flex flex-col justify-center">

@@ -10,6 +10,7 @@ import { useUser } from "@/hooks/use-user";
 import { Bug, Zap, Terminal, Code2, ShieldAlert, Layers, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GitStatusBadge } from "./GitStatusBadge";
+import { useTranslation } from "@/store/use-translation";
 
 const ISSUE_TYPE_CONFIG = {
   task: { label: "Task", icon: CheckCircle2, color: "text-blue-500", bg: "bg-blue-500/10" },
@@ -36,6 +37,7 @@ const priorityColors: Record<string, string> = {
 
 export const KanbanTask: React.FC<KanbanTaskProps> = ({ task, onOpen, isDone }) => {
   const { user } = useUser();
+  const { t } = useTranslation();
   const isSoftwareDev = user?.business_type?.toLowerCase()?.replace('-', ' ') === 'software development';
   const {
     attributes,
@@ -122,7 +124,7 @@ export const KanbanTask: React.FC<KanbanTaskProps> = ({ task, onOpen, isDone }) 
             {task.due_date && (
               <div className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${isOverdue ? 'text-red-500 bg-red-500/10 font-bold' : 'text-muted-foreground bg-muted/50'}`}>
                 <Calendar className="h-3 w-3" />
-                {isOverdue ? 'Overdue: ' : ''}
+                {isOverdue ? t('project_management.overdue_colon', 'Overdue: ') : ''}
                 {format(new Date(task.due_date), "MMM d")}
               </div>
             )}
@@ -130,7 +132,7 @@ export const KanbanTask: React.FC<KanbanTaskProps> = ({ task, onOpen, isDone }) 
             {isSoftwareDev && task.story_points && (
               <div className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">
                 <Zap className="h-2.5 w-2.5" />
-                {task.story_points} pts
+                {task.story_points} {t('project_management.pts', 'pts')}
               </div>
             )}
 

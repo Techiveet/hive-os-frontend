@@ -64,6 +64,7 @@ type Model3DViewerProps = {
   openButtonLabel?: string;
   showOpenButton?: boolean;
   autoRotate?: boolean;
+  fallbackImage?: string;
 };
 
 export function Model3DViewer({
@@ -77,6 +78,7 @@ export function Model3DViewer({
   openButtonLabel = "Open Model",
   showOpenButton = true,
   autoRotate = true,
+  fallbackImage,
 }: Model3DViewerProps) {
   const [resolvedSrc, setResolvedSrc] = React.useState<string | null>(null);
   const [isPreparingSource, setIsPreparingSource] = React.useState(false);
@@ -85,6 +87,27 @@ export function Model3DViewer({
 
   React.useEffect(() => {
     let isMounted = true;
+
+    // WebGL capability check to prevent mounting model-viewer when drivers are exhausted/missing
+    const hasWebGL = (() => {
+      if (typeof window === "undefined") return false;
+      try {
+        const canvas = document.createElement("canvas");
+        return !!(
+          window.WebGLRenderingContext &&
+          (canvas.getContext("webgl") || canvas.getContext("experimental-webgl"))
+        );
+      } catch (e) {
+        return false;
+      }
+    })();
+
+    if (!hasWebGL) {
+      if (isMounted) {
+        setViewerError("WebGL is not supported or enabled in this browser.");
+      }
+      return;
+    }
 
     ensureModelViewerLoaded()
       .then(() => {
@@ -190,6 +213,22 @@ export function Model3DViewer({
   }
 
   if (viewerError) {
+    if (fallbackImage) {
+      return (
+        <div className={frameClasses}>
+          <div className="relative w-full h-full min-h-[280px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={fallbackImage}
+              alt={alt}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className={frameClasses}>
         <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-4 p-6 text-center">
