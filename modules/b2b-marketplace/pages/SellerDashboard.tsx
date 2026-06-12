@@ -1,87 +1,134 @@
+"use client";
+
 import React from 'react';
-import { QuoteSubmission } from '../components/QuoteSubmission';
-import { Store, TrendingUp, Package } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import QuoteSubmission from '../components/QuoteSubmission';
+import { Crown, Star, Clock, MessageSquare, BellRing } from 'lucide-react';
 
-export const SellerDashboard: React.FC = () => {
+export default function SellerDashboard() {
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-6">
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                    <div className="p-3 bg-primary/10 text-primary rounded-xl">
-                        <Store className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Seller Dashboard</h1>
-                        <p className="text-muted-foreground">Discover wholesale leads and submit winning quotes.</p>
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">New Leads Today</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">12</div>
-                        <p className="text-xs text-muted-foreground">+2 from yesterday</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Quotes</CardTitle>
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">5</div>
-                        <p className="text-xs text-muted-foreground">2 awaiting response</p>
-                    </CardContent>
-                </Card>
+        <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-primary">68%</div>
-                        <p className="text-xs text-muted-foreground">Last 30 days</p>
+                        <div className="text-2xl font-bold">24%</div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Pending Quotes</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">8</div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">3</div>
+                    </CardContent>
+                </Card>
+                <Card className="bg-amber-500/10 border-amber-500/20">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium text-amber-600 flex items-center gap-2"><Crown className="h-4 w-4"/> Plan: Freemium</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-xl font-bold text-amber-600">3 Quotes Left</div>
+                        <Button variant="link" className="text-amber-600 h-auto p-0 text-xs">Upgrade to Premium</Button>
                     </CardContent>
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-                <div className="lg:col-span-2 space-y-4">
-                    <h2 className="text-xl font-bold">Open Marketplace Inquiries</h2>
+            <div className="grid gap-4 md:grid-cols-[1fr_300px]">
+                <Tabs defaultValue="inquiries" className="space-y-4">
+                    <TabsList>
+                        <TabsTrigger value="inquiries">Marketplace Feed</TabsTrigger>
+                        <TabsTrigger value="quotes">My Quotes</TabsTrigger>
+                        <TabsTrigger value="saved">Saved Searches & Alerts</TabsTrigger>
+                    </TabsList>
                     
-                    <Card className="hover:border-primary/50 transition-colors cursor-pointer group">
-                        <CardContent className="p-6">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Badge variant="secondary">Electronics</Badge>
-                                        <span className="text-sm text-muted-foreground">Posted 2 hours ago</span>
+                    <TabsContent value="inquiries" className="space-y-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Marketplace Feed</CardTitle>
+                                <CardDescription>Inquiries matching your category: Electronics</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {[1, 2, 3].map((i) => (
+                                    <div key={i} className="flex flex-col md:flex-row justify-between items-start md:items-center p-4 border rounded-lg bg-card hover:shadow-sm transition-all gap-4">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2">
+                                                <h4 className="font-semibold text-lg">Looking for 500x Laptops (Core i7)</h4>
+                                                <Badge variant="secondary">IT Hardware</Badge>
+                                            </div>
+                                            <p className="text-sm text-muted-foreground">Required Delivery: Next Month • Location: New York, USA</p>
+                                        </div>
+                                        <Button>Submit Quote</Button>
                                     </div>
-                                    <h3 className="text-lg font-bold group-hover:text-primary transition-colors">100x Dell Latitude Laptops</h3>
-                                    <p className="text-muted-foreground text-sm mt-2">Looking for a verified supplier who can provide 100 units of Dell Latitude 5000 series. Need delivery within 30 days.</p>
+                                ))}
+                            </CardContent>
+                        </Card>
+                        <QuoteSubmission />
+                    </TabsContent>
+
+                    <TabsContent value="saved">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Saved Searches & Alerts</CardTitle>
+                                <CardDescription>Manage your automated notifications for new leads.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="p-4 border rounded-xl flex items-center justify-between">
+                                    <div>
+                                        <h4 className="font-semibold">Search: "Smartphones" in Europe</h4>
+                                        <p className="text-sm text-muted-foreground">Quantity > 1000 units</p>
+                                    </div>
+                                    <Button variant="secondary" size="sm"><BellRing className="h-4 w-4 mr-2"/> Active</Button>
                                 </div>
-                                <div className="text-right">
-                                    <div className="font-bold">Budget: Open</div>
-                                    <Button className="mt-4" size="sm">Draft Quote</Button>
-                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
+
+                {/* Reputation Engine Widget */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Reputation Score</CardTitle>
+                        <CardDescription>Your performance metrics</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="text-center">
+                            <div className="text-4xl font-black text-primary">4.8</div>
+                            <div className="flex justify-center text-amber-400 mt-1">
+                                <Star className="h-4 w-4 fill-current"/><Star className="h-4 w-4 fill-current"/><Star className="h-4 w-4 fill-current"/><Star className="h-4 w-4 fill-current"/><Star className="h-4 w-4"/>
                             </div>
-                        </CardContent>
-                    </Card>
-                </div>
-                <div>
-                    <h2 className="text-xl font-bold mb-4">Draft Response</h2>
-                    <QuoteSubmission />
-                </div>
+                            <p className="text-xs text-muted-foreground mt-1">Based on 124 reviews</p>
+                        </div>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="flex items-center gap-2"><Clock className="h-4 w-4 text-emerald-500"/> On-time Delivery</span>
+                                <span className="font-bold">98%</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="flex items-center gap-2"><MessageSquare className="h-4 w-4 text-blue-500"/> Responsiveness</span>
+                                <span className="font-bold">&lt; 2 hours</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="flex items-center gap-2"><PackageCheck className="h-4 w-4 text-purple-500"/> Product Quality</span>
+                                <span className="font-bold">4.9 / 5</span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
         </div>
     );
-};
-export default SellerDashboard;
+}

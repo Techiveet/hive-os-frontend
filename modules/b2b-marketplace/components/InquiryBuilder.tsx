@@ -1,40 +1,95 @@
-import React from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+"use client";
 
-export const InquiryBuilder: React.FC = () => {
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { UploadCloud, FileText, BrainCircuit } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+export default function InquiryBuilder() {
+    const [template, setTemplate] = useState('custom');
+
     return (
-        <Card className="w-full">
+        <Card className="max-w-2xl">
             <CardHeader>
-                <CardTitle>Create New B2B Inquiry</CardTitle>
-                <CardDescription>Specify your wholesale needs to broadcast to verified sellers.</CardDescription>
+                <CardTitle>Post a New Inquiry (RFQ)</CardTitle>
+                <CardDescription>Detail your sourcing requirements or upload a document.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="title">Inquiry Title</Label>
-                    <Input id="title" placeholder="e.g. 500 units of Office Chairs" />
+            <CardContent className="space-y-6">
+                
+                {/* Smart Upload Area */}
+                <div className="border border-primary/20 bg-primary/5 rounded-xl p-6 text-center space-y-3 border-dashed relative overflow-hidden group cursor-pointer hover:bg-primary/10 transition-colors">
+                    <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wide flex items-center gap-1">
+                        <BrainCircuit className="h-3 w-3" /> AI Powered OCR
+                    </div>
+                    <UploadCloud className="h-8 w-8 mx-auto text-primary" />
+                    <div>
+                        <h4 className="font-semibold">Smart Document Upload</h4>
+                        <p className="text-xs text-muted-foreground mt-1">Upload a PDF or Word spec sheet, and we'll auto-fill the form below.</p>
+                    </div>
                 </div>
-                <div className="space-y-2">
-                    <Label htmlFor="desc">Detailed Requirements</Label>
-                    <Textarea id="desc" placeholder="Provide material specifications, dimensions, etc." className="min-h-[120px]"/>
+
+                <div className="flex items-center gap-4 py-2">
+                    <div className="h-px bg-border flex-1"></div>
+                    <span className="text-xs text-muted-foreground uppercase font-bold tracking-widest">OR</span>
+                    <div className="h-px bg-border flex-1"></div>
                 </div>
+
+                {/* RFQ Template Selector */}
+                <div className="space-y-2">
+                    <Label>RFQ Template</Label>
+                    <Select value={template} onValueChange={setTemplate}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select a Template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="custom">Custom Requirement</SelectItem>
+                            <SelectItem value="it_hardware">IT Hardware & Electronics</SelectItem>
+                            <SelectItem value="construction">Construction Materials</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="space-y-2">
+                    <Label>Product / Service Title</Label>
+                    <Input placeholder="e.g. 500x Dell Latitude Laptops" />
+                </div>
+                
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <Label htmlFor="budget">Target Budget (ETB)</Label>
-                        <Input id="budget" type="number" placeholder="Optional" />
+                        <Label>Quantity</Label>
+                        <Input type="number" placeholder="100" />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="deadline">Submission Deadline</Label>
-                        <Input id="deadline" type="date" />
+                        <Label>Delivery Date</Label>
+                        <Input type="date" />
                     </div>
                 </div>
+
+                {template === 'it_hardware' && (
+                    <div className="p-4 bg-muted/30 rounded-xl space-y-4 border">
+                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider">IT Hardware Specs</div>
+                        <div className="space-y-2">
+                            <Label>Minimum RAM (GB)</Label>
+                            <Input placeholder="16" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Storage Required</Label>
+                            <Input placeholder="512GB SSD" />
+                        </div>
+                    </div>
+                )}
+
+                <div className="space-y-2">
+                    <Label>Detailed Specifications</Label>
+                    <Textarea placeholder="Describe the material, certification requirements, etc." rows={4} />
+                </div>
+                
+                <Button className="w-full">Publish Inquiry to Marketplace</Button>
             </CardContent>
-            <CardFooter className="flex justify-end">
-                <Button>Publish Inquiry</Button>
-            </CardFooter>
         </Card>
     );
-};
+}

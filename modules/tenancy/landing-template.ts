@@ -239,6 +239,13 @@ export const FALLBACK_TENANT_BUSINESS_TYPES: TenantBusinessTypeDefinition[] = [
     icon: "layout-dashboard",
     default_template: FALLBACK_TENANT_LANDING_TEMPLATE,
   },
+  {
+    key: "b2b",
+    label: "B2B Marketplace",
+    description: "Connect with verified wholesale suppliers and post RFQs.",
+    icon: "boxes",
+    default_template: FALLBACK_TENANT_LANDING_TEMPLATE,
+  },
 ];
 
 const cloneTemplate = (template: TenantLandingTemplate): TenantLandingTemplate =>
@@ -388,6 +395,28 @@ const variantSeedsForBusinessType = (
   businessKey: string,
 ): TenantLandingTemplateVariantSeed[] => {
   switch (businessKey) {
+    case "b2b":
+      return [
+        {
+          key: "signature",
+          label: "Global Marketplace",
+          description: "A professional B2B platform for global sourcing and bulk procurement.",
+          overrides: {
+            hero: {
+              eyebrow: "Global B2B Sourcing",
+              title: "Connect with verified wholesale suppliers and secure your supply chain.",
+              description: "Post RFQs, receive competitive quotes, and transact safely with Escrow.",
+              primary_label: "Post an Inquiry",
+              secondary_label: "Become a Seller",
+            },
+            stats: [
+              { value: "10K+", label: "Verified Suppliers" },
+              { value: "Secure", label: "Escrow Payments" },
+              { value: "Global", label: "Logistics Tracking" },
+            ],
+          },
+        },
+      ];
     case "retail":
       return [
         {

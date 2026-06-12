@@ -47,6 +47,7 @@ import {
 import { resolveLandingTemplate } from "@/modules/tenancy/landing-template";
 import { TenantBusinessLanding } from "@/modules/tenancy/components/tenant-business-landing";
 import { RestaurantLandingTemplate } from "@/modules/tenancy/components/restaurant-landing-template";
+import B2BLandingTemplate from "@/modules/tenancy/components/b2b-landing-template";
 
 interface LandingUIProps {
   initialPortalName: string;
@@ -440,6 +441,12 @@ function LandingUI({
             t('landing.common.tenant_workspace', "Tenant Workspace")
           }
         />
+      );
+    }
+
+    if (businessType === "b2b") {
+      return (
+        <B2BLandingTemplate />
       );
     }
 
