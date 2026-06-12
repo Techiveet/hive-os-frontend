@@ -186,6 +186,7 @@ function SidebarInner({
   const [isHospitalityOpen, setIsHospitalityOpen] = useState(false);
   const [isProjectManagementOpen, setIsProjectManagementOpen] = useState(false);
   const [isWorkflowOpen, setIsWorkflowOpen] = useState(false);
+  const [isB2BMarketplaceOpen, setIsB2BMarketplaceOpen] = useState(false);
   // 🚀 Apps dropdown state
   const [isAppsOpen, setIsAppsOpen] = useState(false);
   const canAccessConverter =
@@ -301,7 +302,8 @@ function SidebarInner({
         item.moduleId === "hospitality" ||
         item.moduleId === "warehouse" ||
         item.moduleId === "workflow" ||
-        item.moduleId === "projectmanagement",
+        item.moduleId === "projectmanagement" ||
+        item.moduleId === "b2b-marketplace",
     ),
     ...projectManagementFromSecondary,
     ...workflowFromSecondary,
@@ -313,6 +315,7 @@ function SidebarInner({
       item.moduleId !== "warehouse" &&
       item.moduleId !== "workflow" &&
       item.moduleId !== "projectmanagement" &&
+      item.moduleId !== "b2b-marketplace" &&
       item.href !== "/dashboard/landing-templates",
   );
   const inventoryModuleItems = moduleNavItems.filter(
@@ -329,6 +332,9 @@ function SidebarInner({
   );
   const workflowModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "workflow",
+  );
+  const b2bMarketplaceModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "b2b-marketplace",
   );
 
   useEffect(() => {
@@ -351,6 +357,10 @@ function SidebarInner({
     if (pathname.startsWith("/dashboard/workflow")) {
       setIsModulesOpen(true);
       setIsWorkflowOpen(true);
+    }
+    if (pathname.startsWith("/dashboard/b2b-marketplace")) {
+      setIsModulesOpen(true);
+      setIsB2BMarketplaceOpen(true);
     }
     if (
       pathname.startsWith("/dashboard/tools/converter") ||
@@ -819,6 +829,60 @@ function SidebarInner({
                         {isWorkflowOpen && (
                           <div className="flex flex-col gap-1 pl-4">
                             {workflowModuleItems.map((item) => {
+                              const active =
+                                item.href === "/dashboard"
+                                  ? pathname === "/dashboard"
+                                  : pathname === item.href ||
+                                    pathname.startsWith(item.href + "/");
+                              const Icon = item.icon;
+                              const label = t(
+                                item.translationKey,
+                                item.fallbackLabel,
+                              );
+
+                              return (
+                                <Link
+                                  key={item.href}
+                                  id={item.tourId}
+                                  href={item.href}
+                                  className={cn(
+                                    "group flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-[13px] transition-all duration-200",
+                                    active
+                                      ? "hive-sidebar-nested-active"
+                                      : "hive-sidebar-nested-idle",
+                                  )}
+                                >
+                                  <Icon className="h-4 w-4 shrink-0" />
+                                  <span className="truncate">{label}</span>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {b2bMarketplaceModuleItems.length > 0 && (
+                      <div className="flex flex-col gap-1">
+                        <button
+                          onClick={() => setIsB2BMarketplaceOpen(!isB2BMarketplaceOpen)}
+                          className="group flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[13px] font-semibold transition-all duration-200 hive-sidebar-subsection-idle outline-none"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Boxes className="h-4 w-4 shrink-0" />
+                            <span className="truncate">
+                              {t("nav.b2bMarketplace", "B2B Marketplace")}
+                            </span>
+                          </div>
+                          {isB2BMarketplaceOpen ? (
+                            <ChevronDown className="h-4 w-4 opacity-50" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 opacity-50" />
+                          )}
+                        </button>
+                        {isB2BMarketplaceOpen && (
+                          <div className="flex flex-col gap-1 pl-4">
+                            {b2bMarketplaceModuleItems.map((item) => {
                               const active =
                                 item.href === "/dashboard"
                                   ? pathname === "/dashboard"

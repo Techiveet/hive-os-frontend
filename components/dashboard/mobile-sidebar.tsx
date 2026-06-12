@@ -63,6 +63,7 @@ const MODULE_IDS = new Set([
   "warehouse",
   "workflow",
   "projectmanagement",
+  "b2b-marketplace",
 ]);
 
 const APP_PATH_PREFIXES = [
@@ -192,6 +193,7 @@ export function MobileSidebar() {
   const [isHospitalityOpen, setIsHospitalityOpen] = useState(false);
   const [isProjectManagementOpen, setIsProjectManagementOpen] = useState(false);
   const [isWorkflowOpen, setIsWorkflowOpen] = useState(false);
+  const [isB2BMarketplaceOpen, setIsB2BMarketplaceOpen] = useState(false);
   const [isAppsOpen, setIsAppsOpen] = useState(false);
 
   const canAccessConverter =
@@ -375,6 +377,9 @@ export function MobileSidebar() {
   const workflowModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "workflow",
   );
+  const b2bMarketplaceModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "b2b-marketplace",
+  );
 
   useEffect(() => {
     if (pathname.startsWith("/dashboard/inventory")) {
@@ -400,6 +405,11 @@ export function MobileSidebar() {
     if (pathname.startsWith("/dashboard/workflow")) {
       setIsModulesOpen(true);
       setIsWorkflowOpen(true);
+    }
+
+    if (pathname.startsWith("/dashboard/b2b-marketplace")) {
+      setIsModulesOpen(true);
+      setIsB2BMarketplaceOpen(true);
     }
 
     if (isAppPath(pathname)) {
@@ -763,6 +773,14 @@ export function MobileSidebar() {
                           icon: CheckCircle,
                           openState: isWorkflowOpen,
                           onToggle: () => setIsWorkflowOpen((value) => !value),
+                        })}
+
+                        {renderModuleSection({
+                          items: b2bMarketplaceModuleItems,
+                          label: t("nav.b2bMarketplace", "B2B Marketplace"),
+                          icon: Boxes,
+                          openState: isB2BMarketplaceOpen,
+                          onToggle: () => setIsB2BMarketplaceOpen((value) => !value),
                         })}
                       </div>
                     )}
