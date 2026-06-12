@@ -19,6 +19,10 @@ import {
   RefreshCcw,
   ExternalLink,
   Box,
+  BarChart3,
+  Quote,
+  HelpCircle,
+  ConciergeBell,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,6 +52,10 @@ import {
   type TenantLandingTemplate,
   type TenantLandingCard,
   type TenantLandingMenus,
+  type TenantLandingStat,
+  type TenantLandingTestimonial,
+  type TenantLandingServiceCard,
+  type TenantLandingFaq,
 } from "@/modules/tenancy/landing-template";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -307,6 +315,48 @@ export default function HeroSliderPage() {
     description: "",
   });
 
+  // ── new dynamic sections state ──
+  const [stats, setStats] = useState<TenantLandingStat[]>([]);
+  const [testimonials, setTestimonials] = useState<TenantLandingTestimonial[]>([]);
+  const [services, setServices] = useState<TenantLandingServiceCard[]>([]);
+  const [faqs, setFaqs] = useState<TenantLandingFaq[]>([]);
+
+  const DEFAULT_STATS: TenantLandingStat[] = [
+    { value: "12+", label: "Signature Cocktails" },
+    { value: "4.9", label: "Guest Rating" },
+    { value: "2,000+", label: "Happy Guests Monthly" },
+    { value: "120+", label: "Nights Hosted a Year" },
+  ];
+
+  const DEFAULT_TESTIMONIALS: TenantLandingTestimonial[] = [
+    { quote: "The atmosphere is unmatched — neon glow, deep house, and the best espresso martini in the city.", author: "Hanna T.", role: "Regular Guest" },
+    { quote: "Booked the VIP lounge for a birthday. Bottle service, dedicated host, zero hassle. We're coming back.", author: "Dawit M.", role: "VIP Member" },
+    { quote: "Dinner flows into the club night seamlessly. One venue, a whole evening — that's rare.", author: "Sara K.", role: "Food Critic" },
+  ];
+
+  const DEFAULT_SERVICES: TenantLandingServiceCard[] = [
+    { title: "Private Events & Buyouts", description: "Celebrate anniversaries, VIP corporate receptions, or private parties. We offer full and partial venue buyout options.", image: "" },
+    { title: "VIP Lounge Experience", description: "Indulge in premium bottle service, bespoke seating in our high-end lounge, and dedicated butler treatment.", image: "" },
+    { title: "Catering & Masterclasses", description: "Elevate your private gatherings with custom menus, chef-led dining, and mixology sessions hosted by our top artisans.", image: "" },
+  ];
+
+  const DEFAULT_FAQS: TenantLandingFaq[] = [
+    { question: "What is the dress code?", answer: "Smart casual after 8 PM — no sportswear or flip-flops. For VIP lounge bookings we recommend upscale evening wear." },
+    { question: "How do VIP tables and bottle service work?", answer: "Reserve a VIP table through the booking form and pick 'VIP Lounge Table'. Your host confirms the minimum spend and a dedicated server takes care of the night." },
+    { question: "Do you take walk-ins?", answer: "Yes — dining walk-ins are welcome until 9 PM. After that, guests on the list and reservations get priority entry." },
+    { question: "Is parking available?", answer: "Complimentary valet parking is available every night from 6 PM, plus secured self-parking next to the venue." },
+    { question: "Can we book the whole venue?", answer: "Absolutely. Choose 'Private Event / Buyout' in the booking form and our events team will design the night around you." },
+  ];
+
+  // The platform fallback ships placeholder stats — treat those as "not configured"
+  const GENERIC_STAT_HINTS = ["always-on", "discovery", "next step", "inside admin"];
+  const sanitizeStats = (incoming: TenantLandingStat[] | undefined): TenantLandingStat[] => {
+    const list = (Array.isArray(incoming) ? incoming : []).filter(
+      (s) => s?.value && s?.label && !GENERIC_STAT_HINTS.some((h) => s.label.toLowerCase().includes(h)),
+    );
+    return list.length >= 3 ? list.slice(0, 4) : DEFAULT_STATS;
+  };
+
   const DEFAULT_HIGHLIGHTS: TenantLandingCard[] = [
     { kicker: "Our Specialties", title: "Crafted with passion, served with perfection.", description: "Every dish tells a story of local sourcing, seasonal inspiration, and meticulous preparation. Discover flavors that linger long after the last bite." },
     { kicker: "", title: "Artisan Steaks", description: "Dry-aged to perfection for minimum 28 days." },
@@ -460,15 +510,37 @@ export default function HeroSliderPage() {
       description_eyebrow: "Interactive Experience",
       description: "Interact directly with our signature dishes in high-fidelity 3D, or select from our exquisite main courses.",
     });
+
+    setStats(sanitizeStats(template.stats));
+    setTestimonials(
+      Array.isArray(template.testimonials) && template.testimonials.length > 0
+        ? template.testimonials.slice(0, 3)
+        : DEFAULT_TESTIMONIALS,
+    );
+    setServices(
+      Array.isArray(template.services) && template.services.length > 0
+        ? template.services.slice(0, 3)
+        : DEFAULT_SERVICES,
+    );
+    setFaqs(
+      Array.isArray(template.faqs) && template.faqs.length > 0
+        ? template.faqs
+        : DEFAULT_FAQS,
+    );
     setIsDirty(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryData]);
 
   // ── save mutation ──
   const saveMutation = useMutation({
-    mutationFn: async (payload: { 
-      nextSlides: TenantLandingHeroSlide[]; 
+    mutationFn: async (payload: {
+      nextSlides: TenantLandingHeroSlide[];
       nextHighlights: TenantLandingCard[];
       nextMenus: TenantLandingMenus;
+      nextStats: TenantLandingStat[];
+      nextTestimonials: TenantLandingTestimonial[];
+      nextServices: TenantLandingServiceCard[];
+      nextFaqs: TenantLandingFaq[];
     }) => {
       const nextTemplate = {
         ...currentTemplate,
@@ -478,6 +550,10 @@ export default function HeroSliderPage() {
         },
         highlights: payload.nextHighlights,
         menus: payload.nextMenus,
+        stats: payload.nextStats.filter((s) => s.value.trim() && s.label.trim()),
+        testimonials: payload.nextTestimonials.filter((tst) => tst.quote.trim() && tst.author.trim()),
+        services: payload.nextServices.filter((s) => s.title.trim()),
+        faqs: payload.nextFaqs.filter((f) => f.question.trim() && f.answer.trim()),
       };
 
       return apiFetch("/settings/landing", {
@@ -501,6 +577,16 @@ export default function HeroSliderPage() {
         description_eyebrow: "Interactive Experience",
         description: "Interact directly with our signature dishes in high-fidelity 3D, or select from our exquisite main courses.",
       });
+      setStats(sanitizeStats(updatedTemplate.stats));
+      if (Array.isArray(updatedTemplate.testimonials) && updatedTemplate.testimonials.length > 0) {
+        setTestimonials(updatedTemplate.testimonials.slice(0, 3));
+      }
+      if (Array.isArray(updatedTemplate.services) && updatedTemplate.services.length > 0) {
+        setServices(updatedTemplate.services.slice(0, 3));
+      }
+      if (Array.isArray(updatedTemplate.faqs) && updatedTemplate.faqs.length > 0) {
+        setFaqs(updatedTemplate.faqs);
+      }
       queryClient.invalidateQueries({ queryKey: ["hospitality", "hero-slider-settings"] });
       queryClient.invalidateQueries({ queryKey: ["tenant-landing-page-settings"] });
       queryClient.invalidateQueries({ queryKey: ["tenantPublicLanding"] });
@@ -597,6 +683,15 @@ export default function HeroSliderPage() {
       setMenus((prev) => ({ ...prev, model_3d_url: url }));
       setIsDirty(true);
       toast.success("3D model selected for menus section");
+    } else if (typeof mediaPickerTarget === "string" && mediaPickerTarget.startsWith("service_image_")) {
+      const idx = Number(mediaPickerTarget.replace("service_image_", ""));
+      setServices((prev) => {
+        const next = [...prev];
+        if (next[idx]) next[idx] = { ...next[idx], image: url };
+        return next;
+      });
+      setIsDirty(true);
+      toast.success("Image selected for service card");
     } else if (typeof mediaPickerTarget === "string" && mediaPickerTarget.startsWith("menu_item_image_")) {
       const itemId = Number(mediaPickerTarget.replace("menu_item_image_", ""));
       updateMenuItemMutation.mutate({ id: itemId, payload: { image_url: url } });
@@ -665,7 +760,7 @@ export default function HeroSliderPage() {
             View Live
           </a>
           <Button
-            onClick={() => saveMutation.mutate({ nextSlides: slides, nextHighlights: highlights, nextMenus: menus })}
+            onClick={() => saveMutation.mutate({ nextSlides: slides, nextHighlights: highlights, nextMenus: menus, nextStats: stats, nextTestimonials: testimonials, nextServices: services, nextFaqs: faqs })}
             disabled={!isDirty || saveMutation.isPending}
             className="rounded-full px-6 gap-2 bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] hover:from-[#e0173a] hover:to-[#6912be] text-white shadow-lg shadow-[#FF1A43]/25 disabled:opacity-50 transition-all"
           >
@@ -698,10 +793,14 @@ export default function HeroSliderPage() {
 
       {/* ── Tabs Container ── */}
       <Tabs defaultValue="slider" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-[500px] mb-6">
-          <TabsTrigger value="slider">Hero Slides</TabsTrigger>
-          <TabsTrigger value="specialties">Specialties Section</TabsTrigger>
-          <TabsTrigger value="menus">Menus Section</TabsTrigger>
+        <TabsList className="flex w-full flex-wrap h-auto gap-1 mb-6 justify-start">
+          <TabsTrigger value="slider" className="gap-1.5"><GalleryHorizontalEnd className="h-3.5 w-3.5" /> Hero Slides</TabsTrigger>
+          <TabsTrigger value="specialties" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Specialties</TabsTrigger>
+          <TabsTrigger value="menus" className="gap-1.5"><Box className="h-3.5 w-3.5" /> Menus</TabsTrigger>
+          <TabsTrigger value="stats" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> Stats</TabsTrigger>
+          <TabsTrigger value="services" className="gap-1.5"><ConciergeBell className="h-3.5 w-3.5" /> Services</TabsTrigger>
+          <TabsTrigger value="testimonials" className="gap-1.5"><Quote className="h-3.5 w-3.5" /> Testimonials</TabsTrigger>
+          <TabsTrigger value="faqs" className="gap-1.5"><HelpCircle className="h-3.5 w-3.5" /> FAQs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="slider" className="outline-none">
@@ -1325,6 +1424,319 @@ export default function HeroSliderPage() {
             )}
           </div>
         </TabsContent>
+
+        {/* ── STATS TAB ── */}
+        <TabsContent value="stats" className="space-y-6 outline-none">
+          <div className="rounded-2xl border bg-card p-6 shadow-sm space-y-6">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight text-foreground">Animated Stats Band</h2>
+              <p className="text-muted-foreground text-xs">
+                Four numbers shown right under the hero with a count-up animation. Use a number + suffix in the value (e.g. <strong>2,000+</strong>, <strong>4.9</strong>, <strong>12+</strong>).
+              </p>
+            </div>
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+              {[0, 1, 2, 3].map((idx) => (
+                <div key={idx} className="p-5 border rounded-xl bg-background/50 space-y-4">
+                  <Badge variant="outline" className="font-bold text-xs uppercase tracking-widest text-[#FF1A43] bg-[#FF1A43]/5 border-[#FF1A43]/20">
+                    Stat 0{idx + 1}
+                  </Badge>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-muted-foreground">Value</Label>
+                    <Input
+                      placeholder="e.g. 2,000+"
+                      value={stats[idx]?.value || ""}
+                      onChange={(e) => {
+                        const next = [...stats];
+                        if (!next[idx]) next[idx] = { value: "", label: "" };
+                        next[idx] = { ...next[idx], value: e.target.value };
+                        setStats(next);
+                        setIsDirty(true);
+                      }}
+                      maxLength={12}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-muted-foreground">Label</Label>
+                    <Input
+                      placeholder="e.g. Happy Guests Monthly"
+                      value={stats[idx]?.label || ""}
+                      onChange={(e) => {
+                        const next = [...stats];
+                        if (!next[idx]) next[idx] = { value: "", label: "" };
+                        next[idx] = { ...next[idx], label: e.target.value };
+                        setStats(next);
+                        setIsDirty(true);
+                      }}
+                      maxLength={40}
+                    />
+                  </div>
+                  {/* mini preview */}
+                  <div className="rounded-lg bg-[#0a0612] border border-white/10 px-3 py-4 text-center">
+                    <div className="text-2xl font-black bg-gradient-to-r from-[#FF1A43] via-[#D31A9B] to-[#7B16D9] bg-clip-text text-transparent">
+                      {stats[idx]?.value || "—"}
+                    </div>
+                    <p className="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-white/50">
+                      {stats[idx]?.label || "Label"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── SERVICES TAB ── */}
+        <TabsContent value="services" className="space-y-6 outline-none">
+          <div className="rounded-2xl border bg-card p-6 shadow-sm space-y-6">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight text-foreground">Exclusive Services Cards</h2>
+              <p className="text-muted-foreground text-xs">
+                The three big image cards in the &ldquo;What We Offer&rdquo; section. Each card&apos;s &ldquo;Inquire Now&rdquo; button opens the booking form.
+              </p>
+            </div>
+            <div className="grid gap-6 md:grid-cols-3">
+              {[0, 1, 2].map((idx) => (
+                <div key={idx} className="border rounded-xl bg-background/50 overflow-hidden">
+                  {/* image picker */}
+                  <div className="relative h-36 bg-gradient-to-br from-[#120820] to-[#1a0a30] group">
+                    {services[idx]?.image ? (
+                      <>
+                        <SecureAssetImage
+                          src={services[idx].image as string}
+                          alt={services[idx]?.title || `Service ${idx + 1}`}
+                          className="w-full h-full object-cover object-center"
+                        />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button type="button" variant="secondary" size="sm" onClick={() => setMediaPickerTarget(`service_image_${idx}`)} className="rounded-full text-xs shadow-lg">
+                            Change
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              const next = [...services];
+                              if (next[idx]) next[idx] = { ...next[idx], image: "" };
+                              setServices(next);
+                              setIsDirty(true);
+                            }}
+                            className="rounded-full text-xs shadow-lg"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setMediaPickerTarget(`service_image_${idx}`)}
+                        className="w-full h-full flex flex-col items-center justify-center gap-2 text-white/30 hover:text-white/60 transition-colors"
+                      >
+                        <ImageIcon className="h-7 w-7" />
+                        <span className="text-[10px] font-medium">Choose image</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <Badge variant="outline" className="font-bold text-xs uppercase tracking-widest text-[#FF1A43] bg-[#FF1A43]/5 border-[#FF1A43]/20">
+                      Service 0{idx + 1}
+                    </Badge>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-muted-foreground">Title</Label>
+                      <Input
+                        placeholder="e.g. VIP Lounge Experience"
+                        value={services[idx]?.title || ""}
+                        onChange={(e) => {
+                          const next = [...services];
+                          if (!next[idx]) next[idx] = { title: "", description: "", image: "" };
+                          next[idx] = { ...next[idx], title: e.target.value };
+                          setServices(next);
+                          setIsDirty(true);
+                        }}
+                        maxLength={60}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-muted-foreground">Description</Label>
+                      <Textarea
+                        rows={3}
+                        placeholder="Describe this service…"
+                        value={services[idx]?.description || ""}
+                        onChange={(e) => {
+                          const next = [...services];
+                          if (!next[idx]) next[idx] = { title: "", description: "", image: "" };
+                          next[idx] = { ...next[idx], description: e.target.value };
+                          setServices(next);
+                          setIsDirty(true);
+                        }}
+                        maxLength={220}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Tip: titles containing <strong>&ldquo;Private&rdquo;</strong> or <strong>&ldquo;VIP&rdquo;</strong> automatically preselect the matching booking type when guests click Inquire Now.
+            </p>
+          </div>
+        </TabsContent>
+
+        {/* ── TESTIMONIALS TAB ── */}
+        <TabsContent value="testimonials" className="space-y-6 outline-none">
+          <div className="rounded-2xl border bg-card p-6 shadow-sm space-y-6">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight text-foreground">Guest Testimonials</h2>
+              <p className="text-muted-foreground text-xs">
+                Three quotes shown in the &ldquo;Night Tales&rdquo; section with star ratings and the author&apos;s initial as the avatar.
+              </p>
+            </div>
+            <div className="grid gap-6 md:grid-cols-3">
+              {[0, 1, 2].map((idx) => (
+                <div key={idx} className="p-5 border rounded-xl bg-background/50 space-y-4">
+                  <Badge variant="outline" className="font-bold text-xs uppercase tracking-widest text-[#7B16D9] bg-[#7B16D9]/5 border-[#7B16D9]/20">
+                    Review 0{idx + 1}
+                  </Badge>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-muted-foreground">Quote</Label>
+                    <Textarea
+                      rows={4}
+                      placeholder="What did the guest say?"
+                      value={testimonials[idx]?.quote || ""}
+                      onChange={(e) => {
+                        const next = [...testimonials];
+                        if (!next[idx]) next[idx] = { quote: "", author: "", role: "" };
+                        next[idx] = { ...next[idx], quote: e.target.value };
+                        setTestimonials(next);
+                        setIsDirty(true);
+                      }}
+                      maxLength={280}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-muted-foreground">Author</Label>
+                      <Input
+                        placeholder="e.g. Hanna T."
+                        value={testimonials[idx]?.author || ""}
+                        onChange={(e) => {
+                          const next = [...testimonials];
+                          if (!next[idx]) next[idx] = { quote: "", author: "", role: "" };
+                          next[idx] = { ...next[idx], author: e.target.value };
+                          setTestimonials(next);
+                          setIsDirty(true);
+                        }}
+                        maxLength={40}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-muted-foreground">Role / Tag</Label>
+                      <Input
+                        placeholder="e.g. VIP Member"
+                        value={testimonials[idx]?.role || ""}
+                        onChange={(e) => {
+                          const next = [...testimonials];
+                          if (!next[idx]) next[idx] = { quote: "", author: "", role: "" };
+                          next[idx] = { ...next[idx], role: e.target.value };
+                          setTestimonials(next);
+                          setIsDirty(true);
+                        }}
+                        maxLength={40}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── FAQS TAB ── */}
+        <TabsContent value="faqs" className="space-y-6 outline-none">
+          <div className="rounded-2xl border bg-card p-6 shadow-sm space-y-6">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="text-lg font-bold tracking-tight text-foreground">FAQ Accordion</h2>
+                <p className="text-muted-foreground text-xs">
+                  Questions shown in the &ldquo;Good To Know&rdquo; section. Drag-free: use the order they appear here.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                disabled={faqs.length >= 8}
+                onClick={() => {
+                  setFaqs((prev) => [...prev, { question: "", answer: "" }]);
+                  setIsDirty(true);
+                }}
+                className="rounded-full gap-1.5 bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] text-white border-none shadow-md shadow-[#FF1A43]/20"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Question {faqs.length >= 8 ? "(max 8)" : ""}
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              {faqs.map((faq, idx) => (
+                <div key={idx} className="p-5 border rounded-xl bg-background/50 space-y-3 relative">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="font-bold text-xs uppercase tracking-widest text-muted-foreground">
+                      Q{idx + 1}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setFaqs((prev) => prev.filter((_, i) => i !== idx));
+                        setIsDirty(true);
+                      }}
+                      className="h-7 w-7 p-0 text-rose-500 border-rose-200 bg-rose-50 hover:bg-rose-100 dark:text-rose-400 dark:border-rose-800 dark:bg-rose-950/40 rounded-lg"
+                      title="Remove question"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-muted-foreground">Question</Label>
+                    <Input
+                      placeholder="e.g. What is the dress code?"
+                      value={faq.question}
+                      onChange={(e) => {
+                        const next = [...faqs];
+                        next[idx] = { ...next[idx], question: e.target.value };
+                        setFaqs(next);
+                        setIsDirty(true);
+                      }}
+                      maxLength={120}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-muted-foreground">Answer</Label>
+                    <Textarea
+                      rows={2}
+                      placeholder="Write the answer guests will see…"
+                      value={faq.answer}
+                      onChange={(e) => {
+                        const next = [...faqs];
+                        next[idx] = { ...next[idx], answer: e.target.value };
+                        setFaqs(next);
+                        setIsDirty(true);
+                      }}
+                      maxLength={400}
+                    />
+                  </div>
+                </div>
+              ))}
+              {faqs.length === 0 && (
+                <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-muted-foreground/20 h-32 gap-2 text-muted-foreground/50">
+                  <HelpCircle className="h-7 w-7" />
+                  <p className="text-sm font-medium">No questions yet — add your first FAQ.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* ── Edit / Add Dialog ── */}
@@ -1488,6 +1900,8 @@ export default function HeroSliderPage() {
               <DialogDescription>
                 {mediaPickerTarget === "specialties"
                   ? "Select a main image for the specialties section"
+                  : typeof mediaPickerTarget === "string" && mediaPickerTarget.startsWith("service_image_")
+                  ? "Select a showcase image for this service card"
                   : mediaPickerTarget === "menus_image"
                   ? "Select a showcase image for the menus section"
                   : mediaPickerTarget === "menus_model"

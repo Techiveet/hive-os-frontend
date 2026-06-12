@@ -82,6 +82,17 @@ export type TenantLandingMenus = {
   model_3d_url?: string;
 };
 
+export type TenantLandingServiceCard = {
+  title: string;
+  description: string;
+  image?: string;
+};
+
+export type TenantLandingFaq = {
+  question: string;
+  answer: string;
+};
+
 export type TenantLandingTemplateMeta = {
   business_type?: string;
   business_label?: string;
@@ -103,6 +114,8 @@ export type TenantLandingTemplate = {
   final_cta: TenantLandingFinalCta;
   rendering: TenantLandingRendering;
   menus?: TenantLandingMenus;
+  services?: TenantLandingServiceCard[];
+  faqs?: TenantLandingFaq[];
 };
 
 export type TenantLandingTemplateVariant = {
@@ -306,6 +319,19 @@ export const resolveLandingTemplate = (
       description_eyebrow: typeof candidate.menus?.description_eyebrow === "string" ? candidate.menus.description_eyebrow : (fallback.menus?.description_eyebrow ?? "Interactive Experience"),
       description: typeof candidate.menus?.description === "string" ? candidate.menus.description : (fallback.menus?.description ?? "Interact directly with our signature dishes in high-fidelity 3D, or select from our exquisite main courses."),
     },
+    services: Array.isArray(candidate.services) && candidate.services.length > 0
+      ? candidate.services.map((item) => ({
+          title: String(item?.title ?? ""),
+          description: String(item?.description ?? ""),
+          image: item?.image ? String(item.image) : undefined,
+        }))
+      : fallback.services,
+    faqs: Array.isArray(candidate.faqs) && candidate.faqs.length > 0
+      ? candidate.faqs.map((item) => ({
+          question: String(item?.question ?? ""),
+          answer: String(item?.answer ?? ""),
+        }))
+      : fallback.faqs,
   };
 };
 

@@ -7,6 +7,7 @@ import { inventoryModule } from "@/modules/inventory/module";
 import { warehouseModule } from "@/modules/warehouse/module";
 import { workflowModule } from "@/modules/workflow/module";
 import { projectManagementModule } from "@/modules/projectmanagement/module";
+import { b2bMarketplaceModule } from "@/modules/b2b-marketplace/module";
 import type { FrontendModuleDefinition, ModuleNavItem } from "@/modules/types";
 
 export type { FrontendModuleDefinition, ModuleNavItem } from "@/modules/types";
@@ -21,6 +22,7 @@ export const FEATURE_MODULES: FrontendModuleDefinition[] = [
   warehouseModule,
   workflowModule,
   projectManagementModule,
+  b2bMarketplaceModule,
 ];
 
 export const DASHBOARD_NAV: ModuleNavItem[] = FEATURE_MODULES.flatMap((module) =>

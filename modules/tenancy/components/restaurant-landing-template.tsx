@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRight, Utensils, Clock, MapPin, Phone, Star, CheckCircle2, X, Wine, Martini, Box, Image as ImageIcon } from "lucide-react";
+import { ArrowRight, ArrowUp, ChevronDown, Menu, Quote, Utensils, Clock, MapPin, Phone, Star, CheckCircle2, X, Wine, Martini, Box, Image as ImageIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -18,6 +18,20 @@ import type { HospitalityMenuItem } from "@/modules/hospitality/types";
 
 // Types
 import { type TenantLandingTemplate, type TenantLandingHeroSlide } from "@/modules/tenancy/landing-template";
+// Premium motion layer
+import {
+  ScrollProgress,
+  SpotlightCursor,
+  GrainOverlay,
+  EmberField,
+  ScrollCue,
+  Marquee,
+  MagneticButton,
+  TiltCard,
+  RevealText,
+  Reveal,
+  CountUp,
+} from "./lounge-fx";
 
 type BrandSettings = {
   app_title?: string | null;
@@ -240,6 +254,51 @@ export function RestaurantLandingTemplate({
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   const [successReservation, setSuccessReservation] = React.useState<{ reservation_code: string; customer_name: string; reservation_time: string } | null>(null);
 
+  // New interactive sections state
+  const [showScrollTop, setShowScrollTop] = React.useState(false);
+  const [lightboxImage, setLightboxImage] = React.useState<string | null>(null);
+  const [openFaq, setOpenFaq] = React.useState<number | null>(0);
+  const [isNavScrolled, setIsNavScrolled] = React.useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = React.useState(false);
+  const [activeSection, setActiveSection] = React.useState<string>("");
+
+  // Scroll-spy: highlight the nav link of the section currently in view
+  React.useEffect(() => {
+    const ids = ["specialties", "menu", "services", "events", "gallery", "cellar", "experience", "location"];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) setActiveSection(entry.target.id);
+        });
+      },
+      { rootMargin: "-35% 0px -55% 0px" },
+    );
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [dynamicMenuItems.length]);
+
+  React.useEffect(() => {
+    const onScroll = () => {
+      setShowScrollTop(window.scrollY > 600);
+      setIsNavScrolled(window.scrollY > 24);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Close the lightbox with Escape
+  React.useEffect(() => {
+    if (!lightboxImage) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxImage(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxImage]);
+
   React.useEffect(() => {
     setMounted(true);
 
@@ -389,44 +448,269 @@ export function RestaurantLandingTemplate({
     }
   };
 
+  // Single source of truth for nav links (desktop pill + mobile dropdown)
+  const navLinks = [
+    { id: "specialties", label: t("landing.nav.specialties", "Specialties") },
+    { id: "menu", label: t("landing.nav.menu_short", "Menus") },
+    { id: "services", label: t("landing.nav.services_short", "Offers") },
+    { id: "events", label: t("landing.nav.events_short", "Events") },
+    { id: "gallery", label: t("landing.nav.gallery", "Gallery") },
+    { id: "cellar", label: t("landing.nav.cellar_short", "Cellar") },
+    { id: "location", label: t("landing.nav.location", "Location") },
+  ];
+
+  // Stats band — dashboard-configurable via template.stats. The platform fallback
+  // template ships meaningless placeholder stats ("always-on discovery", "inside
+  // admin", ...) — detect those and show lounge-relevant numbers instead.
+  const genericStatHints = ["always-on", "discovery", "next step", "inside admin"];
+  const customStats = (Array.isArray(template?.stats) ? template.stats : []).filter(
+    (s) =>
+      s?.value &&
+      s?.label &&
+      !genericStatHints.some((hint) => s.label.toLowerCase().includes(hint)),
+  );
+  const loungeStats =
+    customStats.length >= 3
+      ? customStats.slice(0, 4)
+      : [
+          { value: "12+", label: t("landing.stats.cocktails", "Signature Cocktails") },
+          { value: "4.9", label: t("landing.stats.rating", "Guest Rating") },
+          { value: "2,000+", label: t("landing.stats.guests", "Happy Guests Monthly") },
+          { value: "120+", label: t("landing.stats.events", "Nights Hosted a Year") },
+        ];
+
+  // Gallery — hero slides first (dashboard-managed), padded with house imagery
+  const galleryImages = React.useMemo(() => {
+    const fromSlides = heroSlides
+      .map((s) => getPublicServeUrl(s.image) ?? s.image)
+      .filter(Boolean) as string[];
+    const fallbacks = ["/landing/hero.png", "/landing/dining.png", "/landing/liquor.png", "/landing/hero_3.png", "/landing/dish.png", "/landing/coffee.png"];
+    return Array.from(new Set([...fromSlides, ...fallbacks])).slice(0, 6);
+  }, [heroSlides]);
+
+  // Testimonials — dashboard-configurable via template.testimonials
+  const loungeTestimonials =
+    Array.isArray(template?.testimonials) && template.testimonials.length > 0
+      ? template.testimonials.slice(0, 3)
+      : [
+          {
+            quote: t("landing.reviews.q1", "The atmosphere is unmatched — neon glow, deep house, and the best espresso martini in the city."),
+            author: "Hanna T.",
+            role: t("landing.reviews.r1", "Regular Guest"),
+          },
+          {
+            quote: t("landing.reviews.q2", "Booked the VIP lounge for a birthday. Bottle service, dedicated host, zero hassle. We're coming back."),
+            author: "Dawit M.",
+            role: t("landing.reviews.r2", "VIP Member"),
+          },
+          {
+            quote: t("landing.reviews.q3", "Dinner flows into the club night seamlessly. One venue, a whole evening — that's rare."),
+            author: "Sara K.",
+            role: t("landing.reviews.r3", "Food Critic"),
+          },
+        ];
+
+  // Services — dashboard-configurable via template.services, lounge defaults otherwise
+  const loungeServices =
+    Array.isArray(template?.services) && template.services.filter((s) => s?.title).length > 0
+      ? template.services
+          .filter((s) => s?.title)
+          .slice(0, 3)
+          .map((s, i) => ({
+            title: s.title,
+            desc: s.description,
+            image: s.image
+              ? (getPublicServeUrl(s.image) ?? s.image)
+              : ["/landing/dining.png", "/landing/hero_3.png", "/landing/dish.png"][i % 3],
+          }))
+      : [
+          {
+            title: "Private Events & Buyouts",
+            desc: "Celebrate anniversaries, VIP corporate receptions, or private parties. We offer full and partial venue buyout options.",
+            image: "/landing/dining.png",
+          },
+          {
+            title: "VIP Lounge Experience",
+            desc: "Indulge in premium bottle service, bespoke seating in our high-end lounge, and dedicated butler treatment.",
+            image: "/landing/hero_3.png",
+          },
+          {
+            title: "Catering & Masterclasses",
+            desc: "Elevate your private gatherings with custom menus, chef-led dining, and mixology sessions hosted by our top artisans.",
+            image: "/landing/dish.png",
+          },
+        ];
+
+  // FAQs — dashboard-configurable via template.faqs, lounge defaults otherwise
+  const customFaqs = (Array.isArray(template?.faqs) ? template.faqs : []).filter(
+    (f) => f?.question?.trim() && f?.answer?.trim(),
+  );
+  const faqs = customFaqs.length > 0
+    ? customFaqs.map((f) => ({ q: f.question, a: f.answer }))
+    : [
+    {
+      q: t("landing.faq.q1", "What is the dress code?"),
+      a: t("landing.faq.a1", "Smart casual after 8 PM — no sportswear or flip-flops. For VIP lounge bookings we recommend upscale evening wear."),
+    },
+    {
+      q: t("landing.faq.q2", "How do VIP tables and bottle service work?"),
+      a: t("landing.faq.a2", "Reserve a VIP table through the booking form and pick 'VIP Lounge Table'. Your host confirms the minimum spend and a dedicated server takes care of the night."),
+    },
+    {
+      q: t("landing.faq.q3", "Do you take walk-ins?"),
+      a: t("landing.faq.a3", "Yes — dining walk-ins are welcome until 9 PM. After that, guests on the list and reservations get priority entry."),
+    },
+    {
+      q: t("landing.faq.q4", "Is parking available?"),
+      a: t("landing.faq.a4", "Complimentary valet parking is available every night from 6 PM, plus secured self-parking next to the venue."),
+    },
+    {
+      q: t("landing.faq.q5", "Can we book the whole venue?"),
+      a: t("landing.faq.a5", "Absolutely. Choose 'Private Event / Buyout' in the booking form and our events team will design the night around you."),
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 overflow-hidden" style={{ fontFamily: "'Poppins', sans-serif" }}>
-      {/* Navigation */}
-      <motion.nav 
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
+      {/* Premium ambient FX layer */}
+      <ScrollProgress />
+      <GrainOverlay />
+      <SpotlightCursor />
+
+      {/* Navigation — floating neon glass pill */}
+      <motion.nav
+        initial={{ y: -100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="fixed top-0 left-0 right-0 z-50 border-b bg-background/80 backdrop-blur-md shadow-sm animate-in fade-in"
+        className="fixed top-0 left-0 right-0 z-50 px-3 sm:px-6 pt-3 sm:pt-4"
       >
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-20 items-center justify-between">
-            <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+        <div
+          className={`mx-auto max-w-7xl rounded-full p-[1.5px] transition-all duration-500 ${
+            isNavScrolled
+              ? "bg-gradient-to-r from-[#FF1A43]/60 via-white/10 to-[#7B16D9]/60 shadow-[0_8px_40px_rgba(0,0,0,0.6),0_0_30px_rgba(255,26,67,0.18)]"
+              : "bg-gradient-to-r from-[#FF1A43]/25 via-white/[0.06] to-[#7B16D9]/25 shadow-[0_8px_30px_rgba(0,0,0,0.35)]"
+          }`}
+        >
+          <div
+            className={`rounded-full backdrop-blur-xl transition-colors duration-500 ${
+              isNavScrolled ? "bg-[#0a0612]/95" : "bg-[#0a0612]/75"
+            }`}
+          >
+          <div className="flex h-16 items-center justify-between gap-3 pl-5 pr-2.5 sm:pl-6 sm:pr-3">
+            {/* Brand */}
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              className="flex items-center gap-3 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF1A43] rounded-full"
+              aria-label={brandName}
+            >
               {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoUrl} alt={brandName} className="h-10 w-auto object-contain drop-shadow-[0_0_8px_rgba(255,26,67,0.3)]" />
+                <img src={logoUrl} alt={brandName} className="h-9 w-auto object-contain drop-shadow-[0_0_8px_rgba(255,26,67,0.3)]" />
               ) : (
-                <Utensils className="h-8 w-8 text-[#FF1A43] drop-shadow-[0_0_8px_rgba(255,26,67,0.4)]" />
+                <Utensils className="h-7 w-7 text-[#FF1A43] drop-shadow-[0_0_8px_rgba(255,26,67,0.4)]" />
               )}
-              <span className="text-2xl font-black tracking-tighter bg-gradient-to-r from-[#FF1A43] via-[#EC4899] to-[#7B16D9] bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(255,26,67,0.35)]">{brandName}</span>
+              <span className="text-xl sm:text-2xl font-black tracking-tighter bg-gradient-to-r from-[#FF1A43] via-[#EC4899] to-[#7B16D9] bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(255,26,67,0.35)] whitespace-nowrap">
+                {brandName}
+              </span>
+            </button>
+
+            {/* Section links with scroll-spy */}
+            <div className="hidden lg:flex items-center gap-0.5 xl:gap-1 text-[13px] font-bold tracking-wide font-sans">
+              {navLinks.map((link) => {
+                const isActive = activeSection === link.id;
+                return (
+                  <button
+                    key={link.id}
+                    type="button"
+                    onClick={() => scrollToSection(link.id)}
+                    className={`group relative px-3 py-2 cursor-pointer transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF1A43] rounded-full ${
+                      isActive ? "text-white" : "text-foreground/80 hover:text-white"
+                    }`}
+                  >
+                    {link.label}
+                    <span
+                      className={`pointer-events-none absolute inset-x-3 -bottom-0.5 h-[2px] origin-left rounded-full bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] shadow-[0_0_8px_rgba(255,26,67,0.6)] transition-transform duration-300 ${
+                        isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                      }`}
+                    />
+                  </button>
+                );
+              })}
             </div>
-            <div className="hidden md:flex items-center gap-8 text-sm font-bold tracking-wide font-sans">
-              <button onClick={() => scrollToSection("specialties")} className="hover:text-[#FF1A43] transition-colors">{t("landing.nav.specialties", "Specialties")}</button>
-              <button onClick={() => scrollToSection("menu")} className="hover:text-[#FF1A43] transition-colors">{t("landing.nav.menu", "Our Menus")}</button>
-              <button onClick={() => scrollToSection("services")} className="hover:text-[#FF1A43] transition-colors">{t("landing.nav.services", "What We Offer")}</button>
-              <button onClick={() => scrollToSection("events")} className="hover:text-[#FF1A43] transition-colors">{t("landing.nav.events", "Theme Nights")}</button>
-              <button onClick={() => scrollToSection("cellar")} className="hover:text-[#FF1A43] transition-colors">{t("landing.nav.cellar", "The Cellar")}</button>
-              <button onClick={() => scrollToSection("experience")} className="hover:text-[#FF1A43] transition-colors">{t("landing.nav.experience", "Experience")}</button>
-              <button onClick={() => scrollToSection("location")} className="hover:text-[#FF1A43] transition-colors">{t("landing.nav.location", "Location")}</button>
-            </div>
-            <div className="flex items-center gap-4">
+
+            {/* Controls */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <span
+                className="hidden xl:inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300 whitespace-nowrap mr-1"
+                title={t("landing.nav.open_tonight", "Open Tonight")}
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                </span>
+                {t("landing.nav.open_short", "Open")}
+              </span>
+              <span className="hidden sm:block h-6 w-px bg-white/10 mx-0.5" aria-hidden />
               <LanguageSwitcher />
               <ThemeToggle />
-              <Button onClick={() => setIsBookingOpen(true)} className="hidden lg:flex rounded-full px-8 font-bold shadow-lg shadow-[#FF1A43]/25 hover:scale-105 transition-transform bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] hover:from-[#e61539] hover:to-[#6a12bd] text-white border-none">
+              <Button
+                onClick={() => setIsBookingOpen(true)}
+                className="hidden sm:flex rounded-full px-6 lg:px-8 h-11 font-bold shadow-lg shadow-[#FF1A43]/25 hover:scale-105 transition-transform bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] hover:from-[#e61539] hover:to-[#6a12bd] text-white border-none"
+              >
                 {t("landing.cta.book", "Book a Table")}
               </Button>
+              <button
+                type="button"
+                onClick={() => setIsMobileNavOpen((open) => !open)}
+                aria-label={t("landing.nav.toggle_menu", "Toggle navigation menu")}
+                aria-expanded={isMobileNavOpen}
+                className="lg:hidden flex h-11 w-11 items-center justify-center rounded-full border border-white/10 text-foreground hover:border-[#FF1A43]/50 hover:text-[#FF1A43] transition-colors cursor-pointer"
+              >
+                {isMobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
             </div>
           </div>
+          </div>
         </div>
+
+        {/* Mobile dropdown */}
+        <AnimatePresence>
+          {isMobileNavOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -12, scale: 0.98 }}
+              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              className="lg:hidden mx-auto max-w-7xl mt-2 rounded-3xl border border-white/[0.08] bg-[#0a0612]/95 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.6)] p-4"
+            >
+              <div className="grid grid-cols-2 gap-1.5">
+                {[...navLinks, { id: "experience", label: t("landing.nav.experience", "Experience") }].map((link) => (
+                  <button
+                    key={link.id}
+                    type="button"
+                    onClick={() => {
+                      setIsMobileNavOpen(false);
+                      scrollToSection(link.id);
+                    }}
+                    className="rounded-2xl px-4 py-3.5 text-left text-sm font-bold text-foreground/85 hover:text-white hover:bg-white/[0.05] border border-transparent hover:border-[#FF1A43]/30 transition-all cursor-pointer"
+                  >
+                    {link.label}
+                  </button>
+                ))}
+              </div>
+              <Button
+                onClick={() => {
+                  setIsMobileNavOpen(false);
+                  setIsBookingOpen(true);
+                }}
+                className="mt-3 w-full rounded-2xl h-12 font-bold bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] text-white border-none shadow-[0_0_20px_rgba(255,26,67,0.3)]"
+              >
+                {t("landing.cta.book", "Book a Table")}
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.nav>
 
       {/* Hero Section */}
@@ -434,6 +718,9 @@ export function RestaurantLandingTemplate({
         {/* Ambient background glows for lounge/club vibe */}
         <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] sm:w-[500px] sm:h-[500px] bg-[#FF1A43]/15 rounded-full blur-[100px] pointer-events-none z-0" />
         <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[350px] h-[350px] sm:w-[500px] sm:h-[500px] bg-[#7B16D9]/20 rounded-full blur-[120px] pointer-events-none z-0" />
+
+        {/* Drifting embers */}
+        <EmberField count={28} />
 
         {/* Background Slider & Overlay */}
         <div className="absolute inset-0 z-0 bg-background overflow-hidden">
@@ -484,34 +771,44 @@ export function RestaurantLandingTemplate({
                 )}
               </div>
               <div>
-                <Badge variant="outline" className="mb-6 px-5 py-2 text-sm font-bold uppercase tracking-widest backdrop-blur-md bg-[#FF1A43]/10 border-[#FF1A43]/45 text-[#FF1A43] shadow-[0_0_15px_rgba(255,26,67,0.2)]">
+                <Badge variant="outline" className="mb-4 px-5 py-2 text-sm font-bold uppercase tracking-widest backdrop-blur-md bg-[#FF1A43]/10 border-[#FF1A43]/45 text-[#FF1A43] shadow-[0_0_15px_rgba(255,26,67,0.2)]">
                   {t(`landing.hero.badge_${safeCurrentSlide}`, activeSlide.badge)}
                 </Badge>
               </div>
               
-              <h1 className="mx-auto max-w-5xl text-5xl sm:text-7xl lg:text-[6.5rem] font-black tracking-tighter leading-[0.95] mb-8 uppercase">
-                <span className="bg-gradient-to-r from-[#FF1A43] via-[#D31A9B] to-[#7B16D9] bg-clip-text text-transparent drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]">
-                  {t(`landing.hero.title_${safeCurrentSlide}`, activeSlide.title)}
-                </span>
-              </h1>
-              
-              <p className="mx-auto max-w-2xl text-lg sm:text-2xl text-muted-foreground mb-12 font-medium leading-relaxed">
-                {t(`landing.hero.subtitle_${safeCurrentSlide}`, activeSlide.subtitle)}
-              </p>
+              {Boolean(activeSlide.title?.trim()) && (
+                <h1 className="mx-auto max-w-5xl text-5xl sm:text-7xl lg:text-[6rem] font-black tracking-tighter leading-[0.95] mb-5 uppercase">
+                  <RevealText
+                    trigger="mount"
+                    text={t(`landing.hero.title_${safeCurrentSlide}`, activeSlide.title)}
+                    className="bg-gradient-to-r from-[#FF1A43] via-[#D31A9B] to-[#7B16D9] bg-clip-text text-transparent drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                  />
+                </h1>
+              )}
+
+              {Boolean(activeSlide.subtitle?.trim()) && (
+                <p className="mx-auto max-w-2xl text-lg sm:text-2xl text-muted-foreground mb-10 font-medium leading-relaxed">
+                  {t(`landing.hero.subtitle_${safeCurrentSlide}`, activeSlide.subtitle)}
+                </p>
+              )}
               
               <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
-                <Button onClick={() => setIsBookingOpen(true)} size="lg" className="rounded-full px-10 h-16 text-lg font-bold shadow-[0_0_25px_rgba(255,26,67,0.45)] hover:shadow-[0_0_40px_rgba(255,26,67,0.65)] hover:scale-105 transition-all duration-300 w-full sm:w-auto bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] text-white border-none">
-                  {t("landing.cta.reservation", "Make a Reservation")}
-                  <ArrowRight className="ml-3 h-6 w-6" />
-                </Button>
-                <Button 
-                  size="lg" 
-                  variant="outline" 
-                  onClick={() => scrollToSection("menu")}
-                  className="rounded-full px-10 h-16 text-lg font-bold backdrop-blur-md bg-background/30 border-[#7B16D9]/40 w-full sm:w-auto hover:border-[#FF1A43] hover:bg-background/80 transition-all shadow-[0_0_15px_rgba(123,22,217,0.15)] hover:shadow-[0_0_25px_rgba(255,26,67,0.25)]"
-                >
-                  {t("landing.cta.menu", "View Menu")}
-                </Button>
+                <MagneticButton className="w-full sm:w-auto">
+                  <Button onClick={() => setIsBookingOpen(true)} size="lg" className="rounded-full px-10 h-16 text-lg font-bold shadow-[0_0_25px_rgba(255,26,67,0.45)] hover:shadow-[0_0_40px_rgba(255,26,67,0.65)] transition-all duration-300 w-full sm:w-auto bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] text-white border-none">
+                    {t("landing.cta.reservation", "Make a Reservation")}
+                    <ArrowRight className="ml-3 h-6 w-6" />
+                  </Button>
+                </MagneticButton>
+                <MagneticButton className="w-full sm:w-auto">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={() => scrollToSection("menu")}
+                    className="rounded-full px-10 h-16 text-lg font-bold backdrop-blur-md bg-background/30 border-[#7B16D9]/40 w-full sm:w-auto hover:border-[#FF1A43] hover:bg-background/80 transition-all shadow-[0_0_15px_rgba(123,22,217,0.15)] hover:shadow-[0_0_25px_rgba(255,26,67,0.25)]"
+                  >
+                    {t("landing.cta.menu", "View Menu")}
+                  </Button>
+                </MagneticButton>
               </div>
             </motion.div>
           </AnimatePresence>
@@ -557,6 +854,40 @@ export function RestaurantLandingTemplate({
             </div>
           </>
         )}
+
+        <ScrollCue label={t("landing.hero.scroll", "Scroll")} onClick={() => scrollToSection("stats")} />
+      </section>
+
+      {/* Club energy marquee */}
+      <Marquee
+        items={[
+          t("landing.marquee.dj", "Live DJ Sets"),
+          t("landing.marquee.cocktails", "Craft Cocktails"),
+          t("landing.marquee.late", "Late Nights"),
+          t("landing.marquee.vip", "VIP Lounge"),
+          t("landing.marquee.flavors", "Signature Flavors"),
+          t("landing.marquee.events", "Private Events"),
+          t("landing.marquee.bottle", "Bottle Service"),
+        ]}
+      />
+
+      {/* Animated stats band */}
+      <section id="stats" className="py-20 bg-background relative overflow-hidden border-b border-white/[0.05]">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[200px] bg-[#7B16D9]/10 rounded-full blur-[120px] pointer-events-none" />
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 grid grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
+          {loungeStats.map((stat, i) => (
+            <Reveal key={`${stat.value}-${i}`} delay={i * 0.1}>
+              <div className="text-center group cursor-default">
+                <div className="text-4xl sm:text-6xl font-black tracking-tighter bg-gradient-to-r from-[#FF1A43] via-[#D31A9B] to-[#7B16D9] bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(255,26,67,0.15)]">
+                  <CountUp value={stat.value} />
+                </div>
+                <p className="mt-3 text-xs sm:text-sm font-black uppercase tracking-[0.22em] text-muted-foreground group-hover:text-foreground transition-colors duration-300">
+                  {stat.label}
+                </p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
       </section>
 
       {/* Highlights / Specialties */}
@@ -841,31 +1172,9 @@ export function RestaurantLandingTemplate({
           <SectionTitle title="Exclusive Services" subtitle="Services" t={t} />
           
           <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                title: "Private Events & Buyouts",
-                desc: "Celebrate anniversaries, VIP corporate receptions, or private parties. We offer full and partial venue buyout options.",
-                image: "/landing/dining.png"
-              },
-              {
-                title: "VIP Lounge Experience",
-                desc: "Indulge in premium bottle service, bespoke seating in our high-end lounge, and dedicated butler treatment.",
-                image: "/landing/hero_3.png"
-              },
-              {
-                title: "Catering & Masterclasses",
-                desc: "Elevate your private gatherings with custom menus, chef-led dining, and mixology sessions hosted by our top artisans.",
-                image: "/landing/dish.png"
-              }
-            ].map((srv, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.15, duration: 0.6 }}
-                className="group relative rounded-[2.5rem] overflow-hidden shadow-2xl h-[450px] border border-white/[0.08] hover:border-[#FF1A43]/60 hover:shadow-[0_0_35px_rgba(255,26,67,0.25)] transition-all duration-500 bg-card"
-              >
+            {loungeServices.map((srv, i) => (
+              <Reveal key={i} delay={i * 0.12}>
+                <TiltCard className="group relative rounded-[2.5rem] overflow-hidden shadow-2xl h-[450px] border border-white/[0.08] hover:border-[#FF1A43]/60 hover:shadow-[0_0_35px_rgba(255,26,67,0.25)] transition-all duration-500 bg-card">
                 {/* Background image */}
                 <div className="absolute inset-0 z-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -892,7 +1201,8 @@ export function RestaurantLandingTemplate({
                     {t("landing.services.inquire", "Inquire Now")}
                   </Button>
                 </div>
-              </motion.div>
+                </TiltCard>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -908,14 +1218,8 @@ export function RestaurantLandingTemplate({
           
           <div className="grid md:grid-cols-3 gap-8">
             {dynamicEvents.map((evt, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1, duration: 0.6 }}
-                className="group relative rounded-[2.5rem] overflow-hidden shadow-xl border border-white/[0.08] bg-card p-6 flex flex-col justify-between h-[520px] hover:border-[#FF1A43]/60 hover:shadow-[0_0_35px_rgba(255,26,67,0.25)] transition-all duration-500"
-              >
+              <Reveal key={i} delay={i * 0.1}>
+                <TiltCard className="group relative rounded-[2.5rem] overflow-hidden shadow-xl border border-white/[0.08] bg-card p-6 flex flex-col justify-between h-[520px] hover:border-[#FF1A43]/60 hover:shadow-[0_0_35px_rgba(255,26,67,0.25)] transition-all duration-500">
                 {/* Image panel */}
                 <div className="relative h-48 w-full rounded-2xl overflow-hidden mb-6">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -959,7 +1263,40 @@ export function RestaurantLandingTemplate({
                     </Button>
                   </div>
                 </div>
-              </motion.div>
+                </TiltCard>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Gallery — The Vibe */}
+      <section id="gallery" className="py-32 bg-muted/5 relative overflow-hidden">
+        <div className="absolute bottom-0 left-1/3 w-[420px] h-[420px] bg-[#D31A9B]/8 rounded-full blur-[110px] pointer-events-none z-0" />
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
+          <SectionTitle title="The Vibe" subtitle="Gallery" t={t} />
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 [grid-auto-rows:220px] md:[grid-auto-rows:260px]">
+            {galleryImages.map((img, i) => (
+              <Reveal key={img} delay={i * 0.08} className={i === 0 || i === 3 ? "md:col-span-2 row-span-1 md:row-span-2" : ""}>
+                <button
+                  type="button"
+                  onClick={() => setLightboxImage(img)}
+                  aria-label={t("landing.gallery.open", "Open photo {index} in full screen").replace("{index}", String(i + 1))}
+                  className="group relative h-full w-full min-h-[220px] md:min-h-0 overflow-hidden rounded-[2rem] border border-white/[0.08] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF1A43] hover:border-[#FF1A43]/50 hover:shadow-[0_0_30px_rgba(255,26,67,0.2)] transition-all duration-500"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={img}
+                    alt={t("landing.gallery.alt", "Inside the lounge")}
+                    loading="lazy"
+                    className="absolute inset-0 h-full w-full object-cover group-hover:scale-110 transition-transform duration-700"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-60 group-hover:opacity-90 transition-opacity duration-300" />
+                  <span className="absolute bottom-4 left-5 text-xs font-black uppercase tracking-[0.25em] text-white/0 group-hover:text-white/90 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                    {t("landing.gallery.view", "View")}
+                  </span>
+                </button>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -1089,6 +1426,132 @@ export function RestaurantLandingTemplate({
         </div>
       </section>
 
+      {/* Testimonials — Night Tales */}
+      <section id="reviews" className="py-32 bg-muted/5 relative overflow-hidden">
+        <div className="absolute top-1/3 left-0 w-[400px] h-[400px] bg-[#FF1A43]/6 rounded-full blur-[110px] pointer-events-none z-0" />
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
+          <SectionTitle title="Night Tales" subtitle="Reviews" t={t} />
+          <div className="grid md:grid-cols-3 gap-8">
+            {loungeTestimonials.map((item, i) => (
+              <Reveal key={`${item.author}-${i}`} delay={i * 0.12}>
+                <TiltCard className="group relative h-full rounded-[2.5rem] border border-white/[0.08] bg-card p-8 flex flex-col justify-between hover:border-[#7B16D9]/60 hover:shadow-[0_0_35px_rgba(123,22,217,0.22)] transition-all duration-500">
+                  <div>
+                    <div className="flex items-center justify-between mb-6">
+                      <Quote className="h-9 w-9 text-[#FF1A43] drop-shadow-[0_0_10px_rgba(255,26,67,0.4)]" />
+                      <div className="flex gap-1">
+                        {Array.from({ length: 5 }).map((_, s) => (
+                          <Star key={s} className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-lg leading-relaxed font-medium text-foreground/90">&ldquo;{item.quote}&rdquo;</p>
+                  </div>
+                  <div className="mt-8 pt-6 border-t border-white/[0.06] flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#FF1A43] to-[#7B16D9] text-white font-black text-lg shadow-[0_0_15px_rgba(255,26,67,0.35)]">
+                      {item.author.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-black text-foreground">{item.author}</p>
+                      <p className="text-sm text-muted-foreground font-medium">{item.role}</p>
+                    </div>
+                  </div>
+                </TiltCard>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="py-32 bg-background relative overflow-hidden">
+        <div className="absolute bottom-0 right-1/4 w-[380px] h-[380px] bg-[#7B16D9]/8 rounded-full blur-[110px] pointer-events-none z-0" />
+        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 relative z-10">
+          <SectionTitle title="Good To Know" subtitle="FAQ" t={t} />
+          <div className="space-y-4">
+            {faqs.map((faq, i) => {
+              const isOpen = openFaq === i;
+              return (
+                <Reveal key={i} delay={i * 0.06}>
+                  <div
+                    className={`rounded-3xl border transition-all duration-300 overflow-hidden ${
+                      isOpen
+                        ? "border-[#FF1A43]/50 bg-card shadow-[0_0_25px_rgba(255,26,67,0.12)]"
+                        : "border-white/[0.08] bg-card/60 hover:border-white/20"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setOpenFaq(isOpen ? null : i)}
+                      aria-expanded={isOpen}
+                      className="w-full flex items-center justify-between gap-6 p-6 sm:p-7 text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF1A43] rounded-3xl"
+                    >
+                      <span className={`text-lg sm:text-xl font-black transition-colors ${isOpen ? "text-[#FF1A43]" : "text-foreground"}`}>
+                        {faq.q}
+                      </span>
+                      <motion.span
+                        animate={{ rotate: isOpen ? 180 : 0 }}
+                        transition={{ duration: 0.3 }}
+                        className={`shrink-0 flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${
+                          isOpen ? "border-[#FF1A43]/50 bg-[#FF1A43]/10 text-[#FF1A43]" : "border-white/10 text-muted-foreground"
+                        }`}
+                      >
+                        <ChevronDown className="h-5 w-5" />
+                      </motion.span>
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                        >
+                          <p className="px-6 sm:px-7 pb-7 text-base sm:text-lg text-muted-foreground leading-relaxed font-medium">
+                            {faq.a}
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </Reveal>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Guest List strip */}
+      <section className="relative overflow-hidden border-y border-white/[0.06] bg-[#0a0612] py-20">
+        <EmberField count={14} />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[300px] bg-[#FF1A43]/10 rounded-full blur-[130px] pointer-events-none" />
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col md:flex-row items-center justify-between gap-10 text-center md:text-left">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.3em] text-[#FF1A43] mb-3">
+              {t("landing.guestlist.eyebrow", "Skip the line")}
+            </p>
+            <h2 className="text-4xl sm:text-5xl font-black tracking-tighter text-white">
+              <RevealText text={t("landing.guestlist.title", "Get on the Guest List")} />
+            </h2>
+            <p className="mt-4 max-w-xl text-lg text-white/70 font-medium">
+              {t("landing.guestlist.description", "Priority entry, a welcome drink, and first pick of the lounge — confirmed in minutes.")}
+            </p>
+          </div>
+          <MagneticButton>
+            <Button
+              onClick={() => {
+                setFormData((prev) => ({ ...prev, booking_type: "Guest List Entry" }));
+                setIsBookingOpen(true);
+              }}
+              size="lg"
+              className="rounded-full px-12 h-16 text-lg font-black shadow-[0_0_30px_rgba(255,26,67,0.45)] hover:shadow-[0_0_45px_rgba(255,26,67,0.65)] transition-all duration-300 bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] text-white border-none"
+            >
+              <Martini className="mr-3 h-6 w-6" />
+              {t("landing.guestlist.cta", "Join Tonight")}
+            </Button>
+          </MagneticButton>
+        </div>
+      </section>
+
       {/* Quick Info & CTA */}
       <section id="location" className="py-32 bg-primary text-primary-foreground relative overflow-hidden">
         {/* Decorative background pattern */}
@@ -1104,7 +1567,7 @@ export function RestaurantLandingTemplate({
               className="text-left"
             >
               <h2 className="text-5xl sm:text-7xl font-black tracking-tighter mb-8 leading-[1.1] uppercase">
-                {t("landing.footer.cta", "Ready to join us?")}
+                <RevealText text={t("landing.footer.cta", "Ready to join us?")} />
               </h2>
               <p className="text-2xl text-primary-foreground/90 mb-12 max-w-lg leading-relaxed font-medium">
                 {t("landing.footer.description", "Reserve your table today and let us treat you to an unforgettable dining experience.")}
@@ -1176,6 +1639,54 @@ export function RestaurantLandingTemplate({
           </div>
         </div>
       </footer>
+
+      {/* Back to top */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, scale: 0.6, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.6, y: 16 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            aria-label={t("landing.scroll_top", "Back to top")}
+            className="fixed bottom-7 right-7 z-[70] flex h-13 w-13 sm:h-14 sm:w-14 items-center justify-center rounded-full border border-[#FF1A43]/40 bg-[#0a0612]/90 text-white backdrop-blur-md shadow-[0_0_20px_rgba(255,26,67,0.35)] hover:shadow-[0_0_35px_rgba(255,26,67,0.55)] hover:border-[#FF1A43] transition-all duration-300 cursor-pointer"
+          >
+            <ArrowUp className="h-6 w-6" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Gallery Lightbox */}
+      <AnimatePresence>
+        {lightboxImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setLightboxImage(null)}
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 sm:p-10 cursor-zoom-out"
+          >
+            <motion.img
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              src={lightboxImage}
+              alt={t("landing.gallery.alt", "Inside the lounge")}
+              className="max-h-full max-w-full rounded-[2rem] object-contain shadow-[0_0_60px_rgba(255,26,67,0.25)] border border-white/10"
+            />
+            <button
+              type="button"
+              onClick={() => setLightboxImage(null)}
+              aria-label={t("landing.gallery.close", "Close photo")}
+              className="absolute top-6 right-6 flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white hover:bg-[#FF1A43] hover:border-[#FF1A43] transition-all duration-300 cursor-pointer"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Booking Modal */}
       <AnimatePresence>
@@ -1374,6 +1885,7 @@ export function RestaurantLandingTemplate({
                       >
                         <option value="Regular Reservation" className="bg-[#0E0B1B] text-white">Regular Reservation</option>
                         <option value="VIP Lounge Table" className="bg-[#0E0B1B] text-white">VIP Lounge Table</option>
+                        <option value="Guest List Entry" className="bg-[#0E0B1B] text-white">Guest List Entry</option>
                         <option value="Birthday Party" className="bg-[#0E0B1B] text-white">Birthday Party</option>
                         <option value="Corporate Event" className="bg-[#0E0B1B] text-white">Corporate Event</option>
                         <option value="Bachelorette Party" className="bg-[#0E0B1B] text-white">Bachelorette Party</option>
