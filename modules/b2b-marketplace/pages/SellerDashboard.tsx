@@ -89,7 +89,7 @@ export default function SellerDashboard() {
                                 <div className="p-4 border rounded-xl flex items-center justify-between">
                                     <div>
                                         <h4 className="font-semibold">Search: "Smartphones" in Europe</h4>
-                                        <p className="text-sm text-muted-foreground">Quantity > 1000 units</p>
+                                        <p className="text-sm text-muted-foreground">Quantity &gt; 1000 units</p>
                                     </div>
                                     <Button variant="secondary" size="sm"><BellRing className="h-4 w-4 mr-2"/> Active</Button>
                                 </div>
