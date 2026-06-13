@@ -4,7 +4,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
-export const QuoteComparisonTool: React.FC = () => {
+const QuoteComparisonTool: React.FC = () => {
     return (
         <Card className="w-full mt-6">
             <CardHeader>
@@ -42,3 +42,5 @@ export const QuoteComparisonTool: React.FC = () => {
         </Card>
     );
 };
+
+export default QuoteComparisonTool;

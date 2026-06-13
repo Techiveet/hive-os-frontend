@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import QuoteSubmission from '../components/QuoteSubmission';
-import { Crown, Star, Clock, MessageSquare, BellRing } from 'lucide-react';
+import { Crown, Star, Clock, MessageSquare, BellRing, PackageCheck } from 'lucide-react';
 
 export default function SellerDashboard() {
     return (
