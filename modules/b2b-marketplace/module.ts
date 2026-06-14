@@ -1,4 +1,4 @@
-import { Store } from "lucide-react";
+import { Store, LayoutTemplate } from "lucide-react";
 import type { FrontendModuleDefinition } from "../types";
 
 export const b2bMarketplaceModule: FrontendModuleDefinition = {
@@ -14,6 +14,16 @@ export const b2bMarketplaceModule: FrontendModuleDefinition = {
       fallbackLabel: "B2B Marketplace",
       href: "/dashboard/b2b-marketplace",
       icon: Store,
+      permissions: ["view_b2b_marketplace"],
+      placement: "primary",
+    },
+    {
+      moduleId: "b2b-marketplace",
+      translationKey: "nav.b2bLanding",
+      fallbackLabel: "Marketplace Landing",
+      href: "/dashboard/b2b-marketplace/landing",
+      icon: LayoutTemplate,
+      permissions: ["manage_b2b_marketplace"],
       placement: "primary",
     },
   ],

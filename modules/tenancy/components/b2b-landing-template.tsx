@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -34,6 +34,7 @@ import {
   Settings2,
   ShieldCheck,
   Ship,
+  ShoppingCart,
   Sparkles,
   Star,
   Store,
@@ -64,9 +65,29 @@ import {
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { useTranslation } from "@/store/use-translation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useInView, useMotionValue, animate } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { isTenantHost } from "@/lib/runtime-context";
+import {
+  isTenantHost,
+  getPublicServeUrl,
+  getBackendApiRoot,
+  getTenantHeaders,
+} from "@/lib/runtime-context";
+import { type TenantLandingTemplate } from "@/modules/tenancy/landing-template";
+import { B2BApi } from "@/modules/b2b-marketplace/api";
+import { HeroGlobe } from "@/modules/b2b-marketplace/components/HeroGlobe";
+import { MarketplaceBackdrop } from "@/modules/b2b-marketplace/components/MarketplaceBackdrop";
+import { CartSheet } from "@/modules/b2b-marketplace/cart/CartSheet";
+import { useCart } from "@/modules/b2b-marketplace/cart/cart-store";
+import { AddToCartButton } from "@/modules/b2b-marketplace/cart/AddToCartButton";
+
+type B2BBrandSettings = {
+  app_title?: string | null;
+  logo_light?: string | null;
+  logo_dark?: string | null;
+  footer_text?: string | null;
+} | null;
 
 /* ─────────────────────────────────────────────────────────────────────────
    📦 DATA
@@ -74,6 +95,7 @@ import { isTenantHost } from "@/lib/runtime-context";
 
 type Category = {
   name: string;
+  slug: string;
   img: string;
   count: string;
   growth: string;
@@ -100,6 +122,7 @@ type Product = {
 };
 
 type Supplier = {
+  id?: number;
   name: string;
   logo: string;
   country: string;
@@ -109,6 +132,7 @@ type Supplier = {
   products: number;
   verified: boolean;
   premium: boolean;
+  onTimeRate?: number | null;
 };
 
 type Testimonial = {
@@ -123,6 +147,7 @@ type Testimonial = {
 const CATEGORIES: Category[] = [
   {
     name: "Electronics & Gadgets",
+    slug: "electronics-gadgets",
     img: "/images/b2b/cat_electronics.png",
     count: "1.2k+ Products",
     growth: "+24%",
@@ -131,6 +156,7 @@ const CATEGORIES: Category[] = [
   },
   {
     name: "Industrial Machinery",
+    slug: "industrial-machinery",
     img: "/images/b2b/cat_machinery.png",
     count: "850+ Products",
     growth: "+11%",
@@ -139,6 +165,7 @@ const CATEGORIES: Category[] = [
   },
   {
     name: "Apparel & Textiles",
+    slug: "apparel-textiles",
     img: "/images/b2b/cat_apparel.png",
     count: "2.5k+ Products",
     growth: "+38%",
@@ -147,6 +174,7 @@ const CATEGORIES: Category[] = [
   },
   {
     name: "Agriculture & Food",
+    slug: "agriculture-food",
     img: "/images/b2b/cat_agriculture.png",
     count: "920+ Products",
     growth: "+19%",
@@ -303,6 +331,53 @@ const STATS = [
   { value: "99.2%", label: "On-Time Delivery", icon: Truck },
 ];
 
+/** Counts up the numeric part of a formatted stat (e.g. "$2.8B", "10,400+") when scrolled into view. */
+function AnimatedStatValue({ value }: { value: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-40px" });
+  const mv = useMotionValue(0);
+
+  const m = /^(\D*)([\d,.]+)(.*)$/.exec(value);
+  const prefix = m?.[1] ?? "";
+  const numStr = m?.[2] ?? value;
+  const suffix = m?.[3] ?? "";
+  const hasComma = numStr.includes(",");
+  const decimals = numStr.includes(".") ? numStr.split(".")[1].length : 0;
+  const targetNum = parseFloat(numStr.replace(/,/g, "")) || 0;
+
+  const fmt = (v: number) => {
+    const fixed = v.toFixed(decimals);
+    return hasComma
+      ? Number(fixed).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+      : fixed;
+  };
+
+  const [display, setDisplay] = useState(fmt(0));
+
+  useEffect(() => {
+    if (!inView || !m) {
+      if (!m) setDisplay(value);
+      return;
+    }
+    const controls = animate(mv, targetNum, {
+      duration: 1.5,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate: (v) => setDisplay(fmt(v)),
+    });
+    return () => controls.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inView]);
+
+  if (!m) return <span ref={ref}>{value}</span>;
+  return (
+    <span ref={ref}>
+      {prefix}
+      {display}
+      {suffix}
+    </span>
+  );
+}
+
 const FAQ_ITEMS = [
   {
     q: "How does the Escrow service protect my payment?",
@@ -388,7 +463,10 @@ function ProductCard({
       transition={{ duration: 0.4 }}
       className="group relative flex flex-col overflow-hidden rounded-3xl border border-border/60 bg-card/70 backdrop-blur-xl shadow-sm hover:shadow-2xl hover:shadow-primary/10 hover:border-primary/40 transition-all duration-500"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-muted/30 to-muted/10">
+      <Link
+        href={`/marketplace/product/${product.id}`}
+        className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-muted/30 to-muted/10 block"
+      >
         <img
           src={product.img}
           alt={product.name}
@@ -424,13 +502,16 @@ function ProductCard({
             </PillBadge>
           </div>
         )}
-      </div>
+      </Link>
 
       <div className="flex flex-1 flex-col p-5 gap-4">
         <div>
-          <h3 className="line-clamp-2 text-base font-bold leading-snug tracking-tight text-foreground min-h-[2.75rem]">
+          <Link
+            href={`/marketplace/product/${product.id}`}
+            className="block line-clamp-2 text-base font-bold leading-snug tracking-tight text-foreground min-h-[2.75rem] hover:text-primary transition-colors"
+          >
             {product.name}
-          </h3>
+          </Link>
           <button
             onClick={() => onContact(product)}
             className="mt-2 flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors text-left"
@@ -483,6 +564,11 @@ function ProductCard({
             </Button>
           </div>
         </div>
+
+        <AddToCartButton
+          product={{ id: product.id, name: product.name, image: product.img, supplier: product.supplier, priceLabel: product.price, moq: product.moq }}
+          className="w-full h-9 text-xs"
+        />
       </div>
     </motion.article>
   );
@@ -526,16 +612,31 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
         </div>
         <div className="rounded-xl bg-muted/40 px-3 py-2">
           <p className="text-muted-foreground">On-Time</p>
-          <p className="font-bold text-emerald-600 dark:text-emerald-400">98.7%</p>
+          <p className="font-bold text-emerald-600 dark:text-emerald-400">
+            {supplier.onTimeRate != null ? `${supplier.onTimeRate}%` : "98.7%"}
+          </p>
         </div>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        className="w-full h-9 rounded-xl text-xs font-bold group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all"
-      >
-        View Supplier <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
-      </Button>
+      {supplier.id != null ? (
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="w-full h-9 rounded-xl text-xs font-bold group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all"
+        >
+          <Link href={`/marketplace/supplier/${supplier.id}`}>
+            View Supplier <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
+          </Link>
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full h-9 rounded-xl text-xs font-bold group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all"
+        >
+          View Supplier <ArrowUpRight className="h-3.5 w-3.5 ml-1" />
+        </Button>
+      )}
     </motion.div>
   );
 }
@@ -920,9 +1021,10 @@ function RfqDialog({
    🧭 NAV
    ───────────────────────────────────────────────────────────────────────── */
 
-function TopNav({ onPostRfq }: { onPostRfq: () => void }) {
+function TopNav({ onPostRfq, onOpenCart, brandName = "B2B Marketplace" }: { onPostRfq: () => void; onOpenCart: () => void; brandName?: string }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const { count: cartCount } = useCart();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -960,9 +1062,7 @@ function TopNav({ onPostRfq }: { onPostRfq: () => void }) {
               <div className="absolute inset-0 rounded-xl bg-primary/40 blur-xl -z-10 opacity-50 group-hover:opacity-100 transition-opacity" />
             </div>
             <div className="leading-tight">
-              <p className="text-sm font-black tracking-tight">
-                Global<span className="text-primary">B2B</span>
-              </p>
+              <p className="text-sm font-black tracking-tight">{brandName}</p>
               <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Marketplace</p>
             </div>
           </Link>
@@ -990,6 +1090,20 @@ function TopNav({ onPostRfq }: { onPostRfq: () => void }) {
                 Sign In
               </Button>
             </Link>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onOpenCart}
+              aria-label="Open cart"
+              className="relative h-9 w-9 rounded-full"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-black text-primary-foreground">
+                  {cartCount}
+                </span>
+              )}
+            </Button>
             <Button
               onClick={onPostRfq}
               className="rounded-full font-bold text-sm h-9 px-4 gap-1.5 shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
@@ -1053,8 +1167,173 @@ function TopNav({ onPostRfq }: { onPostRfq: () => void }) {
    🌐 MAIN COMPONENT
    ───────────────────────────────────────────────────────────────────────── */
 
-export default function B2BLandingTemplate() {
+export default function B2BLandingTemplate({
+  brandSettings,
+  template,
+  tenantName,
+}: {
+  brandSettings?: B2BBrandSettings;
+  template?: TenantLandingTemplate | null;
+  tenantName?: string;
+} = {}) {
   const { t } = useTranslation();
+
+  // ── Resolve content from the tenant landing template; fall back to built-in defaults ──
+  const b2b = template?.b2b ?? {};
+  const brandName = brandSettings?.app_title?.trim() || tenantName?.trim() || "B2B Marketplace";
+  const pubImg = (u?: string) => {
+    if (!u) return "";
+    // Absolute URLs and rooted public paths (e.g. /images/b2b/…) pass through untouched;
+    // bare storage keys are resolved to a public serve URL.
+    if (u.startsWith("http") || u.startsWith("/")) return u;
+    return getPublicServeUrl(u) ?? u;
+  };
+
+  // ── Live marketplace catalog (real DB data) — takes priority over template/defaults ──
+  const apiRoot = getBackendApiRoot();
+  const { data: liveCatalog } = useQuery({
+    queryKey: ["b2bPublicCatalog", tenantName ?? "tenant"],
+    queryFn: async () => {
+      const headers = { Accept: "application/json", ...getTenantHeaders() };
+      const pull = async (path: string) => {
+        try {
+          const res = await fetch(`${apiRoot}/public/b2b/${path}`, { headers });
+          if (!res.ok) return [];
+          const json = await res.json();
+          return Array.isArray(json?.data) ? json.data : [];
+        } catch {
+          return [];
+        }
+      };
+      const [categories, products, suppliers] = await Promise.all([
+        pull("categories"),
+        pull("products"),
+        pull("suppliers"),
+      ]);
+      return { categories, products, suppliers };
+    },
+    staleTime: 120000,
+    retry: 1,
+  });
+  const liveCategories: any[] = liveCatalog?.categories ?? [];
+  const liveProducts: any[] = liveCatalog?.products ?? [];
+  const liveSuppliers: any[] = liveCatalog?.suppliers ?? [];
+
+  const STAT_ICONS: Record<string, React.ElementType> = {
+    store: Store, suppliers: Store, dollar: CircleDollarSign, gmv: CircleDollarSign,
+    globe: Globe2, countries: Globe2, truck: Truck, delivery: Truck,
+    users: Users, shield: ShieldCheck, trending: TrendingUp, chart: BarChart3,
+  };
+
+  const hero = {
+    badge: b2b.hero?.badge?.trim() || "Trusted by 24,000+ businesses in 184 countries",
+    title: b2b.hero?.title?.trim() || "Source globally.",
+    titleHighlight: b2b.hero?.title_highlight?.trim() || "Scale confidently.",
+    subtitle:
+      b2b.hero?.subtitle?.trim() ||
+      "Connect with verified wholesale manufacturers, run competitive RFQs, and ship safely with built-in Escrow and end-to-end logistics tracking.",
+    searchPlaceholder: b2b.hero?.search_placeholder?.trim() || "Search 10,400+ products, suppliers, MOQs…",
+    trending:
+      Array.isArray(b2b.hero?.trending) && b2b.hero!.trending!.length > 0
+        ? b2b.hero!.trending!
+        : ["Smartphones", "Coffee Beans", "Excavators", "Workwear", "Solar Panels"],
+  };
+
+  const stats =
+    Array.isArray(b2b.stats) && b2b.stats.length > 0
+      ? b2b.stats.slice(0, 4).map((s) => ({ value: s.value, label: s.label, icon: STAT_ICONS[(s.icon || "").toLowerCase()] ?? Store }))
+      : STATS;
+
+  const slugify = (s: string) =>
+    (s || "").toLowerCase().replace(/&/g, " ").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  const mapCategory = (c: any): Category => ({
+    name: c.name,
+    slug: c.slug || slugify(c.name),
+    img: pubImg(c.image) || "/images/b2b/cat_electronics.png",
+    count: c.count ?? "",
+    growth: c.growth ?? "",
+    description: c.description ?? "",
+    suppliers: c.suppliers ?? 0,
+  });
+  const mapProduct = (p: any, i: number): Product => ({
+    id: p.id != null ? String(p.id) : `p-${i}`,
+    name: p.name,
+    price: p.price ?? "",
+    moq: p.moq ?? "",
+    img: pubImg(p.image),
+    supplier: p.supplier ?? "",
+    supplierLogo: p.supplier_logo || (p.supplier ? p.supplier.slice(0, 2).toUpperCase() : "SP"),
+    rating: p.rating ?? 5,
+    reviews: p.reviews ?? 0,
+    location: p.location ?? "",
+    verified: p.verified ?? true,
+    tradeAssurance: p.trade_assurance ?? true,
+    badges: Array.isArray(p.badges) ? p.badges : [],
+    leadTime: p.lead_time ?? "",
+    category: p.category ?? "",
+  });
+  const mapSupplier = (s: any): Supplier => ({
+    id: typeof s.id === "number" ? s.id : undefined,
+    name: s.name,
+    logo: s.logo || (s.name ? s.name.slice(0, 2).toUpperCase() : "SP"),
+    country: s.country ?? "",
+    flag: s.flag ?? "",
+    rating: s.rating ?? 5,
+    years: s.years ?? 0,
+    products: s.products ?? 0,
+    verified: s.verified ?? true,
+    premium: s.premium ?? false,
+    onTimeRate: s.on_time_rate ?? null,
+  });
+
+  // Priority: live DB catalog → tenant landing template → built-in demo defaults.
+  const categories: Category[] =
+    liveCategories.length > 0
+      ? liveCategories.map(mapCategory)
+      : Array.isArray(b2b.categories) && b2b.categories.length > 0
+        ? b2b.categories.map(mapCategory)
+        : CATEGORIES;
+
+  const products: Product[] =
+    liveProducts.length > 0
+      ? liveProducts.map(mapProduct)
+      : Array.isArray(b2b.products) && b2b.products.length > 0
+        ? b2b.products.map(mapProduct)
+        : PRODUCTS;
+
+  const suppliers: Supplier[] =
+    liveSuppliers.length > 0
+      ? liveSuppliers.map(mapSupplier)
+      : Array.isArray(b2b.suppliers) && b2b.suppliers.length > 0
+        ? b2b.suppliers.map(mapSupplier)
+        : SUPPLIERS;
+
+  const testimonials: Testimonial[] =
+    Array.isArray(b2b.testimonials) && b2b.testimonials.length > 0
+      ? b2b.testimonials.map((tm) => ({
+          quote: tm.quote,
+          author: tm.author,
+          role: tm.role ?? "",
+          company: tm.company ?? "",
+          flag: tm.flag ?? "",
+          amount: tm.amount ?? "",
+        }))
+      : TESTIMONIALS;
+
+  const faqs =
+    Array.isArray(b2b.faqs) && b2b.faqs.length > 0
+      ? b2b.faqs.map((f) => ({ q: f.question, a: f.answer }))
+      : FAQ_ITEMS;
+
+  const cta = {
+    badge: b2b.cta?.badge?.trim() || "Start in 60 seconds",
+    title: b2b.cta?.title?.trim() || "Ready to scale your global sourcing?",
+    description: b2b.cta?.description?.trim() || "Join 24,000+ businesses already trading with confidence. No fees to source.",
+  };
+
+  // Category options for the search filter, derived from the resolved categories
+  const categoryOptions = categories.map((c) => c.name);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchCategory, setSearchCategory] = useState("all");
   const [contactProduct, setContactProduct] = useState<Product | null>(null);
@@ -1063,6 +1342,8 @@ export default function B2BLandingTemplate() {
   const [rfqPrefill, setRfqPrefill] = useState<string | undefined>(undefined);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [cartOpen, setCartOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 600);
@@ -1071,18 +1352,28 @@ export default function B2BLandingTemplate() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Debounce the search box so we don't hammer Meilisearch on every keystroke.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    return () => clearTimeout(id);
+  }, [searchQuery]);
+
+  // Meilisearch-backed product search (server side) when a query is present.
+  const { data: searchHits, isFetching: isSearching } = useQuery({
+    queryKey: ["b2bSearch", debouncedQuery, searchCategory],
+    queryFn: () => B2BApi.search(debouncedQuery, searchCategory !== "all" ? searchCategory : undefined),
+    enabled: debouncedQuery.length > 0,
+    staleTime: 30000,
+  });
+
   const filteredProducts = useMemo(() => {
-    return PRODUCTS.filter((p) => {
-      const matchesCategory = searchCategory === "all" || p.category === searchCategory;
-      const q = searchQuery.trim().toLowerCase();
-      const matchesQuery = !q
-        || p.name.toLowerCase().includes(q)
-        || p.supplier.toLowerCase().includes(q)
-        || p.category.toLowerCase().includes(q)
-        || p.location.toLowerCase().includes(q);
-      return matchesCategory && matchesQuery;
-    });
-  }, [searchQuery, searchCategory]);
+    // With an active query, show Meilisearch results (already category-filtered server-side).
+    if (debouncedQuery.length > 0) {
+      return (searchHits ?? []).map(mapProduct);
+    }
+    // No query → simple client-side category filter over the loaded catalog.
+    return products.filter((p) => searchCategory === "all" || p.category === searchCategory);
+  }, [debouncedQuery, searchHits, products, searchCategory]);
 
   const handleContact = (p: Product) => {
     setContactProduct(p);
@@ -1108,18 +1399,22 @@ export default function B2BLandingTemplate() {
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-background text-foreground overflow-x-hidden">
-      {/* 🌌 Background */}
+    <div className="relative min-h-screen w-full text-foreground overflow-x-hidden">
+      {/* 🌌 Living WebGL trade-network backdrop (whole page) */}
+      <MarketplaceBackdrop />
       <div className="fixed inset-0 -z-10 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(244,63,94,0.10),transparent_50%),radial-gradient(ellipse_at_bottom,rgba(59,130,246,0.10),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:60px_60px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(244,63,94,0.06),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(59,130,246,0.06),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(0,0,0,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.03)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:60px_60px] opacity-60" />
       </div>
 
-      <TopNav onPostRfq={handlePostRfq} />
+      <TopNav onPostRfq={handlePostRfq} onOpenCart={() => setCartOpen(true)} brandName={brandName} />
+      <CartSheet open={cartOpen} onOpenChange={setCartOpen} />
 
       {/* 1️⃣ HERO */}
-      <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 px-4 sm:px-6">
-        <div className="mx-auto max-w-7xl">
+      <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 px-4 sm:px-6 overflow-hidden">
+        {/* 🌐 three.js trade-network globe (decorative background) */}
+        <HeroGlobe className="pointer-events-none absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 h-[680px] w-[680px] sm:h-[820px] sm:w-[820px] max-w-none opacity-60 dark:opacity-70 [mask-image:radial-gradient(circle,black_35%,transparent_72%)]" />
+        <div className="relative z-10 mx-auto max-w-7xl">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1128,20 +1423,19 @@ export default function B2BLandingTemplate() {
           >
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 backdrop-blur-md px-4 py-1.5 text-xs font-bold text-primary mb-6">
               <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-              Trusted by 24,000+ businesses in 184 countries
+              {hero.badge}
             </div>
 
             <h1 className="text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-black tracking-tighter leading-[0.95]">
-              Source globally.
+              {hero.title}
               <br />
               <span className="bg-gradient-to-r from-primary via-rose-500 to-amber-500 bg-clip-text text-transparent">
-                Scale confidently.
+                {hero.titleHighlight}
               </span>
             </h1>
 
             <p className="mt-7 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Connect with verified wholesale manufacturers, run competitive RFQs, and ship
-              safely with built-in Escrow and end-to-end logistics tracking.
+              {hero.subtitle}
             </p>
 
             {/* Search bar */}
@@ -1154,10 +1448,9 @@ export default function B2BLandingTemplate() {
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl">
                       <SelectItem value="all">All Categories</SelectItem>
-                      <SelectItem value="Electronics & Gadgets">Electronics</SelectItem>
-                      <SelectItem value="Industrial Machinery">Machinery</SelectItem>
-                      <SelectItem value="Apparel & Textiles">Apparel</SelectItem>
-                      <SelectItem value="Agriculture & Food">Agriculture</SelectItem>
+                      {categoryOptions.map((name) => (
+                        <SelectItem key={name} value={name}>{name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <div className="flex-1 relative flex items-center">
@@ -1170,7 +1463,7 @@ export default function B2BLandingTemplate() {
                           scrollTo("products");
                         }
                       }}
-                      placeholder="Search 10,400+ products, suppliers, MOQs…"
+                      placeholder={hero.searchPlaceholder}
                       className="h-12 sm:h-14 pl-10 rounded-2xl border-0 bg-muted/30 text-base focus-visible:ring-0"
                     />
                   </div>
@@ -1185,7 +1478,7 @@ export default function B2BLandingTemplate() {
 
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
                 <span className="text-[10px] font-bold uppercase tracking-widest mr-1">Trending:</span>
-                {["Smartphones", "Coffee Beans", "Excavators", "Workwear", "Solar Panels"].map((t) => (
+                {hero.trending.map((t) => (
                   <button
                     key={t}
                     onClick={() => {
@@ -1225,7 +1518,7 @@ export default function B2BLandingTemplate() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto"
           >
-            {STATS.map((s) => {
+            {stats.map((s) => {
               const Icon = s.icon;
               return (
                 <div
@@ -1233,7 +1526,7 @@ export default function B2BLandingTemplate() {
                   className="group rounded-3xl border border-border/60 bg-card/60 backdrop-blur-xl p-6 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 transition-all"
                 >
                   <Icon className="h-5 w-5 text-primary mb-3 group-hover:scale-110 transition-transform" />
-                  <p className="text-3xl font-black tracking-tight">{s.value}</p>
+                  <p className="text-3xl font-black tracking-tight"><AnimatedStatValue value={s.value} /></p>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">
                     {s.label}
                   </p>
@@ -1245,7 +1538,7 @@ export default function B2BLandingTemplate() {
       </section>
 
       {/* 2️⃣ CATEGORIES */}
-      <section id="categories" className="py-20 px-4 sm:px-6 bg-muted/20 border-y border-border/60">
+      <section id="categories" className="py-20 px-4 sm:px-6 bg-muted/10 border-y border-border/60 backdrop-blur-[2px]">
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-wrap items-end justify-between gap-4 mb-10">
             <div>
@@ -1259,24 +1552,27 @@ export default function B2BLandingTemplate() {
                 Pre-vetted factories and bulk suppliers across the world's most competitive categories.
               </p>
             </div>
-            <Button variant="ghost" className="rounded-full font-bold gap-1">
-              All categories <ChevronRight className="h-4 w-4" />
+            <Button
+              variant="ghost"
+              className="rounded-full font-bold gap-1"
+              onClick={() => { setSearchQuery(""); setSearchCategory("all"); scrollTo("products"); }}
+            >
+              Browse all products <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {CATEGORIES.map((c, i) => (
-              <motion.button
+            {categories.map((c, i) => (
+              <motion.div
                 key={c.name}
                 initial={{ opacity: 0, y: 24 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.05, duration: 0.4 }}
-                onClick={() => {
-                  setSearchCategory(c.name);
-                  scrollTo("products");
-                }}
-                className="group relative text-left overflow-hidden rounded-3xl aspect-[4/5] border border-border/60 hover:border-primary/50 transition-all hover:shadow-2xl hover:shadow-primary/10"
+              >
+              <Link
+                href={`/marketplace/category/${c.slug}`}
+                className="group relative block text-left overflow-hidden rounded-3xl aspect-[4/5] border border-border/60 hover:border-primary/50 transition-all hover:shadow-2xl hover:shadow-primary/10"
               >
                 <img
                   src={c.img}
@@ -1299,12 +1595,14 @@ export default function B2BLandingTemplate() {
                   <p className="text-sm text-white/80 line-clamp-2">{c.description}</p>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-xs font-bold text-white/90">{c.count}</span>
-                    <span className="h-8 w-8 rounded-full bg-white/10 backdrop-blur flex items-center justify-center group-hover:bg-white group-hover:text-black transition-all">
-                      <ArrowRight className="h-4 w-4 -rotate-45 group-hover:rotate-0 transition-transform" />
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 backdrop-blur px-3 py-1.5 text-xs font-bold group-hover:bg-white group-hover:text-black transition-all">
+                      View details
+                      <ArrowRight className="h-3.5 w-3.5 -rotate-45 group-hover:rotate-0 transition-transform" />
                     </span>
                   </div>
                 </div>
-              </motion.button>
+              </Link>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -1325,8 +1623,11 @@ export default function B2BLandingTemplate() {
                   ? searchCategory
                   : "High-margin deals, low MOQs"}
               </h2>
-              <p className="text-muted-foreground mt-2">
-                {filteredProducts.length} of {PRODUCTS.length} products · curated daily
+              <p className="text-muted-foreground mt-2 inline-flex items-center gap-2">
+                {isSearching && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                {debouncedQuery
+                  ? `${filteredProducts.length} result${filteredProducts.length === 1 ? "" : "s"} via Meilisearch`
+                  : `${filteredProducts.length} of ${products.length} products · curated daily`}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1381,7 +1682,7 @@ export default function B2BLandingTemplate() {
       </section>
 
       {/* 4️⃣ SUPPLIER DIRECTORY */}
-      <section id="suppliers" className="py-24 px-4 sm:px-6 bg-muted/20 border-y border-border/60">
+      <section id="suppliers" className="py-24 px-4 sm:px-6 bg-muted/10 border-y border-border/60 backdrop-blur-[2px]">
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-wrap items-end justify-between gap-4 mb-10">
             <div>
@@ -1395,13 +1696,15 @@ export default function B2BLandingTemplate() {
                 Every supplier is KYC-verified, on-site audited, and tracked on 30+ service metrics.
               </p>
             </div>
-            <Button variant="ghost" className="rounded-full font-bold gap-1">
-              Browse 10,400+ <ChevronRight className="h-4 w-4" />
+            <Button asChild variant="ghost" className="rounded-full font-bold gap-1">
+              <Link href="/auth/signup">
+                Browse all suppliers <ChevronRight className="h-4 w-4" />
+              </Link>
             </Button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {SUPPLIERS.map((s) => (
+            {suppliers.map((s) => (
               <SupplierCard key={s.name} supplier={s} />
             ))}
           </div>
@@ -1482,7 +1785,7 @@ export default function B2BLandingTemplate() {
       </section>
 
       {/* 6️⃣ TESTIMONIALS */}
-      <section className="py-24 px-4 sm:px-6 bg-muted/20 border-y border-border/60">
+      <section className="py-24 px-4 sm:px-6 bg-muted/10 border-y border-border/60 backdrop-blur-[2px]">
         <div className="mx-auto max-w-6xl">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <Badge className="mb-3 bg-primary/10 text-primary border-primary/20 text-[10px]">
@@ -1494,7 +1797,7 @@ export default function B2BLandingTemplate() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-5">
-            {TESTIMONIALS.map((tm, i) => (
+            {testimonials.map((tm, i) => (
               <motion.figure
                 key={tm.author}
                 initial={{ opacity: 0, y: 24 }}
@@ -1534,7 +1837,7 @@ export default function B2BLandingTemplate() {
         <div className="mx-auto max-w-7xl">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <Badge className="mb-3 bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px]">
-              <Sparkles className="h-3 w-3 mr-1" /> Why GlobalB2B
+              <Sparkles className="h-3 w-3 mr-1" /> Why {brandName}
             </Badge>
             <h2 className="text-4xl sm:text-5xl font-black tracking-tight">
               Built for serious buyers
@@ -1576,7 +1879,7 @@ export default function B2BLandingTemplate() {
       </section>
 
       {/* 8️⃣ FAQ */}
-      <section id="faq" className="py-24 px-4 sm:px-6 bg-muted/20 border-y border-border/60">
+      <section id="faq" className="py-24 px-4 sm:px-6 bg-muted/10 border-y border-border/60 backdrop-blur-[2px]">
         <div className="mx-auto max-w-3xl">
           <div className="text-center mb-12">
             <Badge className="mb-3 bg-primary/10 text-primary border-primary/20 text-[10px]">
@@ -1588,7 +1891,7 @@ export default function B2BLandingTemplate() {
           </div>
 
           <div className="space-y-3">
-            {FAQ_ITEMS.map((item, idx) => {
+            {faqs.map((item, idx) => {
               const open = openFaq === idx;
               return (
                 <div
@@ -1645,13 +1948,13 @@ export default function B2BLandingTemplate() {
                 className="relative z-10 max-w-2xl mx-auto space-y-6"
               >
                 <Badge className="bg-white/20 text-white border-white/30 backdrop-blur">
-                  <Rocket className="h-3 w-3 mr-1" /> Start in 60 seconds
+                  <Rocket className="h-3 w-3 mr-1" /> {cta.badge}
                 </Badge>
                 <h2 className="text-4xl sm:text-5xl font-black leading-tight">
-                  Ready to scale your global sourcing?
+                  {cta.title}
                 </h2>
                 <p className="text-white/85 text-lg">
-                  Join 24,000+ businesses already trading with confidence. No fees to source.
+                  {cta.description}
                 </p>
                 <div className="flex flex-col sm:flex-row justify-center gap-3 pt-2">
                   <Button
@@ -1693,9 +1996,7 @@ export default function B2BLandingTemplate() {
                   <Globe2 className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-black tracking-tight">
-                    Global<span className="text-primary">B2B</span>
-                  </p>
+                  <p className="text-sm font-black tracking-tight">{brandName}</p>
                   <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Marketplace</p>
                 </div>
               </Link>
@@ -1752,7 +2053,7 @@ export default function B2BLandingTemplate() {
 
           <div className="mt-10 pt-6 border-t border-border/60 flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-xs text-muted-foreground">
-              © {new Date().getFullYear()} GlobalB2B Marketplace · All rights reserved
+              © {new Date().getFullYear()} {brandName} · All rights reserved
             </p>
             <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
               <a href="#" className="hover:text-foreground">Privacy</a>
