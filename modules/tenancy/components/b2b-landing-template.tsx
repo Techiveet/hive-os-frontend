@@ -882,7 +882,7 @@ function RfqDialog({
               >
                 Post Another
               </Button>
-              <Link href="/auth/signup" onClick={() => onOpenChange(false)}>
+              <Link href="/marketplace/register" onClick={() => onOpenChange(false)}>
                 <Button className="rounded-full font-bold gap-2 shadow-lg shadow-primary/20">
                   Open My Dashboard <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -1049,7 +1049,7 @@ function TopNav({ onPostRfq, onOpenCart, brandName = "B2B Marketplace" }: { onPo
 
   const onTenantHost = typeof window !== "undefined" ? isTenantHost(window.location.hostname) : true;
   const signInHref = onTenantHost ? "/sign-in" : "/sign-in";
-  const signUpHref = "/auth/signup";
+  const signUpHref = "/marketplace/register";
 
   return (
     <header
@@ -1091,6 +1091,13 @@ function TopNav({ onPostRfq, onOpenCart, brandName = "B2B Marketplace" }: { onPo
               <div className="w-px h-5 bg-border mx-1" />
               <ThemeToggle />
             </div>
+            {!loggedIn && (
+              <Link href="/marketplace/register" className="hidden md:block">
+                <Button variant="ghost" className="rounded-full font-bold text-sm h-9 px-4">
+                  Register
+                </Button>
+              </Link>
+            )}
             <Link href={loggedIn ? "/dashboard/b2b-marketplace" : signInHref} className="hidden sm:block">
               <Button variant="ghost" className="rounded-full font-bold text-sm h-9 px-4">
                 {loggedIn ? "Dashboard" : "Sign In"}
@@ -1703,7 +1710,7 @@ export default function B2BLandingTemplate({
               </p>
             </div>
             <Button asChild variant="ghost" className="rounded-full font-bold gap-1">
-              <Link href="/auth/signup">
+              <Link href="/marketplace/register">
                 Browse all suppliers <ChevronRight className="h-4 w-4" />
               </Link>
             </Button>
@@ -1970,7 +1977,7 @@ export default function B2BLandingTemplate({
                   >
                     <FileText className="h-4 w-4" /> Post a Free RFQ
                   </Button>
-                  <Link href="/auth/signup">
+                  <Link href="/marketplace/register?role=seller">
                     <Button
                       size="lg"
                       variant="outline"
@@ -2049,7 +2056,7 @@ export default function B2BLandingTemplate({
             <div>
               <h4 className="text-[10px] font-black uppercase tracking-widest text-foreground mb-4">Company</h4>
               <ul className="space-y-2.5 text-sm text-muted-foreground">
-                <li><Link href="/auth/signup" className="hover:text-primary transition-colors">Create Account</Link></li>
+                <li><Link href="/marketplace/register" className="hover:text-primary transition-colors">Create Account</Link></li>
                 <li><Link href="/sign-in" className="hover:text-primary transition-colors">Sign In</Link></li>
                 <li><Link href="/request-demo" className="hover:text-primary transition-colors">Request Demo</Link></li>
                 <li><a href="#" className="hover:text-primary transition-colors">Contact Sales</a></li>

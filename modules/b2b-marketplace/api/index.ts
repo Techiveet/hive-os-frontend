@@ -98,6 +98,35 @@ export const B2BApi = {
   product: (id: number | string) => get<B2BProductDetail>(`products/${id}`),
   // Meilisearch-backed full-text search
   search: (q: string, category?: string) => get<B2BProduct[]>("search", { q, category }),
+  // Public self-service registration (pending admin approval)
+  register: async (payload: B2BRegisterPayload) => {
+    const res = await fetch(`${getBackendApiRoot()}/public/b2b/register`, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json", ...getTenantHeaders() },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.message || `Registration failed (${res.status})`);
+    return json as { message: string; data: { id: number; status: string } };
+  },
+};
+
+export type B2BRegisterPayload = {
+  name: string;
+  email: string;
+  password: string;
+  company?: string;
+  requested_role: "buyer" | "seller";
+};
+
+export type B2BRegistration = {
+  id: number;
+  name: string;
+  email: string;
+  company: string | null;
+  requested_role: "buyer" | "seller";
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
 };
 
 // ── Authenticated dashboard analytics ──
@@ -239,6 +268,11 @@ export const B2BDash = {
   orders: () => body<B2BOrder[]>(api.get("/b2b-marketplace/orders")),
   order: (id: number | string) => body<B2BOrderDetail>(api.get(`/b2b-marketplace/orders/${id}`)),
   placeOrder: (payload: PlaceOrderPayload) => body<B2BOrder>(api.post("/b2b-marketplace/orders", payload)),
+
+  // Registration approvals (admin)
+  registrations: () => body<B2BRegistration[]>(api.get("/b2b-marketplace/registrations")),
+  approveRegistration: (id: number) => api.post(`/b2b-marketplace/registrations/${id}/approve`).then((r) => r.data),
+  rejectRegistration: (id: number) => api.post(`/b2b-marketplace/registrations/${id}/reject`).then((r) => r.data),
 };
 
 export type B2BOrderLine = { name: string; unit_price: number; quantity: number; line_total: number };
