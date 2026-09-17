@@ -5,15 +5,18 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight, Barcode, CalendarClock, ClipboardList, Coins, Gauge,
-  Layers, Scale, ShieldAlert,
+  HelpCircle, Layers, Scale, ShieldAlert,
 } from "lucide-react";
+import type { Step } from "react-joyride";
 import { useTranslation } from "@/store/use-translation";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useTour } from "@/components/providers/tour-provider";
 import {
   fetchInventoryBatches, fetchInventorySerials, fetchReconciliationInventoryGl,
   fetchReorderBasis, fetchStocktakes,
@@ -56,18 +59,33 @@ export default function OperationsOverviewPage() {
   const stocktakes = useQuery({ queryKey: ["ov", "stocktakes-counting"], enabled: canOps, queryFn: () => fetchStocktakes({ per_page: 1, status: "counting" }) });
   const lowStock = useQuery({ queryKey: ["ov", "low-stock"], enabled: canOps, queryFn: () => fetchReorderBasis({ per_page: 1, low_only: true }) });
   const invGl = useQuery({ queryKey: ["ov", "inv-gl"], enabled: canFinance, queryFn: fetchReconciliationInventoryGl });
+  const { startTour } = useTour();
+
+  // Permission-aware tour: finance-only steps are omitted for non-finance users.
+  const tourSteps: Step[] = [
+    { target: "#inv-tour-overview-title", title: t("inventory.tour.overview.welcome_title", "Inventory Operations"), content: t("inventory.tour.overview.welcome", "Your operational cockpit for batches, serials, counts and — with finance access — valuation."), placement: "bottom" as const, skipBeacon: true },
+    ...(canOps ? [{ target: "#inv-tour-overview-metrics", title: t("inventory.tour.overview.metrics_title", "Operational signals"), content: t("inventory.tour.overview.metrics", "Live counts of serialized units, expired lots, counts in progress and low-stock goods. Each card opens its workspace."), placement: "bottom" as const, skipBeacon: true }] : []),
+    ...(canFinance ? [{ target: "#inv-tour-overview-finance", title: t("inventory.tour.overview.finance_title", "Valuation & GL"), content: t("inventory.tour.overview.finance", "Finance users see the inventory value (subledger), the Inventory Asset GL balance, and whether they reconcile."), placement: "top" as const, skipBeacon: true }] : []),
+    { target: "#inv-tour-overview-links", title: t("inventory.tour.overview.links_title", "Jump to a workspace"), content: t("inventory.tour.overview.links", "Physical stock (batches/serials/counts) is separate from financial value — only finance roles see valuation and reconciliation."), placement: "top" as const, skipBeacon: true },
+  ];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-black tracking-tight">{t("inventory.overview.title", "Inventory Operations")}</h1>
-        <p className="text-sm text-muted-foreground">
-          {t("inventory.overview.subtitle", "Operational health across batches, serials, counts, and — for finance — valuation.")}
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div id="inv-tour-overview-title">
+          <h1 className="text-3xl font-black tracking-tight">{t("inventory.overview.title", "Inventory Operations")}</h1>
+          <p className="text-sm text-muted-foreground">
+            {t("inventory.overview.subtitle", "Operational health across batches, serials, counts, and — for finance — valuation.")}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="rounded-full" onClick={() => startTour(tourSteps)}>
+          <HelpCircle className="mr-2 h-4 w-4" />
+          {t("inventory.tour.take_tour", "Take a tour")}
+        </Button>
       </div>
 
       {canOps ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div id="inv-tour-overview-metrics" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard icon={Barcode} label={t("inventory.overview.serials", "Serialized units")} href="/dashboard/inventory/serials" loading={serials.isLoading} value={serials.data?.meta?.total ?? 0} />
           <MetricCard icon={CalendarClock} label={t("inventory.overview.expired_lots", "Expired lots")} href="/dashboard/inventory/batches" loading={batchesExpired.isLoading} value={batchesExpired.data?.meta?.total ?? 0} accent="bg-red-500/10" />
           <MetricCard icon={ClipboardList} label={t("inventory.overview.open_counts", "Counts in progress")} href="/dashboard/inventory/stocktakes" loading={stocktakes.isLoading} value={stocktakes.data?.meta?.total ?? 0} accent="bg-sky-500/10" />
@@ -81,7 +99,7 @@ export default function OperationsOverviewPage() {
       )}
 
       {canFinance ? (
-        <Card className="rounded-3xl border-border/60 p-6">
+        <Card id="inv-tour-overview-finance" className="rounded-3xl border-border/60 p-6">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">
               <Coins className="h-4 w-4" /> {t("inventory.overview.valuation_health", "Valuation & GL")}
@@ -121,7 +139,7 @@ export default function OperationsOverviewPage() {
         </Card>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div id="inv-tour-overview-links" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[
           { href: "/dashboard/inventory/batches", icon: Layers, label: t("inventory.batches.title", "Batches & Expiry"), ops: true },
           { href: "/dashboard/inventory/serials", icon: Barcode, label: t("inventory.serials.title", "Serial Numbers"), ops: true },

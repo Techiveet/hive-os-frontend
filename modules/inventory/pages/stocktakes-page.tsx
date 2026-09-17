@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ClipboardList, Eye, Loader2, Plus, ShieldAlert } from "lucide-react";
+import { ClipboardList, Eye, HelpCircle, Loader2, Plus, ShieldAlert } from "lucide-react";
+import type { Step } from "react-joyride";
 import { toast } from "sonner";
 import { useTranslation } from "@/store/use-translation";
+import { useTour } from "@/components/providers/tour-provider";
 
 import { DataTable, type DataTableQuery } from "@/components/datatable/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -152,6 +154,13 @@ export default function StocktakesPage() {
     [t]
   );
 
+  const { startTour } = useTour();
+  const tourSteps: Step[] = [
+    ...(canCreate ? [{ target: "#inv-tour-stocktake-new", title: t("inventory.tour.stocktake.create_title", "1 · Create a count"), content: t("inventory.tour.stocktake.create", "Start a count, pick a warehouse/location and type, then generate the snapshot — expected quantities are captured by the backend, never typed."), placement: "left" as const, skipBeacon: true }] : []),
+    { target: "#inv-tour-stocktake-filter", title: t("inventory.tour.stocktake.status_title", "2 · Track lifecycle"), content: t("inventory.tour.stocktake.status", "Counts move draft → counting → submitted → approved → finalized. Filter by status to find work in progress."), placement: "bottom" as const, skipBeacon: true },
+    { target: "#inv-tour-stocktake-table", title: t("inventory.tour.stocktake.work_title", "3 · Count & finalize"), content: t("inventory.tour.stocktake.work", "Open a count to enter physical quantities, scan serials, and review missing/unexpected. Finalizing posts variances to stock — a manager-only action."), placement: "top" as const, skipBeacon: true },
+  ];
+
   if (isLoaded && !canView) {
     return (
       <Card className="mx-auto mt-10 max-w-lg rounded-3xl border-border/60 p-8 text-center">
@@ -173,15 +182,21 @@ export default function StocktakesPage() {
             {t("inventory.stocktake.subtitle", "Physical and cycle counts. Snapshots and variances are computed by the backend.")}
           </p>
         </div>
-        {canCreate ? (
-          <Button className="rounded-full px-5" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            {t("inventory.stocktake.new_btn", "New Count")}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="rounded-full" onClick={() => startTour(tourSteps)}>
+            <HelpCircle className="mr-2 h-4 w-4" />
+            {t("inventory.tour.take_tour", "Take a tour")}
           </Button>
-        ) : null}
+          {canCreate ? (
+            <Button id="inv-tour-stocktake-new" className="rounded-full px-5" onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              {t("inventory.stocktake.new_btn", "New Count")}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div id="inv-tour-stocktake-filter" className="flex flex-wrap items-center gap-3">
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setTableQuery((p) => ({ ...p, page: 1 })); }}>
           <SelectTrigger className="w-[180px] rounded-full">
             <SelectValue placeholder={t("inventory.common.status", "Status")} />
@@ -195,24 +210,26 @@ export default function StocktakesPage() {
         </Select>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={stocktakesQuery.data?.data ?? []}
-        totalEntries={stocktakesQuery.data?.meta?.total ?? 0}
-        loading={stocktakesQuery.isLoading || stocktakesQuery.isFetching}
-        pageIndex={tableQuery.page}
-        pageSize={tableQuery.pageSize}
-        onQueryChange={(q: DataTableQuery) =>
-          setTableQuery({ page: Number(q.page || 1), pageSize: Number(q.pageSize || 15), search: String(q.search ?? "") })
-        }
-        onRefresh={() => stocktakesQuery.refetch()}
-        onResetFilters={() => { setTableQuery({ page: 1, pageSize: 15, search: "" }); setStatusFilter("all"); }}
-        searchPlaceholder={t("inventory.stocktake.search_placeholder", "Search reference...")}
-        resourceName="stocktakes"
-        canExport={false}
-        syncWithUrl={false}
-        emptyMessage={t("inventory.stocktake.empty", "No stocktakes yet. Create one to begin counting.")}
-      />
+      <div id="inv-tour-stocktake-table">
+        <DataTable
+          columns={columns}
+          data={stocktakesQuery.data?.data ?? []}
+          totalEntries={stocktakesQuery.data?.meta?.total ?? 0}
+          loading={stocktakesQuery.isLoading || stocktakesQuery.isFetching}
+          pageIndex={tableQuery.page}
+          pageSize={tableQuery.pageSize}
+          onQueryChange={(q: DataTableQuery) =>
+            setTableQuery({ page: Number(q.page || 1), pageSize: Number(q.pageSize || 15), search: String(q.search ?? "") })
+          }
+          onRefresh={() => stocktakesQuery.refetch()}
+          onResetFilters={() => { setTableQuery({ page: 1, pageSize: 15, search: "" }); setStatusFilter("all"); }}
+          searchPlaceholder={t("inventory.stocktake.search_placeholder", "Search reference...")}
+          resourceName="stocktakes"
+          canExport={false}
+          syncWithUrl={false}
+          emptyMessage={t("inventory.stocktake.empty", "No stocktakes yet. Create one to begin counting.")}
+        />
+      </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md rounded-3xl">

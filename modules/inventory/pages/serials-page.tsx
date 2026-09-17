@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Barcode, Eye, Loader2, ScanLine, Search, Tags } from "lucide-react";
+import { Barcode, Eye, HelpCircle, Loader2, ScanLine, Search, Tags } from "lucide-react";
+import type { Step } from "react-joyride";
 import { toast } from "sonner";
 import { useTranslation } from "@/store/use-translation";
+import { useTour } from "@/components/providers/tour-provider";
 
 import { DataTable, type DataTableQuery } from "@/components/datatable/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -205,6 +207,13 @@ export default function SerialsPage() {
     [t]
   );
 
+  const { startTour } = useTour();
+  const serialTourSteps: Step[] = [
+    { target: "#inv-tour-serial-scan", title: t("inventory.tour.serial.scan_title", "Scan a serial"), content: t("inventory.tour.serial.scan", "Focus here, scan or type a serial and press Enter to jump straight to that unit — built for warehouse scanners."), placement: "bottom" as const, skipBeacon: true },
+    { target: "#inv-tour-serial-filter", title: t("inventory.tour.serial.filter_title", "Filter by status"), content: t("inventory.tour.serial.filter", "Narrow the directory by lifecycle status: available, issued, quarantine, damaged, returned, disposed or missing."), placement: "bottom" as const, skipBeacon: true },
+    { target: "#inv-tour-serial-table", title: t("inventory.tour.serial.table_title", "Identity & traceability"), content: t("inventory.tour.serial.table", "Open any serial for its good, batch, location and full receipt→issue trace. Physical issue happens through Sales delivery — not from here."), placement: "top" as const, skipBeacon: true },
+  ];
+
   if (isLoaded && !canView) {
     return (
       <Card className="mx-auto mt-10 max-w-lg rounded-3xl border-border/60 p-8 text-center">
@@ -226,10 +235,14 @@ export default function SerialsPage() {
             {t("inventory.serials.subtitle", "Track every serialized unit — identity, location, and full lifecycle.")}
           </p>
         </div>
+        <Button variant="outline" size="sm" className="rounded-full" onClick={() => startTour(serialTourSteps)}>
+          <HelpCircle className="mr-2 h-4 w-4" />
+          {t("inventory.tour.take_tour", "Take a tour")}
+        </Button>
       </div>
 
       {/* Scanner-first exact lookup */}
-      <Card className="rounded-3xl border-border/60 p-4">
+      <Card id="inv-tour-serial-scan" className="rounded-3xl border-border/60 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1 space-y-1.5">
             <label htmlFor="serial-scan" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -263,7 +276,7 @@ export default function SerialsPage() {
         </div>
       </Card>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div id="inv-tour-serial-filter" className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <Tags className="h-4 w-4 text-muted-foreground" />
           <Select
@@ -288,25 +301,27 @@ export default function SerialsPage() {
         </div>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={serialsQuery.data?.data ?? []}
-        totalEntries={serialsQuery.data?.meta?.total ?? 0}
-        loading={serialsQuery.isLoading || serialsQuery.isFetching}
-        pageIndex={tableQuery.page}
-        pageSize={tableQuery.pageSize}
-        onQueryChange={handleTableQueryChange}
-        onRefresh={() => serialsQuery.refetch()}
-        onResetFilters={() => {
-          setTableQuery(DEFAULT_QUERY);
-          setStatusFilter("all");
-        }}
-        searchPlaceholder={t("inventory.serials.search_placeholder", "Search serials...")}
-        resourceName="serials"
-        canExport={false}
-        syncWithUrl={false}
-        emptyMessage={t("inventory.serials.empty", "No serial numbers match your filters.")}
-      />
+      <div id="inv-tour-serial-table">
+        <DataTable
+          columns={columns}
+          data={serialsQuery.data?.data ?? []}
+          totalEntries={serialsQuery.data?.meta?.total ?? 0}
+          loading={serialsQuery.isLoading || serialsQuery.isFetching}
+          pageIndex={tableQuery.page}
+          pageSize={tableQuery.pageSize}
+          onQueryChange={handleTableQueryChange}
+          onRefresh={() => serialsQuery.refetch()}
+          onResetFilters={() => {
+            setTableQuery(DEFAULT_QUERY);
+            setStatusFilter("all");
+          }}
+          searchPlaceholder={t("inventory.serials.search_placeholder", "Search serials...")}
+          resourceName="serials"
+          canExport={false}
+          syncWithUrl={false}
+          emptyMessage={t("inventory.serials.empty", "No serial numbers match your filters.")}
+        />
+      </div>
     </div>
   );
 }

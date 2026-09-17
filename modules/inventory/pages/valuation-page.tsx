@@ -4,8 +4,10 @@ import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Coins, Layers3, Lock, TrendingDown, TrendingUp } from "lucide-react";
+import { Coins, HelpCircle, Layers3, Lock, TrendingDown, TrendingUp } from "lucide-react";
+import type { Step } from "react-joyride";
 import { useTranslation } from "@/store/use-translation";
+import { useTour } from "@/components/providers/tour-provider";
 
 import { DataTable, type DataTableQuery } from "@/components/datatable/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -250,6 +252,13 @@ export default function ValuationPage() {
     [t]
   );
 
+  const { startTour } = useTour();
+  const tourSteps: Step[] = [
+    { target: "#inv-tour-valuation-title", title: t("inventory.tour.valuation.value_title", "Inventory value"), content: t("inventory.tour.valuation.value", "FIFO and standard-cost valuation read straight from the persisted subledger — never recomputed on the client."), placement: "bottom" as const, skipBeacon: true },
+    { target: "#inv-tour-valuation-tabs", title: t("inventory.tour.valuation.tabs_title", "Summary, layers & movements"), content: t("inventory.tour.valuation.tabs", "Summary shows value per good with a FIFO cost-layer drilldown; Movements lists immutable IN/OUT entries with PPV and the linked GL journal."), placement: "bottom" as const, skipBeacon: true },
+    { target: "#inv-tour-valuation-table", title: t("inventory.tour.valuation.recon_title", "Trace & reconcile"), content: t("inventory.tour.valuation.recon", "From here, GL Trace follows a valuation entry to its journal and source, and Reconciliation compares the subledger against the Inventory Asset, COGS, GRNI and PPV accounts."), placement: "top" as const, skipBeacon: true },
+  ];
+
   if (isLoaded && !canView) {
     return (
       <Card className="mx-auto mt-10 max-w-lg rounded-3xl border-border/60 p-8 text-center">
@@ -264,23 +273,29 @@ export default function ValuationPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-3xl font-black tracking-tight">
-          <Coins className="h-7 w-7 text-primary" />
-          {t("inventory.valuation.title", "Inventory Valuation")}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {t("inventory.valuation.subtitle", "FIFO and standard-cost valuation from the persisted subledger. Values are never recomputed on the client.")}
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div id="inv-tour-valuation-title">
+          <h1 className="flex items-center gap-2 text-3xl font-black tracking-tight">
+            <Coins className="h-7 w-7 text-primary" />
+            {t("inventory.valuation.title", "Inventory Valuation")}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {t("inventory.valuation.subtitle", "FIFO and standard-cost valuation from the persisted subledger. Values are never recomputed on the client.")}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="rounded-full" onClick={() => startTour(tourSteps)}>
+          <HelpCircle className="mr-2 h-4 w-4" />
+          {t("inventory.tour.take_tour", "Take a tour")}
+        </Button>
       </div>
 
-      <Tabs defaultValue="summary">
+      <Tabs defaultValue="summary" id="inv-tour-valuation-tabs">
         <TabsList className="rounded-full">
           <TabsTrigger value="summary" className="rounded-full">{t("inventory.valuation.tab_summary", "Summary")}</TabsTrigger>
           <TabsTrigger value="entries" className="rounded-full">{t("inventory.valuation.tab_entries", "Movements")}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="summary" className="mt-4">
+        <TabsContent value="summary" className="mt-4" id="inv-tour-valuation-table">
           <DataTable
             columns={summaryColumns}
             data={summaryQuery.data?.data ?? []}
