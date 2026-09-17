@@ -124,6 +124,7 @@ export type SalesOrderLine = SalesDocumentLine & {
   unit_cost: Numeric;
   outstanding_quantity?: Numeric;
   margin_amount?: Numeric;
+  track_serials?: boolean;
 };
 
 export type SalesOrder = {
