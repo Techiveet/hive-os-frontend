@@ -2204,7 +2204,13 @@ function LineItemsEditor({
             <select
               id={`line-${line.line_key}-item`}
               value={line.inventory_item_id ?? ""}
-              onChange={(e) => selectInventoryItem(index, e.target.value)}
+              onChange={(e) =>
+                update(
+                  index,
+                  "inventory_item_id",
+                  e.target.value ? Number(e.target.value) : null,
+                )
+              }
               className={fieldClass}
             >
               <option value="">Unlinked</option>
@@ -2379,13 +2385,7 @@ function ReceiptLines({
             <select
               id={`receipt-${line.line_key}-item`}
               value={line.inventory_item_id ?? ""}
-              onChange={(e) =>
-                update(
-                  index,
-                  "inventory_item_id",
-                  e.target.value ? Number(e.target.value) : null,
-                )
-              }
+              onChange={(e) => selectInventoryItem(index, e.target.value)}
               className={fieldClass}
             >
               <option value="">Do not post to stock</option>

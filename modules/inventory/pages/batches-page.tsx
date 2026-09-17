@@ -54,11 +54,10 @@ export function ExpiryBadge({ batch }: { batch: Pick<GoodBatch, "expiry_date" | 
     return <span className="text-xs text-muted-foreground">{t("inventory.batches.non_expiring", "Non-expiring")}</span>;
   }
   const label = format(new Date(batch.expiry_date as string), "PP");
-  const cls: Record<typeof state, string> = {
+  const cls: Record<"expired" | "soon" | "healthy", string> = {
     expired: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30",
     soon: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
     healthy: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-    none: "",
   };
   const suffix =
     state === "expired"
