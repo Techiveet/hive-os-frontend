@@ -264,3 +264,6 @@ export const runInventoryDocumentAction = async (
   action: string,
   payload: Record<string, unknown> = {}
 ) => (await api.post<any>(`/inventory/documents/${id}/actions/${action}`, payload)).data;
+
+export * from "./goods";
+export * from "./operations";
