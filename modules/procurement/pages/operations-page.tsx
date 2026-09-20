@@ -53,6 +53,7 @@ import {
   ProcurementTable,
   ProcurementTableSkeleton,
 } from "@/modules/procurement/pages/components/procurement-shell";
+import { useTranslation } from "@/store/use-translation";
 
 export type ProcurementSection =
   | "suppliers"
@@ -4880,33 +4881,48 @@ function ReceiptForm({
         const form = new FormData(event.currentTarget);
         mutation.mutate({
           purchase_order_id: Number(orderId),
-              supplier_delivery_note: textValue(form, "delivery_note"),
-              received_on: textValue(form, "received_on"),
-              attachments: listValue(form, "attachments") ?? [],
-              items: lines.map((line) => {
-                const received = Number(line.received_quantity ?? 0);
-                const accepted = Number(
-                  line.accepted_quantity ?? line.received_quantity ?? 0,
-                );
-                return {
-                  line_key: line.line_key,
-                  description: line.description,
-                  unit: line.unit,
-                  unit_price: line.unit_price,
-                  inventory_item_id: line.inventory_item_id || undefined,
-                  received_quantity: received,
-                  accepted_quantity: accepted,
-                  rejected_quantity: Number(
-                    line.rejected_quantity ?? Math.max(0, received - accepted),
-                  ),
-                  lot_number: line.lot_number || undefined,
-                  batch_number: line.batch_number || undefined,
-                  serial_numbers: line.serial_numbers?.length
-                    ? line.serial_numbers
-                    : undefined,
-                  expiry_date: line.expiry_date || undefined,
-                };
-              }),
+          supplier_delivery_note: textValue(form, "delivery_note"),
+          received_on: textValue(form, "received_on"),
+          attachments: listValue(form, "attachments") ?? [],
+          items: lines.map((line) => {
+            // track_* flags are UI-only; the server derives tracking from the Good.
+            const { track_batches, track_expiry, track_serials, ...rest } = line;
+            void track_batches;
+            void track_expiry;
+            void track_serials;
+          
+            const received = Number(line.received_quantity ?? 0);
+            const accepted = Number(
+              line.accepted_quantity ?? line.received_quantity ?? 0,
+            );
+            const serials = (line.serial_numbers ?? [])
+              .map((s) => s.trim())
+              .filter(Boolean);
+          
+            return {
+              ...rest,
+              line_key: line.line_key,
+              description: line.description,
+              unit: line.unit,
+              unit_price: line.unit_price,
+              inventory_item_id: line.inventory_item_id || undefined,
+              received_quantity: received,
+              accepted_quantity: accepted,
+              rejected_quantity: Number(
+                line.rejected_quantity ?? Math.max(0, received - accepted),
+              ),
+              lot_number: line.lot_number || undefined,
+              batch_number: line.batch_number || undefined,
+              serial_numbers: serials.length ? serials : undefined,
+              expiry_date: line.expiry_date || undefined,
+            };
+          }),          
+
+
+
+
+          
+
         });
       }}
     >
@@ -5745,13 +5761,35 @@ function ReceiptLines({
 }) {
   const update = (
     index: number,
-    patch: Partial<ProcurementLine>,
+    field: keyof ProcurementLine,
+    value: number | string | string[] | boolean | null,
   ) =>
     onChange(
       lines.map((line, lineIndex) =>
         lineIndex === index ? { ...line, ...patch } : line,
       ),
     );
+  // Select an inventory item and copy its Good tracking flags onto the line so the
+  // receiving editor knows whether to require batch / expiry / serial capture.
+  const selectInventoryItem = (index: number, value: string) => {
+    const item = references.inventory_items.find((it) => it.id === Number(value));
+    onChange(
+      lines.map((line, lineIndex) =>
+        lineIndex === index
+          ? {
+              ...line,
+              inventory_item_id: value ? Number(value) : null,
+              track_batches: item?.track_batches ?? false,
+              track_expiry: item?.track_expiry ?? false,
+              track_serials: item?.track_serials ?? false,
+              batch_number: null,
+              expiry_date: null,
+              serial_numbers: [],
+            }
+          : line,
+      ),
+    );
+  };
   if (!lines.length)
     return (
       <Alert>
@@ -5772,7 +5810,7 @@ function ReceiptLines({
         return (
         <div
           key={line.line_key}
-            className="grid gap-3 rounded-xl border p-3 md:grid-cols-3"
+          className="grid gap-3 rounded-xl border p-3 md:grid-cols-5"
         >
             <div className="md:col-span-3">
             <span className="text-sm font-medium">{line.description}</span>
@@ -5846,13 +5884,7 @@ function ReceiptLines({
             <select
               id={`receipt-${line.line_key}-item`}
               value={line.inventory_item_id ?? ""}
-              onChange={(e) =>
-                  update(index, {
-                    inventory_item_id: e.target.value
-                      ? Number(e.target.value)
-                      : null,
-                  })
-              }
+              onChange={(e) => selectInventoryItem(index, e.target.value)}
               className={fieldClass}
             >
               <option value="">Do not post to stock</option>
@@ -5863,54 +5895,136 @@ function ReceiptLines({
               ))}
             </select>
           </Field>
-            <Field id={`receipt-${line.line_key}-lot`} label="Lot number">
-              <Input
-                id={`receipt-${line.line_key}-lot`}
-                value={line.lot_number ?? ""}
-                onChange={(e) => update(index, { lot_number: e.target.value })}
-              />
-            </Field>
-            <Field id={`receipt-${line.line_key}-batch`} label="Batch number">
-              <Input
-                id={`receipt-${line.line_key}-batch`}
-                value={line.batch_number ?? ""}
-                onChange={(e) =>
-                  update(index, { batch_number: e.target.value })
-                }
-              />
-            </Field>
+          {line.inventory_item_id ? (
             <Field
-              id={`receipt-${line.line_key}-serials`}
-              label="Serial numbers"
-              hint="Comma-separated"
+              id={`receipt-${line.line_key}-location`}
+              label="Warehouse location"
             >
-              <Input
-                id={`receipt-${line.line_key}-serials`}
-                value={joinList(line.serial_numbers)}
+              <select
+                id={`receipt-${line.line_key}-location`}
+                value={line.warehouse_location_id ?? ""}
+                required
                 onChange={(e) =>
-                  update(index, {
-                    serial_numbers: e.target.value
-                      .split(",")
-                      .map((item) => item.trim())
-                      .filter(Boolean),
-                  })
+                  update(
+                    index,
+                    "warehouse_location_id",
+                    e.target.value ? Number(e.target.value) : null,
+                  )
                 }
-              />
+                className={fieldClass}
+              >
+                <option value="">Select destination</option>
+                {references.warehouse_locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.warehouse_name
+                      ? `${location.warehouse_name} · `
+                      : ""}
+                    {location.code} — {location.name}
+                  </option>
+                ))}
+              </select>
             </Field>
-            <Field id={`receipt-${line.line_key}-expiry`} label="Expiry date">
-              <Input
-                id={`receipt-${line.line_key}-expiry`}
-                type="date"
-                value={dateInputValue(line.expiry_date)}
-                onChange={(e) =>
-                  update(index, { expiry_date: e.target.value || null })
-                }
+          ) : null}
+          {line.inventory_item_id &&
+          (line.track_batches || line.track_expiry || line.track_serials) ? (
+            <div className="md:col-span-5">
+              <ReceiptTrackingFields
+                line={line}
+                onField={(field, value) => update(index, field, value)}
               />
-            </Field>
+            </div>
+          ) : null}
         </div>
         );
       })}
     </fieldset>
+  );
+}
+
+/**
+ * Per-line batch / expiry / serial capture for tracked Goods on a goods receipt.
+ * Frontend guidance only — the canonical stock service is the final authority
+ * (serial count must equal accepted quantity, no duplicates, right lot).
+ */
+function ReceiptTrackingFields({
+  line,
+  onField,
+}: {
+  line: ProcurementLine;
+  onField: (
+    field: keyof ProcurementLine,
+    value: string | string[] | null,
+  ) => void;
+}) {
+  const { t } = useTranslation();
+  const accepted = Number(line.accepted_quantity ?? line.received_quantity ?? 0);
+  const serials = line.serial_numbers ?? [];
+  const trimmed = serials.map((s) => s.trim()).filter(Boolean);
+  const duplicates = trimmed.filter((s, i) => trimmed.indexOf(s) !== i);
+  const hasDuplicates = duplicates.length > 0;
+  const countMismatch = line.track_serials && trimmed.length !== accepted;
+
+  return (
+    <div className="mt-1 grid gap-3 rounded-lg border border-dashed p-3 md:grid-cols-3">
+      {line.track_batches ? (
+        <Field id={`receipt-${line.line_key}-batch`} label={t("inventory.grn.batch_number", "Batch / lot number")}>
+          <Input
+            id={`receipt-${line.line_key}-batch`}
+            value={line.batch_number ?? ""}
+            required
+            onChange={(e) => onField("batch_number", e.target.value || null)}
+            placeholder={t("inventory.grn.batch_placeholder", "e.g. LOT-2026-014")}
+          />
+        </Field>
+      ) : null}
+      {line.track_expiry ? (
+        <Field id={`receipt-${line.line_key}-expiry`} label={t("inventory.grn.expiry_date", "Expiry date")}>
+          <Input
+            id={`receipt-${line.line_key}-expiry`}
+            type="date"
+            value={line.expiry_date ?? ""}
+            onChange={(e) => onField("expiry_date", e.target.value || null)}
+          />
+        </Field>
+      ) : null}
+      {line.track_serials ? (
+        <div className="md:col-span-3">
+          <Field
+            id={`receipt-${line.line_key}-serials`}
+            label={t("inventory.grn.serials", "Serial numbers (one per line)")}
+          >
+            <textarea
+              id={`receipt-${line.line_key}-serials`}
+              className={`${fieldClass} min-h-[80px] font-mono`}
+              value={serials.join("\n")}
+              spellCheck={false}
+              onChange={(e) =>
+                onField(
+                  "serial_numbers",
+                  e.target.value.split(/[\n,]/).map((s) => s.trim()),
+                )
+              }
+              placeholder={t("inventory.grn.serials_placeholder", "Scan or paste one serial per line")}
+            />
+          </Field>
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
+            <span className={countMismatch ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}>
+              {t("inventory.grn.serial_count", "Accepted {accepted} / serials {count}", {
+                accepted: accepted,
+                count: trimmed.length,
+              })}
+            </span>
+            {hasDuplicates ? (
+              <span className="text-red-600 dark:text-red-400">
+                {t("inventory.grn.serial_duplicates", "Duplicate serial(s): {dupes}", {
+                  dupes: Array.from(new Set(duplicates)).join(", "),
+                })}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

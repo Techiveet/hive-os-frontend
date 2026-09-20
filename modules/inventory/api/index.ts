@@ -137,6 +137,9 @@ export const assignInventoryShelfBox = async (
   }
 ) => (await api.post(`/inventory/shelf-boxes/${id}/assign`, payload)).data;
 
+export const fetchNextInventorySku = async () =>
+  (await api.get<{ sku: string }>("/inventory/items/next-sku")).data;
+
 export const fetchInventoryItems = async (params: ListParams = {}) =>
   (
     await api.get<PaginatedResponse<InventoryItem>>("/inventory/items", {
@@ -261,3 +264,6 @@ export const runInventoryDocumentAction = async (
   action: string,
   payload: Record<string, unknown> = {}
 ) => (await api.post<any>(`/inventory/documents/${id}/actions/${action}`, payload)).data;
+
+export * from "./goods";
+export * from "./operations";

@@ -47,7 +47,7 @@ jobs:
   waiter-pos-e2e:
     name: Waiter POS browser acceptance
     runs-on: ubuntu-22.04
-    timeout-minutes: 35
+    timeout-minutes: 50
     permissions:
       contents: read
     env:
@@ -58,6 +58,14 @@ jobs:
       HIVE_E2E_REVERB_HOST: localhost
       HIVE_E2E_REVERB_PORT: "9095"
       HIVE_E2E_REVERB_SCHEME: http
+      # The acceptance server compiles tenant routes on demand. Running the
+      # journeys serially avoids cold-route navigation timeouts in CI.
+      HIVE_E2E_WORKERS: "1"
+      # Compose interpolates every service before applying the requested
+      # service selection. These are disposable values for this isolated CI
+      # stack, not production credentials.
+      MEILISEARCH_KEY: hive-e2e-meilisearch-key-2026
+      GF_SECURITY_ADMIN_PASSWORD: hive-e2e-grafana-password-2026
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - name: Checkout frontend under its Compose sibling path
@@ -246,6 +254,7 @@ jobs:
       # Tee'd so the per-journey tenant identifiers can be asserted afterwards
       # while the step still streams live and still fails on a non-zero exit.
       - name: Run waiter, KDS, unauthorized, and realtime browser acceptance
+        id: waiter_browser_acceptance
         working-directory: hive-os-frontend
         run: |
           set -o pipefail
@@ -341,7 +350,10 @@ jobs:
           fi
 
       - name: Assert each journey provisioned its own tenant
-        if: always()
+        # If an earlier infrastructure step failed, this browser step is
+        # skipped and no output file should exist. Preserve the original
+        # failure instead of replacing it with a misleading missing-log error.
+        if: ${{ always() && steps.waiter_browser_acceptance.outcome != 'skipped' }}
         run: |
           LOG=hive-os-frontend/playwright-output.log
           if [ ! -f "${LOG}" ]; then
@@ -377,6 +389,19 @@ jobs:
         if: always()
         run: |
           COMPOSE="docker compose -f hive-os-infra/docker-compose.yml"
+
+          # `always()` also runs after service startup failures. In that case
+          # command substitutions below are empty, which is not evidence that
+          # tenant data survived. The earlier failed step remains authoritative.
+          if ! ${COMPOSE} exec -T db pg_isready -U hive -d hive >/dev/null 2>&1; then
+            echo "::warning::Skipping acceptance-residue check because PostgreSQL is unavailable; see the earlier service failure."
+            exit 0
+          fi
+          if ! ${COMPOSE} exec -T backend php artisan --version >/dev/null 2>&1; then
+            echo "::warning::Skipping acceptance-residue check because the backend is unavailable; see the earlier service failure."
+            exit 0
+          fi
+
           FAILED=0
 
           TENANTS=$(${COMPOSE} exec -T db psql -U hive -d hive -tAc \

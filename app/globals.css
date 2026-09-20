@@ -144,6 +144,76 @@
     --sc-warning: #fb923c;
     --sc-caution: #fbbf24;
     --sc-good: #4ade80;
+
+  }
+  /* Signup needs visible form boundaries and focus rings even when a brand's
+     primary color is too light to satisfy non-text contrast on white. */
+  .signup-onboarding,
+  .demo-lease {
+    --primary: 162 94% 24%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 162 94% 24%;
+    --border: 215 16% 47%;
+    --input: 215 16% 47%;
+  }
+
+  .dark .signup-onboarding,
+  .dark .demo-lease {
+    --primary: 158 64% 52%;
+    --primary-foreground: 240 10% 3.9%;
+    --ring: 158 64% 52%;
+    --border: 215 20% 65%;
+    --input: 215 20% 65%;
+  }
+
+  /* Meeting controls need visible boundaries and a full-opacity keyboard
+     focus outline across both themes. These values keep the Hive palette while
+     meeting the 3:1 non-text contrast floor on the conferencing workspace. */
+  .support-bot-accessible,
+  .video-conferencing {
+    --border: 215 16% 47%;
+    --input: 215 16% 47%;
+    --ring: 160 84% 29%;
+  }
+
+  .dark .support-bot-accessible,
+  .dark .video-conferencing {
+    --border: 215 20% 65%;
+    --input: 215 20% 65%;
+    --ring: 158 64% 52%;
+  }
+
+  .support-bot-accessible :where(a, button, input, textarea, select):focus-visible,
+  .video-conferencing :where(a, button, input, textarea, select):focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  .signup-onboarding button,
+  .signup-onboarding a,
+  .demo-lease button,
+  .demo-lease a {
+    min-height: 2.75rem;
+  }
+
+  .signup-onboarding :focus-visible,
+  .demo-lease :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .signup-onboarding *,
+    .signup-onboarding *::before,
+    .signup-onboarding *::after,
+    .demo-lease *,
+    .demo-lease *::before,
+    .demo-lease *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 
   * {
@@ -663,4 +733,3 @@ textarea,
   background-color: hsl(var(--background)) !important;
   border-color: hsl(var(--primary)) !important;
 }
-

@@ -23,13 +23,21 @@ export interface ProcurementLine {
   tax_rate?: number | string;
   line_total?: number | string;
   inventory_item_id?: number | null;
+  warehouse_location_id?: number | null;
   accepted_quantity?: number | string;
   received_quantity?: number | string;
   rejected_quantity?: number | string;
-  lot_number?: string | null;
-  batch_number?: string | null;
-  serial_numbers?: string[] | null;
-  expiry_date?: string | null;
+lot_number?: string | null;
+batch_number?: string | null;
+expiry_date?: string | null;
+serial_numbers?: string[] | null;
+
+// Tracking flags copied onto the receipt line from the selected inventory item
+// so the receiving editor knows which capture fields to require.
+track_batches?: boolean;
+track_expiry?: boolean;
+track_serials?: boolean;
+
 }
 export interface SupplierProfile {
   id: number;
@@ -254,8 +262,19 @@ export interface ProcurementReferences {
     unit: string;
     current_stock: string;
     cost_price: string;
+    track_batches?: boolean;
+    track_expiry?: boolean;
+    track_serials?: boolean;
   }>;
   agreements: Agreement[];
+  warehouse_locations: Array<{
+    id: number;
+    warehouse_id: number;
+    warehouse_name: string | null;
+    code: string;
+    name: string;
+    type: string;
+  }>;
   projects: Array<{ id: number; name: string; status: string }>;
   cost_centers: Array<{ id: number; code: string; name: string; is_active?: boolean }>;
   methods: Array<{ value: string; label: string }>;

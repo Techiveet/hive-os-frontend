@@ -186,11 +186,11 @@ export default function SalesOrdersPage() {
 
   const [deliveries, setDeliveries] = React.useState<Record<number, string>>({});
   const [invoiceDocumentId, setInvoiceDocumentId] = React.useState("");
-
+  
   const pickerOpenRef = React.useRef(false);
   const pickerCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [openPickerCount, setOpenPickerCount] = React.useState(0);
-
+  
   const handlePickerOpenChange = React.useCallback((open: boolean) => {
     if (pickerCloseTimerRef.current) {
       clearTimeout(pickerCloseTimerRef.current);
@@ -208,11 +208,14 @@ export default function SalesOrdersPage() {
       pickerCloseTimerRef.current = null;
     }, 300);
   }, []);
-
-  const blockOutsideDismiss = React.useCallback((event: { preventDefault: () => void }) => {
-    event.preventDefault();
-  }, []);
-
+  
+  const blockOutsideDismiss = React.useCallback(
+    (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+    },
+    [],
+  );
+  
   const allowDialogClose = React.useCallback(
     (open: boolean, close: () => void) => {
       if (!open && (pickerOpenRef.current || openPickerCount > 0)) return;
@@ -220,7 +223,9 @@ export default function SalesOrdersPage() {
     },
     [openPickerCount],
   );
-
+  
+  // Per-line serials for serial-tracked goods (newline/comma separated).
+  const [serialInputs, setSerialInputs] = React.useState<Record<number, string>>({});
   const listQuery = useQuery({
     queryKey: ["sales", "orders", tableQuery, statusFilter, fulfilmentFilter, openOnly],
     queryFn: () =>
@@ -351,11 +356,22 @@ export default function SalesOrdersPage() {
         detailId!,
         Object.entries(deliveries)
           .filter(([, quantity]) => Number(quantity) > 0)
-          .map(([lineId, quantity]) => ({ line_id: Number(lineId), quantity: Number(quantity) })),
+          .map(([lineId, quantity]) => {
+            const serials = (serialInputs[Number(lineId)] ?? "")
+              .split(/[\n,]/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+            return {
+              line_id: Number(lineId),
+              quantity: Number(quantity),
+              ...(serials.length ? { serials } : {}),
+            };
+          }),
       ),
     onSuccess: () => {
       toast.success(t("sales.orders.delivered", "Delivery recorded."));
       setDeliveries({});
+      setSerialInputs({});
       invalidate();
     },
     onError: (error: any) =>
@@ -1117,7 +1133,7 @@ export default function SalesOrdersPage() {
                             </td>
                             <td className="py-2 text-right tabular-nums">{money(line.line_total, detail.currency)}</td>
                             {detail.status === "confirmed" ? (
-                              <td className="py-2 text-right">
+                              <td className="py-2 text-right align-top">
                                 <Input
                                   type="number"
                                   min={0}
@@ -1128,6 +1144,15 @@ export default function SalesOrdersPage() {
                                   }
                                   className="ml-auto h-8 w-24"
                                 />
+                                {line.track_serials && Number(deliveries[line.id] ?? 0) > 0 ? (
+                                  <DeliverySerialCapture
+                                    value={serialInputs[line.id] ?? ""}
+                                    quantity={Number(deliveries[line.id] ?? 0)}
+                                    onChange={(text) =>
+                                      setSerialInputs({ ...serialInputs, [line.id]: text })
+                                    }
+                                  />
+                                ) : null}
                               </td>
                             ) : null}
                           </tr>
@@ -1295,6 +1320,51 @@ export default function SalesOrdersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/**
+ * Exact-serial capture for a serial-tracked delivery line. Frontend guidance only
+ * (count match + duplicate detection); the canonical stock service validates that
+ * each serial is on-hand, in the right good/batch/location before issuing.
+ */
+function DeliverySerialCapture({
+  value,
+  quantity,
+  onChange,
+}: {
+  value: string;
+  quantity: number;
+  onChange: (text: string) => void;
+}) {
+  const { t } = useTranslation();
+  const serials = value.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+  const duplicates = Array.from(new Set(serials.filter((s, i) => serials.indexOf(s) !== i)));
+  const mismatch = serials.length !== quantity;
+  return (
+    <div className="mt-2 text-left">
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        spellCheck={false}
+        placeholder={t("sales.orders.serials_placeholder", "Scan/paste one serial per line")}
+        aria-label={t("sales.orders.serials_label", "Delivery serial numbers")}
+        className="min-h-[64px] w-56 rounded-md border border-input bg-background p-2 font-mono text-xs"
+      />
+      <div className="mt-1 space-y-0.5 text-xs">
+        <span className={mismatch ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}>
+          {t("sales.orders.serial_count", "Delivery {qty} / serials {count}", {
+            qty: quantity,
+            count: serials.length,
+          })}
+        </span>
+        {duplicates.length ? (
+          <p className="text-red-600 dark:text-red-400">
+            {t("sales.orders.serial_duplicates", "Duplicate: {dupes}", { dupes: duplicates.join(", ") })}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
