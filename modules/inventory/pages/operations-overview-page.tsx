@@ -41,7 +41,7 @@ function MetricCard({
           </div>
           <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
         </div>
-        <p className="mt-3 text-2xl font-black">{loading ? <Skeleton className="h-7 w-16" /> : value}</p>
+        <div className="mt-3 text-2xl font-black">{loading ? <Skeleton className="h-7 w-16" /> : value}</div>
         <p className="text-sm text-muted-foreground">{label}</p>
       </Card>
     </Link>
