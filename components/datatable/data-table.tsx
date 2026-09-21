@@ -117,6 +117,7 @@ interface DataTableProps<TData, TValue> {
   title?: string;
   description?: string;
   caption?: string;
+  emptyMessage?: React.ReactNode;
   searchPlaceholder?: string;
   serverSearchDebounceMs?: number;
   className?: string;
@@ -546,6 +547,7 @@ function DataTableInner<TData, TValue>({
   title,
   description,
   caption,
+  emptyMessage,
   searchPlaceholder = "Search...",
   serverSearchDebounceMs = 400,
   className,
@@ -1207,7 +1209,7 @@ function DataTableInner<TData, TValue>({
                     colSpan={mergedColumns.length}
                     className="h-40 text-center text-muted-foreground font-medium"
                   >
-                    No records found matching your filters.
+                    {emptyMessage ?? "No records found matching your filters."}
                   </TableCell>
                 </TableRow>
               )}
