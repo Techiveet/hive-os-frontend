@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { getBackendApiRoot, getTenantHeaders } from '@/lib/runtime-context';
+import { safeLocalStorageSetItem, safeLocalStorageGetItem } from '@/lib/safe-storage';
 
 interface TranslationState {
   locale: string;
@@ -18,13 +19,13 @@ export const useTranslation = create<TranslationState>((set, get) => ({
   isReady: false,
 
   initLocale: async () => {
-    const savedLocale = typeof window !== 'undefined' ? localStorage.getItem('hive_locale') || 'en' : 'en';
+    const savedLocale = typeof window !== 'undefined' ? safeLocalStorageGetItem('hive_locale') || 'en' : 'en';
     await get().setLocale(savedLocale);
   },
 
   setLocale: async (newLocale: string) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('hive_locale', newLocale);
+      safeLocalStorageSetItem('hive_locale', newLocale);
     }
 
     try {

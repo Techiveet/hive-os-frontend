@@ -33,12 +33,16 @@ const getStoredContextKey = (): string => {
     return "guest";
   }
 
-  const rawContext = window.localStorage.getItem("hive_context");
-  if (!rawContext || rawContext === "undefined" || rawContext === "null") {
+  try {
+    const rawContext = window.localStorage.getItem("hive_context");
+    if (!rawContext || rawContext === "undefined" || rawContext === "null") {
+      return "guest";
+    }
+
+    return rawContext;
+  } catch {
     return "guest";
   }
-
-  return rawContext;
 };
 
 export const isOfflineStorageKey = (key: string | null | undefined): boolean =>
@@ -47,15 +51,24 @@ export const isOfflineStorageKey = (key: string | null | undefined): boolean =>
 export const getOfflineStorageKey = (namespace: string): string =>
   `${OFFLINE_STORAGE_PREFIX}${getStoredContextKey()}:${getStoredUserKey()}:${namespace}`;
 
+const getOfflineStorageScopePrefix = (): string =>
+  `${OFFLINE_STORAGE_PREFIX}${getStoredContextKey()}:${getStoredUserKey()}:`;
+
 export const clearOfflineState = (): void => {
   if (typeof window === "undefined") {
     return;
   }
 
-  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
-    const key = window.localStorage.key(index);
-    if (isOfflineStorageKey(key)) {
-      window.localStorage.removeItem(key!);
+  try {
+    const activeScopePrefix = getOfflineStorageScopePrefix();
+
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index);
+      if (key?.startsWith(activeScopePrefix)) {
+        try {
+          window.localStorage.removeItem(key!);
+        } catch {}
+      }
     }
-  }
+  } catch {}
 };

@@ -88,8 +88,7 @@ export function LanguageSwitcher({ id, className }: { id?: string; className?: s
           return (
             <DropdownMenuItem
               key={lang.code}
-              onSelect={(event) => {
-                event.preventDefault();
+              onSelect={() => {
                 void handleSelect(lang.code);
               }}
               className={cn(

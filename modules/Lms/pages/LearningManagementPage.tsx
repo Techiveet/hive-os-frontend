@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   GraduationCap,
   Layers3,
+  PenLine,
   Plus,
   Search,
   Send,
@@ -52,6 +53,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
 import { LmsResourceField } from "@/modules/Lms/components/lms-resource-field";
+import { useLmsCopy } from "@/modules/Lms/components/lms-dashboard-shell";
 import { cn } from "@/lib/utils";
 import {
   learningApi,
@@ -75,6 +77,7 @@ const courseStatuses: Array<LmsCourseStatus | "all"> = ["all", "draft", "publish
 const enrollmentStatuses: Array<LmsEnrollmentStatus | "all"> = ["all", "assigned", "in_progress", "completed", "overdue", "cancelled"];
 
 export default function LearningManagementPage({ initialTab = "overview" }: LearningManagementPageProps) {
+  const lms = useLmsCopy();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const { hasAnyPermission } = usePermissions();
@@ -86,6 +89,8 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
   const [courseLevel, setCourseLevel] = React.useState<LmsCourseLevel | "all">("all");
   const [enrollmentStatus, setEnrollmentStatus] = React.useState<LmsEnrollmentStatus | "all">("all");
   const [courseDialogOpen, setCourseDialogOpen] = React.useState(false);
+  /** The course the dialog is editing; null means it is creating a new one. */
+  const [editingCourse, setEditingCourse] = React.useState<LmsCourse | null>(null);
   const [lessonCourse, setLessonCourse] = React.useState<LmsCourse | null>(null);
   const [enrollmentDialogOpen, setEnrollmentDialogOpen] = React.useState(false);
 
@@ -148,29 +153,29 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
   const publishMutation = useMutation({
     mutationFn: learningApi.publishCourse,
     onSuccess: () => {
-      toast.success("Course published.");
+      toast.success(lms("admin.toast.course_published", "Course published."));
       invalidateLearning(queryClient);
     },
-    onError: (error) => toast.error(errorMessage(error, "Unable to publish course.")),
+    onError: (error) => toast.error(errorMessage(error, lms("admin.toast.publish_failed", "Unable to publish course."))),
   });
 
   const archiveMutation = useMutation({
     mutationFn: learningApi.archiveCourse,
     onSuccess: () => {
-      toast.success("Course archived.");
+      toast.success(lms("admin.toast.course_archived", "Course archived."));
       invalidateLearning(queryClient);
     },
-    onError: (error) => toast.error(errorMessage(error, "Unable to archive course.")),
+    onError: (error) => toast.error(errorMessage(error, lms("admin.toast.archive_failed", "Unable to archive course."))),
   });
 
   const completeLessonMutation = useMutation({
     mutationFn: ({ enrollmentId, lessonId }: { enrollmentId: string; lessonId: string }) =>
       learningApi.updateLessonProgress(enrollmentId, lessonId, { status: "completed", progress_percent: 100 }),
     onSuccess: () => {
-      toast.success("Lesson marked complete.");
+      toast.success(lms("admin.toast.lesson_complete", "Lesson marked complete."));
       invalidateLearning(queryClient);
     },
-    onError: (error) => toast.error(errorMessage(error, "Unable to update progress.")),
+    onError: (error) => toast.error(errorMessage(error, lms("admin.toast.progress_failed", "Unable to update progress."))),
   });
 
   const courses = coursesQuery.data?.data || [];
@@ -191,14 +196,17 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
             <GraduationCap className="h-3.5 w-3.5" aria-hidden="true" />
-            Training operations
+            {lms("admin.badge", "Training operations")}
           </div>
           <div>
             <h1 id="learning-management-title" className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-              Learning Management
+              {lms("admin.title", "Learning Management")}
             </h1>
             <p className="mt-2 max-w-3xl text-base leading-7 text-muted-foreground">
-              Build courses, assign training, monitor learner progress, and keep compliance-ready training reports in one tenant workspace.
+              {lms(
+                "admin.intro",
+                "Build courses, assign training, monitor learner progress, and keep compliance-ready training reports in one tenant workspace.",
+              )}
             </p>
           </div>
         </div>
@@ -206,25 +214,25 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
           {canAssignCourses && (
             <Button variant="outline" onClick={() => setEnrollmentDialogOpen(true)} className="min-h-11">
               <Send className="mr-2 h-4 w-4" aria-hidden="true" />
-              Assign learners
+              {lms("admin.assign_learners", "Assign learners")}
             </Button>
           )}
           {canManageCourses && (
             <Button onClick={() => setCourseDialogOpen(true)} className="min-h-11">
               <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-              Create course
+              {lms("admin.create_course", "Create course")}
             </Button>
           )}
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as LearningTab)} className="space-y-6">
-        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-muted/60 p-1 md:w-fit" aria-label="Learning management sections">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="courses">Courses</TabsTrigger>
-          <TabsTrigger value="learners">Learners</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-          <TabsTrigger value="my-learning">My Learning</TabsTrigger>
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-muted/60 p-1 md:w-fit" aria-label={lms("admin.tabs.aria", "Learning management sections")}>
+          <TabsTrigger value="overview">{lms("admin.tabs.overview", "Overview")}</TabsTrigger>
+          <TabsTrigger value="courses">{lms("admin.tabs.courses", "Courses")}</TabsTrigger>
+          <TabsTrigger value="learners">{lms("admin.tabs.learners", "Learners")}</TabsTrigger>
+          <TabsTrigger value="reports">{lms("admin.tabs.reports", "Reports")}</TabsTrigger>
+          <TabsTrigger value="my-learning">{lms("admin.tabs.my_learning", "My Learning")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -241,7 +249,14 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
             onSearchChange={setCourseSearch}
             onStatusChange={setCourseStatus}
             onLevelChange={setCourseLevel}
-            onCreateCourse={() => setCourseDialogOpen(true)}
+            onCreateCourse={() => {
+              setEditingCourse(null);
+              setCourseDialogOpen(true);
+            }}
+            onEditCourse={(course) => {
+              setEditingCourse(course);
+              setCourseDialogOpen(true);
+            }}
             onAddLesson={setLessonCourse}
             onPublish={(course) => publishMutation.mutate(course.id)}
             onArchive={(course) => archiveMutation.mutate(course.id)}
@@ -270,7 +285,14 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
         </TabsContent>
       </Tabs>
 
-      <CourseDialog open={courseDialogOpen} onOpenChange={setCourseDialogOpen} />
+      <CourseDialog
+        open={courseDialogOpen}
+        course={editingCourse}
+        onOpenChange={(open) => {
+          setCourseDialogOpen(open);
+          if (!open) setEditingCourse(null);
+        }}
+      />
       <LessonDialog course={lessonCourse} onOpenChange={(open) => !open && setLessonCourse(null)} />
       <EnrollmentDialog open={enrollmentDialogOpen} onOpenChange={setEnrollmentDialogOpen} courses={courses} />
     </main>
@@ -278,6 +300,7 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
 }
 
 function OverviewSection({ summary, courses, enrollments }: { summary?: Awaited<ReturnType<typeof learningApi.getSummary>>; courses: LmsCourse[]; enrollments: LmsEnrollment[] }) {
+  const lms = useLmsCopy();
   const stats = summary?.stats || {
     courses: 0,
     published_courses: 0,
@@ -291,30 +314,33 @@ function OverviewSection({ summary, courses, enrollments }: { summary?: Awaited<
 
   return (
     <section className="space-y-6" aria-labelledby="learning-overview-heading">
-      <h2 id="learning-overview-heading" className="sr-only">Learning overview</h2>
+      <h2 id="learning-overview-heading" className="sr-only">{lms("admin.overview.heading", "Learning overview")}</h2>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="Published courses" value={stats.published_courses} detail={`${stats.draft_courses} drafts`} icon={BookOpen} />
-        <MetricCard title="Active enrollments" value={stats.active_enrollments} detail={`${stats.enrollments} total assignments`} icon={Users} tone="blue" />
-        <MetricCard title="Completion" value={`${stats.average_progress}%`} detail={`${stats.completed_enrollments} completed`} icon={CheckCircle2} tone="emerald" />
-        <MetricCard title="Overdue" value={stats.overdue_enrollments} detail="Needs follow-up" icon={AlertCircle} tone={stats.overdue_enrollments > 0 ? "rose" : "muted"} />
+        <MetricCard title={lms("admin.overview.published_courses", "Published courses")} value={stats.published_courses} detail={`${stats.draft_courses} drafts`} icon={BookOpen} />
+        <MetricCard title={lms("admin.overview.active_enrollments", "Active enrollments")} value={stats.active_enrollments} detail={`${stats.enrollments} total assignments`} icon={Users} tone="blue" />
+        <MetricCard title={lms("admin.overview.completion", "Completion")} value={`${stats.average_progress}%`} detail={`${stats.completed_enrollments} completed`} icon={CheckCircle2} tone="emerald" />
+        <MetricCard title={lms("admin.overview.overdue", "Overdue")} value={stats.overdue_enrollments} detail={lms("admin.overview.needs_follow_up", "Needs follow-up")} icon={AlertCircle} tone={stats.overdue_enrollments > 0 ? "rose" : "muted"} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <section className="space-y-4" aria-labelledby="recent-courses-heading">
           <div className="flex items-center justify-between gap-3">
-            <h2 id="recent-courses-heading" className="text-xl font-semibold tracking-tight">Recent courses</h2>
+            <h2 id="recent-courses-heading" className="text-xl font-semibold tracking-tight">{lms("admin.overview.recent_courses", "Recent courses")}</h2>
             <Badge variant="outline">{courses.length} in catalog</Badge>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             {courses.slice(0, 4).map((course) => (
               <CourseSummary key={course.id} course={course} />
             ))}
-            {courses.length === 0 && <EmptyState title="No courses yet" description="Create your first course to start assigning training." />}
+            {courses.length === 0 && <EmptyState
+                title={lms("admin.overview.empty_title", "No courses yet")}
+                description={lms("admin.overview.empty_desc", "Create your first course to start assigning training.")}
+              />}
           </div>
         </section>
 
         <section className="space-y-4" aria-labelledby="due-soon-heading">
-          <h2 id="due-soon-heading" className="text-xl font-semibold tracking-tight">Due soon</h2>
+          <h2 id="due-soon-heading" className="text-xl font-semibold tracking-tight">{lms("admin.overview.due_soon", "Due soon")}</h2>
           <div className="space-y-3">
             {(summary?.due_soon || enrollments.slice(0, 5)).map((enrollment) => (
               <div key={enrollment.id} className="rounded-lg border bg-card p-4 shadow-sm">
@@ -332,7 +358,10 @@ function OverviewSection({ summary, courses, enrollments }: { summary?: Awaited<
               </div>
             ))}
             {(summary?.due_soon || []).length === 0 && enrollments.length === 0 && (
-              <EmptyState title="No urgent assignments" description="Due soon assignments will appear here." />
+              <EmptyState
+                title={lms("admin.overview.due_empty_title", "No urgent assignments")}
+                description={lms("admin.overview.due_empty_desc", "Due soon assignments will appear here.")}
+              />
             )}
           </div>
         </section>
@@ -351,6 +380,7 @@ function CoursesSection({
   onStatusChange,
   onLevelChange,
   onCreateCourse,
+  onEditCourse,
   onAddLesson,
   onPublish,
   onArchive,
@@ -364,28 +394,32 @@ function CoursesSection({
   onStatusChange: (value: LmsCourseStatus | "all") => void;
   onLevelChange: (value: LmsCourseLevel | "all") => void;
   onCreateCourse: () => void;
+  onEditCourse: (course: LmsCourse) => void;
   onAddLesson: (course: LmsCourse) => void;
   onPublish: (course: LmsCourse) => void;
   onArchive: (course: LmsCourse) => void;
 }) {
+  const lms = useLmsCopy();
   return (
     <section className="space-y-5" aria-labelledby="courses-heading">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 id="courses-heading" className="text-2xl font-semibold tracking-tight">Course catalog</h2>
-          <p className="text-sm text-muted-foreground">Filter courses, publish training, and extend lesson plans.</p>
+          <h2 id="courses-heading" className="text-2xl font-semibold tracking-tight">{lms("admin.catalog.heading", "Course catalog")}</h2>
+          <p className="text-sm text-muted-foreground">
+            {lms("admin.catalog.subheading", "Filter courses, publish training, and extend lesson plans.")}
+          </p>
         </div>
         {canManageCourses && (
           <Button onClick={onCreateCourse} className="min-h-11 lg:self-center">
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-            Create course
+            {lms("admin.create_course", "Create course")}
           </Button>
         )}
       </div>
 
       <div className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-[1fr_180px_180px]">
         <div className="space-y-2">
-          <Label htmlFor="lms-course-search">Search courses</Label>
+          <Label htmlFor="lms-course-search">{lms("admin.catalog.search_label", "Search courses")}</Label>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
@@ -393,33 +427,33 @@ function CoursesSection({
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
               className="pl-9"
-              placeholder="Search by title, code, or category"
+              placeholder={lms("admin.catalog.search_placeholder", "Search by title, code, or category")}
             />
           </div>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="lms-course-status">Status</Label>
+          <Label htmlFor="lms-course-status">{lms("admin.catalog.status", "Status")}</Label>
           <Select value={status} onValueChange={(value) => onStatusChange(value as LmsCourseStatus | "all")}>
             <SelectTrigger id="lms-course-status" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {courseStatuses.map((item) => (
-                <SelectItem key={item} value={item}>{titleCase(item)}</SelectItem>
+                <SelectItem key={item} value={item}>{enumLabel(lms, item)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="lms-course-level">Level</Label>
+          <Label htmlFor="lms-course-level">{lms("admin.catalog.level", "Level")}</Label>
           <Select value={level} onValueChange={(value) => onLevelChange(value as LmsCourseLevel | "all")}>
             <SelectTrigger id="lms-course-level" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All levels</SelectItem>
+              <SelectItem value="all">{lms("admin.catalog.all_levels", "All levels")}</SelectItem>
               {courseLevels.map((item) => (
-                <SelectItem key={item} value={item}>{titleCase(item)}</SelectItem>
+                <SelectItem key={item} value={item}>{enumLabel(lms, item)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -428,16 +462,21 @@ function CoursesSection({
 
       <div className="rounded-lg border bg-card">
         <Table>
-          <TableCaption>Courses with lesson count, enrollment count, completion, and available management actions.</TableCaption>
+          <TableCaption>
+            {lms(
+              "admin.catalog.caption",
+              "Courses with lesson count, enrollment count, completion, and available management actions.",
+            )}
+          </TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead scope="col">Course</TableHead>
-              <TableHead scope="col">Level</TableHead>
-              <TableHead scope="col">Lessons</TableHead>
-              <TableHead scope="col">Enrollments</TableHead>
-              <TableHead scope="col">Completion</TableHead>
-              <TableHead scope="col">Status</TableHead>
-              <TableHead scope="col" className="text-right">Actions</TableHead>
+              <TableHead scope="col">{lms("admin.catalog.col_course", "Course")}</TableHead>
+              <TableHead scope="col">{lms("admin.catalog.col_level", "Level")}</TableHead>
+              <TableHead scope="col">{lms("admin.catalog.col_lessons", "Lessons")}</TableHead>
+              <TableHead scope="col">{lms("admin.catalog.col_enrollments", "Enrollments")}</TableHead>
+              <TableHead scope="col">{lms("admin.catalog.col_completion", "Completion")}</TableHead>
+              <TableHead scope="col">{lms("admin.catalog.col_status", "Status")}</TableHead>
+              <TableHead scope="col" className="text-right">{lms("admin.catalog.col_actions", "Actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -447,7 +486,7 @@ function CoursesSection({
                   <div className="font-medium">{course.title}</div>
                   <div className="text-sm text-muted-foreground">{course.code || "No code"} {course.category ? `- ${course.category}` : ""}</div>
                 </TableCell>
-                <TableCell>{titleCase(course.level)}</TableCell>
+                <TableCell>{enumLabel(lms, course.level)}</TableCell>
                 <TableCell>{course.lessons_count ?? course.lessons?.length ?? 0}</TableCell>
                 <TableCell>{course.enrollments_count ?? 0}</TableCell>
                 <TableCell className="min-w-36">
@@ -460,18 +499,24 @@ function CoursesSection({
                 <TableCell className="text-right">
                   <div className="flex flex-wrap justify-end gap-2">
                     {canManageCourses && (
+                      <Button variant="outline" size="sm" onClick={() => onEditCourse(course)}>
+                        <PenLine className="mr-2 h-4 w-4" aria-hidden="true" />
+                        {lms("admin.catalog.edit", "Edit")}
+                      </Button>
+                    )}
+                    {canManageCourses && (
                       <Button variant="outline" size="sm" onClick={() => onAddLesson(course)}>
                         <Layers3 className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Lesson
+                        {lms("admin.catalog.lesson", "Lesson")}
                       </Button>
                     )}
                     {canManageCourses && course.status !== "published" && (
-                      <Button size="sm" onClick={() => onPublish(course)}>Publish</Button>
+                      <Button size="sm" onClick={() => onPublish(course)}>{lms("admin.catalog.publish", "Publish")}</Button>
                     )}
                     {canManageCourses && course.status !== "archived" && (
                       <Button variant="ghost" size="sm" onClick={() => onArchive(course)}>
                         <Archive className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Archive
+                        {lms("admin.catalog.archive", "Archive")}
                       </Button>
                     )}
                   </div>
@@ -481,7 +526,10 @@ function CoursesSection({
             {courses.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="py-10">
-                  <EmptyState title="No courses match this filter" description="Clear filters or create a new course." />
+                  <EmptyState
+                    title={lms("admin.catalog.empty_title", "No courses match this filter")}
+                    description={lms("admin.catalog.empty_desc", "Clear filters or create a new course.")}
+                  />
                 </TableCell>
               </TableRow>
             )}
@@ -503,22 +551,25 @@ function LearnersSection({
   enrollmentStatus: LmsEnrollmentStatus | "all";
   onEnrollmentStatusChange: (status: LmsEnrollmentStatus | "all") => void;
 }) {
+  const lms = useLmsCopy();
   return (
     <section className="space-y-6" aria-labelledby="learners-heading">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 id="learners-heading" className="text-2xl font-semibold tracking-tight">Learners</h2>
-          <p className="text-sm text-muted-foreground">Track learner load, completion, and assignment status.</p>
+          <h2 id="learners-heading" className="text-2xl font-semibold tracking-tight">{lms("admin.learners.heading", "Learners")}</h2>
+          <p className="text-sm text-muted-foreground">
+            {lms("admin.learners.subheading", "Track learner load, completion, and assignment status.")}
+          </p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="lms-enrollment-status">Assignment status</Label>
+          <Label htmlFor="lms-enrollment-status">{lms("admin.learners.status_label", "Assignment status")}</Label>
           <Select value={enrollmentStatus} onValueChange={(value) => onEnrollmentStatusChange(value as LmsEnrollmentStatus | "all")}>
             <SelectTrigger id="lms-enrollment-status" className="w-52">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {enrollmentStatuses.map((item) => (
-                <SelectItem key={item} value={item}>{titleCase(item)}</SelectItem>
+                <SelectItem key={item} value={item}>{enumLabel(lms, item)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -533,31 +584,36 @@ function LearnersSection({
                 <h3 className="font-semibold">{learner.learner?.name || `User ${learner.user_id}`}</h3>
                 <p className="text-sm text-muted-foreground">{learner.learner?.email || "No email available"}</p>
               </div>
-              <Badge variant="outline">{learner.enrollments_count} assigned</Badge>
+              <Badge variant="outline">
+                {learner.enrollments_count} {lms("admin.learners.assigned_count", "assigned")}
+              </Badge>
             </div>
             <div className="mt-5 space-y-3">
               <Progress value={Number(learner.average_progress || 0)} aria-label={`${learner.average_progress || 0}% average progress`} />
               <div className="grid grid-cols-3 gap-2 text-sm">
-                <MiniStat label="Active" value={learner.active_count} />
-                <MiniStat label="Done" value={learner.completed_count} />
-                <MiniStat label="Average" value={`${learner.average_progress || 0}%`} />
+                <MiniStat label={lms("admin.learners.active", "Active")} value={learner.active_count} />
+                <MiniStat label={lms("admin.learners.done", "Done")} value={learner.completed_count} />
+                <MiniStat label={lms("admin.learners.average", "Average")} value={`${learner.average_progress || 0}%`} />
               </div>
             </div>
           </div>
         ))}
-        {learners.length === 0 && <EmptyState title="No learner activity yet" description="Assigned learners will appear here." />}
+        {learners.length === 0 && <EmptyState
+            title={lms("admin.learners.empty_title", "No learner activity yet")}
+            description={lms("admin.learners.empty_desc", "Assigned learners will appear here.")}
+          />}
       </div>
 
       <div className="rounded-lg border bg-card">
         <Table>
-          <TableCaption>Training assignment table filtered by selected status.</TableCaption>
+          <TableCaption>{lms("admin.learners.caption", "Training assignment table filtered by selected status.")}</TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead scope="col">Learner</TableHead>
-              <TableHead scope="col">Course</TableHead>
-              <TableHead scope="col">Due</TableHead>
-              <TableHead scope="col">Progress</TableHead>
-              <TableHead scope="col">Status</TableHead>
+              <TableHead scope="col">{lms("admin.learners.col_learner", "Learner")}</TableHead>
+              <TableHead scope="col">{lms("admin.learners.col_course", "Course")}</TableHead>
+              <TableHead scope="col">{lms("admin.learners.col_due", "Due")}</TableHead>
+              <TableHead scope="col">{lms("admin.learners.col_progress", "Progress")}</TableHead>
+              <TableHead scope="col">{lms("admin.learners.col_status", "Status")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -586,6 +642,7 @@ function LearnersSection({
 }
 
 function ReportsSection({ reports }: { reports?: Awaited<ReturnType<typeof learningApi.getReports>> }) {
+  const lms = useLmsCopy();
   const topCourses = reports?.top_courses || [];
   const statusBreakdown = reports?.status_breakdown || [];
   const categoryBreakdown = reports?.category_breakdown || [];
@@ -593,25 +650,27 @@ function ReportsSection({ reports }: { reports?: Awaited<ReturnType<typeof learn
   return (
     <section className="space-y-6" aria-labelledby="reports-heading">
       <div>
-        <h2 id="reports-heading" className="text-2xl font-semibold tracking-tight">Learning reports</h2>
-        <p className="text-sm text-muted-foreground">Completion, category, and catalog health for leadership review.</p>
+        <h2 id="reports-heading" className="text-2xl font-semibold tracking-tight">{lms("admin.reports.heading", "Learning reports")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {lms("admin.reports.subheading", "Completion, category, and catalog health for leadership review.")}
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <BreakdownPanel title="Enrollment status" items={statusBreakdown.map((item) => ({ label: titleCase(item.status), value: item.value }))} />
-        <BreakdownPanel title="Course categories" items={categoryBreakdown.map((item) => ({ label: item.category, value: item.value }))} />
+        <BreakdownPanel title={lms("admin.reports.enrollment_status", "Enrollment status")} items={statusBreakdown.map((item) => ({ label: enumLabel(lms, item.status), value: item.value }))} />
+        <BreakdownPanel title={lms("admin.reports.course_categories", "Course categories")} items={categoryBreakdown.map((item) => ({ label: item.category, value: item.value }))} />
       </div>
 
       <div className="rounded-lg border bg-card">
         <Table>
-          <TableCaption>Top courses by enrollment volume.</TableCaption>
+          <TableCaption>{lms("admin.reports.caption", "Top courses by enrollment volume.")}</TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead scope="col">Course</TableHead>
-              <TableHead scope="col">Category</TableHead>
-              <TableHead scope="col">Enrollments</TableHead>
-              <TableHead scope="col">Completed</TableHead>
-              <TableHead scope="col">Completion</TableHead>
+              <TableHead scope="col">{lms("admin.reports.col_course", "Course")}</TableHead>
+              <TableHead scope="col">{lms("admin.reports.col_category", "Category")}</TableHead>
+              <TableHead scope="col">{lms("admin.reports.col_enrollments", "Enrollments")}</TableHead>
+              <TableHead scope="col">{lms("admin.reports.col_completed", "Completed")}</TableHead>
+              <TableHead scope="col">{lms("admin.reports.col_completion", "Completion")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -645,11 +704,14 @@ function MyLearningSection({
   onCompleteLesson: (enrollmentId: string, lessonId: string) => void;
   isCompleting: boolean;
 }) {
+  const lms = useLmsCopy();
   return (
     <section className="space-y-6" aria-labelledby="my-learning-heading">
       <div>
-        <h2 id="my-learning-heading" className="text-2xl font-semibold tracking-tight">My Learning</h2>
-        <p className="text-sm text-muted-foreground">Continue assigned training and mark lessons complete as you finish them.</p>
+        <h2 id="my-learning-heading" className="text-2xl font-semibold tracking-tight">{lms("admin.tabs.my_learning", "My Learning")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {lms("admin.my_learning.intro", "Continue assigned training and mark lessons complete as you finish them.")}
+        </p>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -682,12 +744,12 @@ function MyLearningSection({
                     <div key={lesson.id} className="flex items-center justify-between gap-3 rounded-md border bg-background p-3">
                       <div>
                         <p className="font-medium">{lesson.title}</p>
-                        <p className="text-sm text-muted-foreground">{titleCase(lesson.content_type)} - {lesson.duration_minutes || 0} min</p>
+                        <p className="text-sm text-muted-foreground">{enumLabel(lms, lesson.content_type)} - {lesson.duration_minutes || 0} min</p>
                       </div>
                       {completed ? (
-                        <Badge className="bg-emerald-700 text-white">Complete</Badge>
+                        <Badge className="bg-emerald-700 text-white">{lms("admin.my_learning.complete", "Complete")}</Badge>
                       ) : (
-                        <Badge variant="outline">Open</Badge>
+                        <Badge variant="outline">{lms("admin.my_learning.open", "Open")}</Badge>
                       )}
                     </div>
                   );
@@ -700,80 +762,145 @@ function MyLearningSection({
                   onClick={() => onCompleteLesson(enrollment.id, nextLesson.id)}
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Complete next lesson
+                  {lms("admin.my_learning.complete_next", "Complete next lesson")}
                 </Button>
               )}
             </div>
           );
         })}
-        {enrollments.length === 0 && <EmptyState title="No assigned training" description="Assigned courses will appear here when your team enrolls you." />}
+        {enrollments.length === 0 && <EmptyState
+            title={lms("admin.my_learning.empty_title", "No assigned training")}
+            description={lms("admin.my_learning.empty_desc", "Assigned courses will appear here when your team enrolls you.")}
+          />}
       </div>
     </section>
   );
 }
 
-function CourseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+const BLANK_COURSE_FORM = {
+  title: "",
+  code: "",
+  category: "",
+  level: "beginner" as LmsCourseLevel,
+  status: "draft" as LmsCourseStatus,
+  summary: "",
+  description: "",
+  passing_score: 70,
+  lesson_title: "",
+  lesson_duration: 15,
+};
+
+/**
+ * Creates a course, or edits one when `course` is set.
+ *
+ * The same dialog does both because the fields are the same; only the first
+ * lesson is create-only, since an existing course grows its lessons through
+ * the lesson dialog instead.
+ */
+function CourseDialog({
+  open,
+  course,
+  onOpenChange,
+}: {
+  open: boolean;
+  course?: LmsCourse | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const lms = useLmsCopy();
   const queryClient = useQueryClient();
-  const [form, setForm] = React.useState({
-    title: "",
-    code: "",
-    category: "",
-    level: "beginner" as LmsCourseLevel,
-    status: "draft" as LmsCourseStatus,
-    summary: "",
-    description: "",
-    passing_score: 70,
-    lesson_title: "",
-    lesson_duration: 15,
-  });
+  const editing = Boolean(course);
+  const [form, setForm] = React.useState(BLANK_COURSE_FORM);
+
+  // Seed from the course being edited, and clear back to blank for a new one.
+  React.useEffect(() => {
+    if (!open) return;
+
+    setForm(
+      course
+        ? {
+            ...BLANK_COURSE_FORM,
+            title: course.title ?? "",
+            code: course.code ?? "",
+            category: course.category ?? "",
+            level: (course.level as LmsCourseLevel) ?? "beginner",
+            status: course.status === "archived" ? "draft" : (course.status as LmsCourseStatus),
+            summary: course.summary ?? "",
+            description: course.description ?? "",
+            passing_score: course.passing_score ?? 70,
+          }
+        : BLANK_COURSE_FORM,
+    );
+  }, [open, course]);
 
   const mutation = useMutation({
-    mutationFn: () => learningApi.createCourse({
-      title: form.title,
-      code: form.code || undefined,
-      category: form.category || undefined,
-      level: form.level,
-      status: form.status,
-      visibility: "internal",
-      summary: form.summary || undefined,
-      description: form.description || undefined,
-      passing_score: form.passing_score,
-      lessons: form.lesson_title
-        ? [{
-            title: form.lesson_title,
-            content_type: "article",
-            duration_minutes: form.lesson_duration,
-            sort_order: 0,
-            is_required: true,
-          }]
-        : [],
-    }),
-    onSuccess: () => {
-      toast.success("Course created.");
-      setForm({
-        title: "",
-        code: "",
-        category: "",
-        level: "beginner",
-        status: "draft",
-        summary: "",
-        description: "",
-        passing_score: 70,
-        lesson_title: "",
-        lesson_duration: 15,
+    mutationFn: () => {
+      const payload = {
+        title: form.title,
+        code: form.code || undefined,
+        category: form.category || undefined,
+        level: form.level,
+        status: form.status,
+        visibility: "internal" as const,
+        summary: form.summary || undefined,
+        description: form.description || undefined,
+        passing_score: form.passing_score,
+      };
+
+      if (course) {
+        return learningApi.updateCourse(course.id, payload);
+      }
+
+      return learningApi.createCourse({
+        ...payload,
+        lessons: form.lesson_title
+          ? [{
+              title: form.lesson_title,
+              content_type: "article",
+              duration_minutes: form.lesson_duration,
+              sort_order: 0,
+              is_required: true,
+            }]
+          : [],
       });
+    },
+    onSuccess: () => {
+      toast.success(
+        editing
+          ? lms("admin.toast.course_updated", "Course updated.")
+          : lms("admin.toast.course_created", "Course created."),
+      );
+      setForm(BLANK_COURSE_FORM);
       onOpenChange(false);
       invalidateLearning(queryClient);
     },
-    onError: (error) => toast.error(errorMessage(error, "Unable to create course.")),
+    onError: (error) =>
+      toast.error(
+        errorMessage(
+          error,
+          editing
+            ? lms("admin.toast.update_failed", "Unable to update course.")
+            : lms("admin.toast.create_failed", "Unable to create course."),
+        ),
+      ),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Create course</DialogTitle>
-          <DialogDescription>Add the course shell and an optional first lesson.</DialogDescription>
+          <DialogTitle>
+            {editing
+              ? lms("admin.course_dialog.edit_title", "Edit course")
+              : lms("admin.course_dialog.create_title", "Create course")}
+          </DialogTitle>
+          <DialogDescription>
+            {editing
+              ? lms(
+                  "admin.course_dialog.edit_desc",
+                  "Change the course details. Lessons are managed from the catalog row.",
+                )
+              : lms("admin.course_dialog.create_desc", "Add the course shell and an optional first lesson.")}
+          </DialogDescription>
         </DialogHeader>
         <form
           className="space-y-5"
@@ -783,16 +910,16 @@ function CourseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
           }}
         >
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Course title" htmlFor="lms-course-title" required>
+            <Field label={lms("admin.course_dialog.title", "Course title")} htmlFor="lms-course-title" required>
               <Input id="lms-course-title" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required />
             </Field>
-            <Field label="Course code" htmlFor="lms-course-code">
+            <Field label={lms("admin.course_dialog.code", "Course code")} htmlFor="lms-course-code">
               <Input id="lms-course-code" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} />
             </Field>
-            <Field label="Category" htmlFor="lms-course-category">
+            <Field label={lms("admin.course_dialog.category", "Category")} htmlFor="lms-course-category">
               <Input id="lms-course-category" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} />
             </Field>
-            <Field label="Passing score" htmlFor="lms-course-passing-score">
+            <Field label={lms("admin.course_dialog.passing_score", "Passing score")} htmlFor="lms-course-passing-score">
               <Input
                 id="lms-course-passing-score"
                 type="number"
@@ -802,56 +929,64 @@ function CourseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
                 onChange={(event) => setForm({ ...form, passing_score: Number(event.target.value) })}
               />
             </Field>
-            <Field label="Level" htmlFor="lms-course-dialog-level">
+            <Field label={lms("admin.course_dialog.level", "Level")} htmlFor="lms-course-dialog-level">
               <Select value={form.level} onValueChange={(value) => setForm({ ...form, level: value as LmsCourseLevel })}>
                 <SelectTrigger id="lms-course-dialog-level" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {courseLevels.map((level) => <SelectItem key={level} value={level}>{titleCase(level)}</SelectItem>)}
+                  {courseLevels.map((level) => <SelectItem key={level} value={level}>{enumLabel(lms, level)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Status" htmlFor="lms-course-dialog-status">
+            <Field label={lms("admin.course_dialog.status", "Status")} htmlFor="lms-course-dialog-status">
               <Select value={form.status} onValueChange={(value) => setForm({ ...form, status: value as LmsCourseStatus })}>
                 <SelectTrigger id="lms-course-dialog-status" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="published">Published</SelectItem>
+                  <SelectItem value="draft">{lms("admin.course_dialog.draft", "Draft")}</SelectItem>
+                  <SelectItem value="published">{lms("admin.course_dialog.published", "Published")}</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
           </div>
-          <Field label="Summary" htmlFor="lms-course-summary">
+          <Field label={lms("admin.course_dialog.summary", "Summary")} htmlFor="lms-course-summary">
             <Textarea id="lms-course-summary" value={form.summary} onChange={(event) => setForm({ ...form, summary: event.target.value })} />
           </Field>
-          <Field label="Description" htmlFor="lms-course-description">
+          <Field label={lms("admin.course_dialog.description", "Description")} htmlFor="lms-course-description">
             <Textarea id="lms-course-description" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
           </Field>
-          <div className="rounded-lg border bg-muted/30 p-4">
-            <h3 className="font-medium">First lesson</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Optional. You can add more lessons later.</p>
-            <div className="mt-4 grid gap-4 md:grid-cols-[1fr_160px]">
-              <Field label="Lesson title" htmlFor="lms-first-lesson-title">
-                <Input id="lms-first-lesson-title" value={form.lesson_title} onChange={(event) => setForm({ ...form, lesson_title: event.target.value })} />
-              </Field>
-              <Field label="Minutes" htmlFor="lms-first-lesson-duration">
-                <Input
-                  id="lms-first-lesson-duration"
-                  type="number"
-                  min={0}
-                  value={form.lesson_duration}
-                  onChange={(event) => setForm({ ...form, lesson_duration: Number(event.target.value) })}
-                />
-              </Field>
+          {editing ? null : (
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <h3 className="font-medium">{lms("admin.course_dialog.first_lesson", "First lesson")}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {lms("admin.course_dialog.first_lesson_hint", "Optional. You can add more lessons later.")}
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-[1fr_160px]">
+                <Field label={lms("admin.course_dialog.lesson_title", "Lesson title")} htmlFor="lms-first-lesson-title">
+                  <Input id="lms-first-lesson-title" value={form.lesson_title} onChange={(event) => setForm({ ...form, lesson_title: event.target.value })} />
+                </Field>
+                <Field label={lms("admin.course_dialog.minutes", "Minutes")} htmlFor="lms-first-lesson-duration">
+                  <Input
+                    id="lms-first-lesson-duration"
+                    type="number"
+                    min={0}
+                    value={form.lesson_duration}
+                    onChange={(event) => setForm({ ...form, lesson_duration: Number(event.target.value) })}
+                  />
+                </Field>
+              </div>
             </div>
-          </div>
+          )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              {lms("admin.course_dialog.cancel", "Cancel")}
+            </Button>
             <Button type="submit" disabled={mutation.isPending || !form.title.trim()}>
-              Create course
+              {editing
+                ? lms("admin.course_dialog.save", "Save changes")
+                : lms("admin.create_course", "Create course")}
             </Button>
           </DialogFooter>
         </form>
@@ -860,7 +995,26 @@ function CourseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
   );
 }
 
+/**
+ * Best guess at a lesson's type from the resource it points at, so an uploaded
+ * video is treated as one. Returns null when the extension says nothing useful,
+ * leaving the author's choice alone.
+ */
+function inferLessonType(url: string): LmsLesson["content_type"] | null {
+  const path = url.split(/[?#]/, 1)[0]?.toLowerCase() ?? "";
+  const extension = path.slice(path.lastIndexOf(".") + 1);
+
+  if (["mp4", "webm", "ogv", "mov", "m4v", "mkv", "avi", "m3u8"].includes(extension)) {
+    return "video";
+  }
+  if (["pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "csv", "zip", "txt"].includes(extension)) {
+    return "file";
+  }
+  return null;
+}
+
 function LessonDialog({ course, onOpenChange }: { course: LmsCourse | null; onOpenChange: (open: boolean) => void }) {
+  const lms = useLmsCopy();
   const queryClient = useQueryClient();
   const [form, setForm] = React.useState({
     title: "",
@@ -886,11 +1040,11 @@ function LessonDialog({ course, onOpenChange }: { course: LmsCourse | null; onOp
       is_required: true,
     }),
     onSuccess: () => {
-      toast.success("Lesson added.");
+      toast.success(lms("admin.toast.lesson_added", "Lesson added."));
       onOpenChange(false);
       invalidateLearning(queryClient);
     },
-    onError: (error) => toast.error(errorMessage(error, "Unable to add lesson.")),
+    onError: (error) => toast.error(errorMessage(error, lms("admin.toast.lesson_failed", "Unable to add lesson."))),
   });
 
   return (
@@ -911,19 +1065,19 @@ function LessonDialog({ course, onOpenChange }: { course: LmsCourse | null; onOp
             <Input id="lms-lesson-title" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required />
           </Field>
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Content type" htmlFor="lms-lesson-type">
+            <Field label={lms("admin.lesson_dialog.content_type", "Content type")} htmlFor="lms-lesson-type">
               <Select value={form.content_type} onValueChange={(value) => setForm({ ...form, content_type: value as LmsLesson["content_type"] })}>
                 <SelectTrigger id="lms-lesson-type" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {["article", "video", "live", "assessment", "file", "link"].map((type) => (
-                    <SelectItem key={type} value={type}>{titleCase(type)}</SelectItem>
+                    <SelectItem key={type} value={type}>{enumLabel(lms, type)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Minutes" htmlFor="lms-lesson-minutes">
+            <Field label={lms("admin.course_dialog.minutes", "Minutes")} htmlFor="lms-lesson-minutes">
               <Input
                 id="lms-lesson-minutes"
                 type="number"
@@ -933,14 +1087,27 @@ function LessonDialog({ course, onOpenChange }: { course: LmsCourse | null; onOp
               />
             </Field>
           </div>
-          <Field label="Resource (URL or file)" htmlFor="lms-lesson-url">
+          <Field label={lms("admin.lesson_dialog.resource", "Resource (URL or file)")} htmlFor="lms-lesson-url">
             <LmsResourceField
               id="lms-lesson-url"
               value={form.resource_url}
-              onChange={(url) => setForm({ ...form, resource_url: url })}
+              onChange={(url) =>
+                setForm((current) => ({
+                  ...current,
+                  resource_url: url,
+                  // Pick up the type from the file when the author has not
+                  // chosen one. Uploading an .mp4 and having the lesson saved
+                  // as an article — so it never reaches the video player — is
+                  // never what was meant.
+                  content_type:
+                    current.content_type === "article"
+                      ? inferLessonType(url) ?? current.content_type
+                      : current.content_type,
+                }))
+              }
             />
           </Field>
-          <Field label="Lesson content" htmlFor="lms-lesson-content">
+          <Field label={lms("admin.lesson_dialog.content", "Lesson content")} htmlFor="lms-lesson-content">
             <Textarea id="lms-lesson-content" value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} />
           </Field>
           <DialogFooter>
@@ -956,6 +1123,7 @@ function LessonDialog({ course, onOpenChange }: { course: LmsCourse | null; onOp
 }
 
 function EnrollmentDialog({ open, onOpenChange, courses }: { open: boolean; onOpenChange: (open: boolean) => void; courses: LmsCourse[] }) {
+  const lms = useLmsCopy();
   const queryClient = useQueryClient();
   const [courseId, setCourseId] = React.useState("");
   const [search, setSearch] = React.useState("");
@@ -977,14 +1145,14 @@ function EnrollmentDialog({ open, onOpenChange, courses }: { open: boolean; onOp
       notes: notes || undefined,
     }),
     onSuccess: () => {
-      toast.success("Learners assigned.");
+      toast.success(lms("admin.toast.learners_assigned", "Learners assigned."));
       setSelectedUserIds([]);
       setDueAt("");
       setNotes("");
       onOpenChange(false);
       invalidateLearning(queryClient);
     },
-    onError: (error) => toast.error(errorMessage(error, "Unable to assign learners.")),
+    onError: (error) => toast.error(errorMessage(error, lms("admin.toast.assign_failed", "Unable to assign learners."))),
   });
 
   const users = usersQuery.data || [];
@@ -1003,10 +1171,10 @@ function EnrollmentDialog({ open, onOpenChange, courses }: { open: boolean; onOp
             mutation.mutate();
           }}
         >
-          <Field label="Course" htmlFor="lms-enrollment-course" required>
+          <Field label={lms("admin.enrollment_dialog.course", "Course")} htmlFor="lms-enrollment-course" required>
             <Select value={courseId} onValueChange={setCourseId}>
               <SelectTrigger id="lms-enrollment-course" className="w-full">
-                <SelectValue placeholder="Select course" />
+                <SelectValue placeholder={lms("admin.enrollment_dialog.select_course", "Select course")} />
               </SelectTrigger>
               <SelectContent>
                 {courses.map((course) => (
@@ -1015,8 +1183,8 @@ function EnrollmentDialog({ open, onOpenChange, courses }: { open: boolean; onOp
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Search learners" htmlFor="lms-learner-search">
-            <Input id="lms-learner-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name or email" />
+          <Field label={lms("admin.enrollment_dialog.search_label", "Search learners")} htmlFor="lms-learner-search">
+            <Input id="lms-learner-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={lms("admin.enrollment_dialog.search_placeholder", "Search by name or email")} />
           </Field>
           <fieldset className="space-y-3 rounded-lg border p-4">
             <legend className="px-1 text-sm font-medium">Learners</legend>
@@ -1036,10 +1204,10 @@ function EnrollmentDialog({ open, onOpenChange, courses }: { open: boolean; onOp
               <p className="text-sm text-muted-foreground">No matching learners found.</p>
             )}
           </fieldset>
-          <Field label="Due date" htmlFor="lms-enrollment-due-at">
+          <Field label={lms("admin.enrollment_dialog.due_date", "Due date")} htmlFor="lms-enrollment-due-at">
             <Input id="lms-enrollment-due-at" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
           </Field>
-          <Field label="Assignment note" htmlFor="lms-enrollment-note">
+          <Field label={lms("admin.enrollment_dialog.note", "Assignment note")} htmlFor="lms-enrollment-note">
             <Textarea id="lms-enrollment-note" value={notes} onChange={(event) => setNotes(event.target.value)} />
           </Field>
           <DialogFooter>
@@ -1154,7 +1322,8 @@ function Field({ label, htmlFor, required, children }: { label: string; htmlFor:
 }
 
 function StatusBadge({ status }: { status: LmsEnrollmentStatus }) {
-  const label = titleCase(status);
+  const lms = useLmsCopy();
+  const label = enumLabel(lms, status);
   const className = status === "completed"
     ? "bg-emerald-700 text-white"
     : status === "overdue"
@@ -1167,13 +1336,14 @@ function StatusBadge({ status }: { status: LmsEnrollmentStatus }) {
 }
 
 function CourseStatusBadge({ status }: { status: LmsCourseStatus }) {
+  const lms = useLmsCopy();
   const className = status === "published"
     ? "bg-emerald-700 text-white"
     : status === "archived"
       ? "bg-slate-700 text-white"
       : "";
 
-  return <Badge variant={className ? "default" : "secondary"} className={className}>{titleCase(status)}</Badge>;
+  return <Badge variant={className ? "default" : "secondary"} className={className}>{enumLabel(lms, status)}</Badge>;
 }
 
 function EmptyState({ title, description }: { title: string; description: string }) {
@@ -1214,6 +1384,18 @@ function errorMessage(error: unknown, fallback: string) {
   }
 
   return fallback;
+}
+
+/**
+ * Label for an enum value — a status, a level, a lesson type.
+ *
+ * Was `titleCase(value)`, which turned "in_progress" into "In Progress" and
+ * could never be translated, leaving English words scattered through an
+ * otherwise Amharic table. The title-cased form stays as the fallback, so a
+ * value with no dictionary entry still reads sensibly.
+ */
+function enumLabel(lms: (key: string, fallback: string) => string, value: string) {
+  return lms(`admin.enum.${value}`, titleCase(value));
 }
 
 function titleCase(value: string) {

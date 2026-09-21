@@ -10,7 +10,7 @@ import {
 } from "@/lib/offline/mutation-queue";
 import { getUploadQueueCount, subscribeUploadQueue } from "@/lib/offline/file-upload-queue";
 
-const SERVER_SNAPSHOT_QUEUE: typeof getEmptyOfflineMutationQueue = () => [];
+const SERVER_SNAPSHOT_QUEUE = getEmptyOfflineMutationQueue;
 
 const getClientIsOnline = (): boolean => {
   if (typeof window === "undefined" || typeof navigator === "undefined") {

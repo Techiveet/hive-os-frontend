@@ -9,7 +9,7 @@ import {
   onlineManager,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { enqueueFileUpload } from "@/lib/offline/file-upload-queue";
+import { enqueueFileUpload, UploadQueueFullError } from "@/lib/offline/file-upload-queue";
 import { getErrorMessage } from "@/lib/errors";
 import {
   Folder,
@@ -1287,14 +1287,25 @@ export function FileManagerClient({
       if (uploadBaseName) offlineFields.base_name = uploadBaseName;
 
       const queueForLater = async () => {
-        await enqueueFileUpload({
-          file: uploadFile,
-          fileName: uploadFile.name,
-          fileType: uploadFile.type,
-          fields: offlineFields,
-          thumbnail: customThumbnail,
-          label: `upload ${uploadFile.name}`,
-        });
+        try {
+          await enqueueFileUpload({
+            file: uploadFile,
+            fileName: uploadFile.name,
+            fileType: uploadFile.type,
+            fields: offlineFields,
+            thumbnail: customThumbnail,
+            label: `upload ${uploadFile.name}`,
+          });
+        } catch (queueError) {
+          // Browser storage could not hold the file. Report that plainly —
+          // letting the QuotaExceededError escape crashed the file manager.
+          setUploadProgress(0);
+          throw new Error(
+            queueError instanceof UploadQueueFullError
+              ? queueError.message
+              : `${uploadFile.name} could not be saved for retry. Check your connection and upload it again.`,
+          );
+        }
         return { queued: true };
       };
 

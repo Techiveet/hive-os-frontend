@@ -1,5 +1,7 @@
-// app/(auth)/sign-in/2fa/TwoFactorClient.tsx
 "use client";
+
+// app/(auth)/sign-in/2fa/TwoFactorClient.tsx
+
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -26,6 +28,7 @@ import { useTheme } from "next-themes";
 import { useQuery } from "@tanstack/react-query";
 import { logFrontendAction } from "@/lib/api";
 import { clearHiveSession } from "@/lib/auth-sync";
+import { safeLocalStorageSetItem, safeLocalStorageGetItem, safeLocalStorageRemoveItem, safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem, purgeNonEssentialStorage } from "@/lib/safe-storage";
 import { cn } from "@/lib/utils";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -38,15 +41,23 @@ import {
   persistHiveContext,
 } from "@/lib/runtime-context";
 import { initializeSessionActivity } from "@/lib/session-activity";
+import { resolveHomePath } from "@/lib/home-path";
 
 const POST_LOGIN_REDIRECT_STORAGE_KEY = "hive_post_login_redirect";
 
-const resolveStoredPostLoginRedirect = () => {
+/**
+ * A redirect stored before the 2FA step wins; otherwise fall back to the
+ * verified user's own home surface (/learn for LMS tenant members who are not
+ * the Super Admin), which only becomes knowable once 2FA has passed.
+ */
+const resolveStoredPostLoginRedirect = (user?: unknown) => {
+  const fallback = resolveHomePath(user as Parameters<typeof resolveHomePath>[0]);
+
   if (typeof window === "undefined") {
-    return "/dashboard";
+    return fallback;
   }
 
-  const redirect = sessionStorage.getItem(POST_LOGIN_REDIRECT_STORAGE_KEY)?.trim();
+  const redirect = safeSessionStorageGetItem(POST_LOGIN_REDIRECT_STORAGE_KEY)?.trim();
 
   if (
     !redirect ||
@@ -54,7 +65,7 @@ const resolveStoredPostLoginRedirect = () => {
     redirect.startsWith("//") ||
     redirect.includes("\\")
   ) {
-    return "/dashboard";
+    return fallback;
   }
 
   return redirect;
@@ -108,8 +119,8 @@ export default function TwoFactorClient() {
   const activeLogoUrl = getPublicServeUrl(activeLogoPath);
 
   useEffect(() => {
-    const email = sessionStorage.getItem("hive_pending_email");
-    if (!email && !sessionStorage.getItem("hive_2fa_token")) {
+    const email = safeSessionStorageGetItem("hive_pending_email");
+    if (!email && !safeSessionStorageGetItem("hive_2fa_token")) {
       router.push("/sign-in");
       return;
     }
@@ -131,8 +142,8 @@ export default function TwoFactorClient() {
     }
 
     // Check if we arrived here because the server requires 2FA Setup
-    const qr = sessionStorage.getItem("hive_2fa_setup_qr");
-    const secret = sessionStorage.getItem("hive_2fa_setup_secret");
+    const qr = safeSessionStorageGetItem("hive_2fa_setup_qr");
+    const secret = safeSessionStorageGetItem("hive_2fa_setup_secret");
     if (qr && secret) {
       setSetupQr(qr);
       setSetupSecret(secret);
@@ -156,8 +167,8 @@ export default function TwoFactorClient() {
     const apiUrl = `${getBackendApiRoot()}${endpoint}`;
 
     try {
-      const pendingToken = sessionStorage.getItem("hive_2fa_token") || "";
-      const pendingEmail = sessionStorage.getItem("hive_pending_email") || "";
+      const pendingToken = safeSessionStorageGetItem("hive_2fa_token") || "";
+      const pendingEmail = safeSessionStorageGetItem("hive_pending_email") || "";
 
       const payload = {
         code: code.trim(),
@@ -182,31 +193,32 @@ export default function TwoFactorClient() {
         throw new Error(data.message || t("auth.2fa.invalid_code", "Invalid authentication code."));
       }
 
-      sessionStorage.removeItem("hive_2fa_token");
-      sessionStorage.removeItem("hive_pending_email");
-      sessionStorage.removeItem("hive_2fa_setup_qr");
-      sessionStorage.removeItem("hive_2fa_setup_secret");
+      safeSessionStorageRemoveItem("hive_2fa_token");
+      safeSessionStorageRemoveItem("hive_pending_email");
+      safeSessionStorageRemoveItem("hive_2fa_setup_qr");
+      safeSessionStorageRemoveItem("hive_2fa_setup_secret");
 
       clearHiveSession();
-      localStorage.removeItem("hive_original_token");
-      localStorage.setItem("hive_token", data.data.token);
-      localStorage.setItem("hive_user", JSON.stringify(data.data.user));
+      safeLocalStorageRemoveItem("hive_original_token");
+      purgeNonEssentialStorage();
+      safeLocalStorageSetItem("hive_token", data.data.token);
+      safeLocalStorageSetItem("hive_user", JSON.stringify(data.data.user));
       persistHiveContext(
         data.data.context,
         data.data.context_signature ?? null
       );
       initializeSessionActivity();
-      sessionStorage.removeItem("hive_eject_reason");
+      safeSessionStorageRemoveItem("hive_eject_reason");
 
-      const redirectPath = resolveStoredPostLoginRedirect();
-      sessionStorage.removeItem(POST_LOGIN_REDIRECT_STORAGE_KEY);
+      const redirectPath = resolveStoredPostLoginRedirect(data.data.user);
+      safeSessionStorageRemoveItem(POST_LOGIN_REDIRECT_STORAGE_KEY);
       if (data.data.user?.must_change_password) {
-        sessionStorage.setItem("hive_password_change_intended", redirectPath);
+        safeSessionStorageSetItem("hive_password_change_intended", redirectPath);
         window.location.href = "/change-password";
         return;
       }
 
-      sessionStorage.removeItem("hive_password_change_intended");
+      safeSessionStorageRemoveItem("hive_password_change_intended");
       await logFrontendAction({
         module: "Auth - 2FA",
         action: "login_success",

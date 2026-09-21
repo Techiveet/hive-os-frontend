@@ -1,3 +1,4 @@
+import { safeLocalStorageGetItem, safeLocalStorageSetItem, safeLocalStorageRemoveItem } from "@/lib/safe-storage";
 const HIVE_CONTEXT_KEY = "hive_context";
 const HIVE_CONTEXT_SIGNATURE_KEY = "hive_context_signature";
 const SIGNED_STREAM_REFRESH_BUFFER_SECONDS = 30;
@@ -12,7 +13,7 @@ const signedStreamCache = new Map<string, SignedStreamCacheEntry>();
 export const getStoredHiveContext = (): string | null => {
   if (typeof window === "undefined") return null;
 
-  const value = localStorage.getItem(HIVE_CONTEXT_KEY);
+  const value = safeLocalStorageGetItem(HIVE_CONTEXT_KEY);
 
   if (!value || value === "undefined" || value === "null") {
     return null;
@@ -24,7 +25,7 @@ export const getStoredHiveContext = (): string | null => {
 export const getStoredHiveContextSignature = (): string | null => {
   if (typeof window === "undefined") return null;
 
-  const value = localStorage.getItem(HIVE_CONTEXT_SIGNATURE_KEY);
+  const value = safeLocalStorageGetItem(HIVE_CONTEXT_SIGNATURE_KEY);
 
   if (!value || value === "undefined" || value === "null") {
     return null;
@@ -40,15 +41,15 @@ export const persistHiveContext = (
   if (typeof window === "undefined") return;
 
   if (context) {
-    localStorage.setItem(HIVE_CONTEXT_KEY, context);
+    safeLocalStorageSetItem(HIVE_CONTEXT_KEY, context);
   } else {
-    localStorage.removeItem(HIVE_CONTEXT_KEY);
+    safeLocalStorageRemoveItem(HIVE_CONTEXT_KEY);
   }
 
   if (signature) {
-    localStorage.setItem(HIVE_CONTEXT_SIGNATURE_KEY, signature);
+    safeLocalStorageSetItem(HIVE_CONTEXT_SIGNATURE_KEY, signature);
   } else {
-    localStorage.removeItem(HIVE_CONTEXT_SIGNATURE_KEY);
+    safeLocalStorageRemoveItem(HIVE_CONTEXT_SIGNATURE_KEY);
   }
 };
 
@@ -97,13 +98,31 @@ export const getCentralHosts = (): string[] => {
     ),
   ].filter((value): value is string => Boolean(value));
 
-  return Array.from(new Set(["localhost", "127.0.0.1", ...configuredHosts]));
+  return Array.from(new Set(["localhost", "127.0.0.1", "10.0.2.2", ...configuredHosts]));
 };
 
 export const isCentralHost = (host: string): boolean => {
   const normalized = normalizeHost(host);
 
   if (!normalized) {
+    return true;
+  }
+
+  // Any IP address (e.g. 10.0.2.2 for Android emulator, 127.0.0.1, LAN IP) is Central unless explicitly mapped in NEXT_PUBLIC_TENANT_HOST_MAP
+  if (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "10.0.2.2" ||
+    /^(\d{1,3}\.){3}\d{1,3}$/.test(normalized) ||
+    normalized.endsWith(".local")
+  ) {
+    const mappedTenant = process.env.NEXT_PUBLIC_TENANT_HOST_MAP?.split(",")
+      .map((entry) => entry.trim().split(":", 2))
+      .find(([mappedHost]) => normalizeHost(mappedHost) === normalized)?.[1]
+      ?.trim();
+    if (mappedTenant) {
+      return false;
+    }
     return true;
   }
 
@@ -309,6 +328,19 @@ const getLocalPathname = (url: string): string => {
 export const getStreamUrl = (url: string | null | undefined): string => {
   if (!url) return "";
 
+  /*
+   * public-serve is deliberately NOT rewritten into a signed stream URL: that
+   * exchange needs storage permissions a learner does not have, so it answered
+   * 403. It is a public endpoint already — it only needs the tenant naming it,
+   * which is added below because a media element cannot send X-Tenant.
+   */
+  const publicServe = url.match(/\/api\/v1\/files\/(\d+)\/public-serve/);
+  if (publicServe) {
+    const tenant = getTenantId();
+    if (!tenant || url.includes("tenant=")) return url;
+    return `${url}${url.includes("?") ? "&" : "?"}tenant=${encodeURIComponent(tenant)}`;
+  }
+
   // Only transform URLs that follow the /api/v1/files/{id}/serve pattern
   const match = url.match(/\/api\/v1\/files\/(\d+)\/serve/);
   if (!match) return url;
@@ -316,7 +348,7 @@ export const getStreamUrl = (url: string | null | undefined): string => {
   const fileId = match[1];
   const apiRoot = getBackendApiRoot();
   const token =
-    typeof window !== "undefined" ? localStorage.getItem("hive_token") : null;
+    typeof window !== "undefined" ? safeLocalStorageGetItem("hive_token") : null;
   const tenantId = getTenantId();
   const tenantSignature = getStoredHiveContextSignature();
 
@@ -499,7 +531,7 @@ export const getAuthHeaders = (
 
 export const getAccessToken = (): string | null => {
   if (typeof window === "undefined") return null;
-  const token = localStorage.getItem("hive_token");
+  const token = safeLocalStorageGetItem("hive_token");
   if (!token || token === "undefined" || token === "null") {
     return null;
   }

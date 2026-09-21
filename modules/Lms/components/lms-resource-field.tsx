@@ -22,6 +22,29 @@ type PickedFile = {
 };
 
 /**
+ * The File Manager reports a file's public URL using the backend's own base
+ * URL, which inside Docker is the internal host — e.g.
+ * http://backend:8000/api/v1/files/1/public-serve. A browser cannot resolve
+ * that, so every lesson resource picked from the file manager was saved as a
+ * dead link. Keeping only the path lets it resolve against whatever origin the
+ * learner is actually on.
+ */
+const toBrowserResolvableUrl = (url: string): string => {
+  const trimmed = url.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return trimmed;
+
+  try {
+    const parsed = new URL(trimmed);
+    // Only rewrite our own API links; a genuine external URL is left alone.
+    return parsed.pathname.startsWith("/api/")
+      ? `${parsed.pathname}${parsed.search}`
+      : trimmed;
+  } catch {
+    return trimmed;
+  }
+};
+
+/**
  * Resource input for LMS lessons. The user can paste a URL directly, OR open the
  * platform File Manager to upload a new file and pick it. Selecting a file stores
  * its public URL so the resource plays for both authenticated learners and public
@@ -51,7 +74,7 @@ export function LmsResourceField({
       file.path ||
       "";
     if (url) {
-      onChange(url);
+      onChange(toBrowserResolvableUrl(url));
     }
     setOpen(false);
   };
@@ -97,7 +120,19 @@ export function LmsResourceField({
       </p>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex h-[80vh] max-w-[1000px] flex-col overflow-hidden rounded-[2rem] p-0">
+        {/*
+          sm:max-w-6xl is required, not decorative. DialogContent's own default
+          ends with `sm:max-w-lg`, and tailwind-merge keys `max-w-*` separately
+          from `sm:max-w-*`, so a bare `max-w-[1000px]` never removes it and the
+          512px cap wins inside the media query. That collapsed this modal to
+          half width, leaving the file manager's 256px sidebar and a 256px file
+          grid crushed side by side. Any override here has to carry the sm:
+          variant to actually take effect.
+        */}
+        <DialogContent
+          showCloseButton={false}
+          className="flex h-[85vh] w-[95vw] max-w-6xl flex-col gap-0 overflow-hidden rounded-[2rem] border-border/50 bg-background p-0 shadow-2xl sm:max-w-6xl"
+        >
           <div className="flex items-center justify-between border-b px-6 py-4">
             <div>
               <DialogTitle>File Manager</DialogTitle>

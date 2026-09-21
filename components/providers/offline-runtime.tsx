@@ -5,7 +5,10 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { useOfflineStatus } from "@/hooks/use-offline-status";
 import { processOfflineMutationQueue } from "@/lib/offline/mutation-queue";
-import { processFileUploadQueue, refreshUploadQueueCount } from "@/lib/offline/file-upload-queue";
+import {
+  processFileUploadQueue,
+  refreshUploadQueueCount,
+} from "@/lib/offline/file-upload-queue";
 import { installAxiosOfflineInterceptor, uninstallAxiosOfflineInterceptor } from "@/lib/offline/axios-offline-interceptor";
 import { installFetchOfflineInterceptor, uninstallFetchOfflineInterceptor } from "@/lib/offline/fetch-offline-interceptor";
 import { ensureOfflineMutationDefinitionsRegistered } from "@/modules/shared/offline-mutations";
@@ -17,7 +20,17 @@ export function OfflineRuntime() {
 
   React.useEffect(() => {
     ensureOfflineMutationDefinitionsRegistered();
-    void refreshUploadQueueCount();
+
+    const syncUploadQueue = () => {
+      void refreshUploadQueueCount();
+    };
+
+    syncUploadQueue();
+
+    if (typeof window === "undefined") return;
+
+    window.addEventListener("hive_session_changed", syncUploadQueue);
+    return () => window.removeEventListener("hive_session_changed", syncUploadQueue);
   }, []);
 
   React.useEffect(() => {
@@ -27,6 +40,27 @@ export function OfflineRuntime() {
       uninstallAxiosOfflineInterceptor();
       uninstallFetchOfflineInterceptor();
     };
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+      return;
+    }
+
+    const registerSW = async () => {
+      try {
+        await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      } catch {
+        // Silently catch if running in an unsupported or restricted environment
+      }
+    };
+
+    if (document.readyState === "complete") {
+      void registerSW();
+    } else {
+      window.addEventListener("load", registerSW);
+      return () => window.removeEventListener("load", registerSW);
+    }
   }, []);
 
   React.useEffect(() => {

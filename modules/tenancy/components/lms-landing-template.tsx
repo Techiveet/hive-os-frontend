@@ -28,6 +28,7 @@ import { formatDocumentTitle } from "@/lib/document-title";
 import { getBackendStorageUrl } from "@/lib/runtime-context";
 import { cn } from "@/lib/utils";
 import { publicLearningApi, type LmsPublicLanding } from "@/modules/Lms/api";
+import { LmsSiteFooter, LmsSiteHeader, Stars } from "@/modules/Lms/components/lms-site";
 import { CustomLandingFrame, useCustomLandingHtml } from "./custom-landing-frame";
 import type {
   TenantLandingCard,
@@ -58,7 +59,8 @@ type LmsCourseCard = {
   duration: string;
   lessons: string;
   level: string;
-  rating: string;
+  rating: string | number | null;
+  ratingCount?: number | null;
   enrollHref?: string;
   detailHref?: string;
   instructor?: string;
@@ -72,28 +74,40 @@ type LmsInstructor = {
   description: string;
 };
 
+/**
+ * Only the brand-derived accents are set per-tenant. The palette variables
+ * (navy, muted, green, surface…) come from globals.css so they follow the
+ * light/dark theme; redefining them here pinned the page to light.
+ */
 type LmsStyleVars = React.CSSProperties & {
   "--lms-accent": string;
   "--lms-accent-soft": string;
   "--lms-accent-text": string;
-  "--lms-navy": string;
-  "--lms-navy-2": string;
-  "--lms-green": string;
-  "--lms-muted": string;
 };
 
-/* Design tokens lifted from the lms2 template css (Educrat design system). */
+/* Design tokens lifted from the lms2 template css (Educrat design system).
+ *
+ * NAVY / NAVY_2 / NAVY_CARD stay literal: those sections are dark by design in
+ * both themes and carry white text, so flipping them would invert the contrast.
+ *
+ * The pale ones resolve through the theme variables instead. As fixed hex they
+ * stayed light in dark mode, so the page alternated dark, light, dark, light —
+ * two glaring bands cutting through an otherwise dark page. */
 const NAVY = "#140342";
+/** Primary text colour. Flips to white in dark; NAVY stays put for surfaces. */
+const TEXT_NAVY = "var(--lms-navy, #140342)";
+/** Accent text. Lifts in dark, where #6440FB is too dim to read. */
+const TEXT_PURPLE = "var(--lms-purple, #6440FB)";
 const NAVY_2 = "#1A064F";
 const NAVY_CARD = "#2B1C63";
 const PURPLE = "#6440FB";
-const LAVENDER = "#EBEAFE";
+const LAVENDER = "var(--lms-lavender, #EBEAFE)";
 const GREEN = "#00FF84";
 const GREEN_DARK = "#04D697";
-const BEIGE = "#FEFBF4";
+const BEIGE = "var(--lms-beige, #FEFBF4)";
 const STAR_YELLOW = "#E59819";
-const MUTED = "#4F547B";
-const LIGHT_BG = "#F7F8FB";
+const MUTED = "var(--lms-muted, #4F547B)";
+const LIGHT_BG = "var(--lms-light-bg, #F7F8FB)";
 
 const FONT_STACK = '"DM Sans", "DM Sans Fallback", ui-sans-serif, system-ui, sans-serif';
 const FONT_HREF =
@@ -413,22 +427,11 @@ function TemplateImage({
   );
 }
 
-function Stars({ rating, className }: { rating?: string; className?: string }) {
-  return (
-    <span className={cn("inline-flex items-center gap-1", className)}>
-      {rating ? (
-        <span className="text-sm font-bold" style={{ color: STAR_YELLOW }}>
-          {rating}
-        </span>
-      ) : null}
-      <span className="inline-flex items-center gap-0.5" aria-hidden="true">
-        {Array.from({ length: 5 }).map((_, index) => (
-          <Star key={index} className="size-3" style={{ color: STAR_YELLOW, fill: STAR_YELLOW }} />
-        ))}
-      </span>
-    </span>
-  );
-}
+/*
+ * Stars comes from lms-site now. The copy that lived here drew five filled
+ * stars whatever the score, so a 3.0 course looked identical to a 5.0 one, and
+ * it had to be fixed twice in two places. One implementation, one behaviour.
+ */
 
 function BrandMark({
   brandSettings,
@@ -554,14 +557,19 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
   const secondaryHref = sanitizeHref(template.hero.secondary_href, COURSE_CATALOG_HREF);
   const heroImage = template.hero.slides?.[0]?.image || HERO_IMAGE;
   const experienceImage = template.experience?.image || "/lms2/img/home-4/dreamJob/1.png";
+  /*
+   * Only the brand-derived accents are pinned here.
+   *
+   * --lms-navy / --lms-navy-2 / --lms-muted used to be redefined on this
+   * element with fixed light values, which overrode the themed palette in
+   * globals.css — so the landing stayed white with dark text no matter what
+   * the theme was set to. --lms-green is a fixed brand colour in both themes
+   * and is left to the global definition.
+   */
   const styleVars: LmsStyleVars = {
     "--lms-accent": accent,
     "--lms-accent-soft": accentSoft,
     "--lms-accent-text": readableTextOn(accent),
-    "--lms-navy": NAVY,
-    "--lms-navy-2": NAVY_2,
-    "--lms-green": GREEN,
-    "--lms-muted": MUTED,
     fontFamily: FONT_STACK,
   };
 
@@ -590,64 +598,49 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
 
   const categoryIcons = [LibraryBig, Layers3, ShieldCheck, UsersRound, LineChart, MonitorPlay, BarChart3, BookOpenCheck];
 
-  // Templates that carry their own page code render it instead of this design.
-  if (customLandingHtml) {
-    return (
-      <CustomLandingFrame
-        html={customLandingHtml}
-        title={`${brandName} landing page`}
-        mode={template.rendering.mode}
-      />
-    );
-  }
+  /*
+   * The LMS landing renders this design, not stored page code.
+   *
+   * Every tenant carries a seeded custom_code template, so this short-circuit
+   * always fired and the LMS landing was an <iframe> of standalone HTML. An
+   * iframe cannot share the React chrome, which is why the landing had none of
+   * the site header, its nav tabs, the active-tab state, the language switcher
+   * or the theme toggle that every other page in the LMS template has — the
+   * navigation was not the same throughout, and the landing did not follow
+   * light/dark at all.
+   *
+   * There is deliberately no opt-out here yet. meta.is_custom would be the
+   * natural flag, but it is true for every seeded tenant, so it cannot tell a
+   * platform-seeded page from one a tenant actually wrote. Reintroducing the
+   * escape hatch needs a field that means only "this tenant authored their own
+   * landing"; until that exists, an LMS tenant gets the LMS design.
+   */
 
   return (
-    <main className="min-h-screen overflow-hidden bg-white text-[var(--lms-navy)] antialiased" style={styleVars}>
+    <main
+      className="min-h-screen overflow-hidden antialiased [background-color:var(--lms-surface,#fff)] text-[var(--lms-navy)]"
+      style={styleVars}
+    >
       { }
       <link rel="stylesheet" href={FONT_HREF} precedence="default" />
 
-      {/* ============ Header ============ */}
-      <header className="sticky top-0 z-40" style={{ backgroundColor: NAVY }}>
-        <div
-          className="px-4 py-2 text-center text-xs font-medium text-white/90"
-          style={{ backgroundColor: PURPLE }}
-        >
-          {template.hero.announcement || "Course creation, enrollments, lessons, and learner progress are ready."}
-        </div>
-        <nav
-          className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8"
-          aria-label="Main"
-        >
-          <Link
-            href="/"
-            className="shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--lms-green)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#140342]"
-          >
-            <BrandMark brandSettings={brandSettings} tenantName={tenantName} onDark />
-          </Link>
-          <div className="hidden items-center gap-8 text-[15px] font-medium text-white/85 lg:flex">
-            <a href="#categories" className="transition hover:text-[var(--lms-green)]">Categories</a>
-            <Link href="/courses" className="transition hover:text-[var(--lms-green)]">Courses</Link>
-            <a href="#why-learn" className="transition hover:text-[var(--lms-green)]">Why learn</a>
-            <a href="#instructors" className="transition hover:text-[var(--lms-green)]">Instructors</a>
-            <a href="#faq" className="transition hover:text-[var(--lms-green)]">FAQ</a>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <Button
-              asChild
-              variant="ghost"
-              className="hidden h-11 rounded-lg px-5 text-[15px] font-medium text-white hover:bg-white/10 hover:text-white sm:inline-flex"
-            >
-              <Link href={LOGIN_HREF}>Log in</Link>
-            </Button>
-            <Button
-              asChild
-              className="h-11 rounded-lg bg-white px-6 text-[15px] font-medium text-[var(--lms-navy)] shadow-none transition hover:bg-[var(--lms-green)] hover:text-[var(--lms-navy)]"
-            >
-              <Link href={REGISTER_HREF}>Sign up</Link>
-            </Button>
-          </div>
-        </nav>
-      </header>
+      {/*
+        The shared site header, not a second copy.
+        This page used to carry its own — with its own tab list ("Why learn"),
+        bare "#anchor" hrefs that broke once you were on another page, no active
+        tab, no language or theme control, and a Log in link still pointing at
+        the ERP dashboard. Using the shared component keeps the navigation
+        identical across the landing, the catalogue and every course page, and
+        means a fix in one place lands everywhere.
+      */}
+      <LmsSiteHeader
+        brandSettings={brandSettings}
+        brandName={tenantName}
+        announcement={
+          template.hero.announcement ||
+          "Course creation, enrollments, lessons, and learner progress are ready."
+        }
+      />
 
       {/* ============ Hero masthead ============ */}
       <section className="relative" style={{ backgroundColor: NAVY }}>
@@ -750,14 +743,14 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
                   <MonitorPlay className="size-5" aria-hidden="true" />
                 </span>
                 <div>
-                  <p className="text-sm font-bold" style={{ color: NAVY }}>{courses.length}+ courses</p>
+                  <p className="text-sm font-bold" style={{ color: TEXT_NAVY }}>{courses.length}+ courses</p>
                   <p className="text-xs" style={{ color: MUTED }}>Ready to start</p>
                 </div>
               </div>
             </div>
 
             <div className="absolute -right-2 top-1/3 hidden animate-[lms-float_7s_ease-in-out_infinite_0.8s] rounded-2xl bg-white p-4 shadow-2xl md:block lg:-right-8">
-              <p className="text-sm font-bold" style={{ color: NAVY }}>Learner rating</p>
+              <p className="text-sm font-bold" style={{ color: TEXT_NAVY }}>Learner rating</p>
               <div className="mt-2 flex items-center gap-2">
                 <Stars rating="4.9" />
               </div>
@@ -769,7 +762,7 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
                   <BookOpenCheck className="size-6" aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold" style={{ color: NAVY }}>{courses[0]?.title}</p>
+                  <p className="truncate text-sm font-bold" style={{ color: TEXT_NAVY }}>{courses[0]?.title}</p>
                   <p className="mt-1 line-clamp-1 text-xs" style={{ color: MUTED }}>{courses[0]?.description}</p>
                   <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: LAVENDER }}>
                     <div className="h-full w-2/3 rounded-full" style={{ backgroundColor: GREEN_DARK }} />
@@ -781,7 +774,13 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
           </div>
         </div>
 
-        {/* Curved bottom edge */}
+        {/*
+          Curved bottom edge, blending the hero into the section beneath it.
+          The fill has to be that section's colour — hardcoded white it became a
+          bright arc slicing across the page the moment the theme went dark.
+          Set through `style` rather than the fill attribute, because a
+          presentation attribute will not accept var().
+        */}
         <svg
           className="block w-full"
           style={{ marginBottom: -1 }}
@@ -790,12 +789,15 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          <path d="M0 64 C 360 0 1080 0 1440 64 L 1440 64 L 0 64 Z" fill="white" />
+          <path
+            d="M0 64 C 360 0 1080 0 1440 64 L 1440 64 L 0 64 Z"
+            style={{ fill: "var(--lms-surface, #ffffff)" }}
+          />
         </svg>
       </section>
 
       {/* ============ Categories ============ */}
-      <section id="categories" className="bg-white py-20 lg:py-24">
+      <section id="categories" className="py-20 lg:py-24 [background-color:var(--lms-surface,#fff)]">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <SectionHeader
             title={template.services_section?.title || "Top categories"}
@@ -811,16 +813,16 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
                 <li key={category}>
                   <Link
                     href={`/courses?category=${encodeURIComponent(category)}`}
-                    className="group flex min-h-40 flex-col items-center justify-center gap-4 rounded-2xl border border-[#EDEDED] bg-white p-6 text-center transition duration-300 hover:-translate-y-1.5 hover:border-transparent hover:shadow-[0_25px_60px_-12px_rgba(20,3,66,0.15)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--lms-accent)] focus-visible:ring-offset-4"
+                    className="group flex min-h-40 flex-col items-center justify-center gap-4 rounded-2xl border border-[var(--lms-border,#EDEDED)] [background-color:var(--lms-surface,#fff)] p-6 text-center transition duration-300 hover:-translate-y-1.5 hover:border-transparent hover:shadow-[0_25px_60px_-12px_rgba(20,3,66,0.15)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--lms-accent)] focus-visible:ring-offset-4"
                   >
                     <span
                       className="grid size-14 place-items-center rounded-full transition group-hover:scale-110"
-                      style={{ backgroundColor: LAVENDER, color: PURPLE }}
+                      style={{ backgroundColor: LAVENDER, color: TEXT_PURPLE }}
                     >
                       <Icon className="size-6" aria-hidden="true" />
                     </span>
                     <span>
-                      <span className="block text-[15px] font-bold" style={{ color: NAVY }}>{category}</span>
+                      <span className="block text-[15px] font-bold" style={{ color: TEXT_NAVY }}>{category}</span>
                       <span className="mt-1 block text-sm" style={{ color: MUTED }}>
                         {categoryCounts.get(category) ?? 12 + index * 3} courses
                       </span>
@@ -845,7 +847,7 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
             <Link
               href="/courses"
               className="inline-flex w-fit items-center gap-2 text-[15px] font-bold transition hover:gap-3"
-              style={{ color: PURPLE }}
+              style={{ color: TEXT_PURPLE }}
             >
               View all courses
               <ArrowRight className="size-4" aria-hidden="true" />
@@ -856,7 +858,7 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
               <li key={course.id || course.title}>
                 <Link
                   href={course.detailHref || course.enrollHref || REGISTER_HREF}
-                  className="group block h-full overflow-hidden rounded-2xl bg-white shadow-[0_6px_16px_rgba(20,3,66,0.05)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_30px_60px_-15px_rgba(20,3,66,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--lms-accent)] focus-visible:ring-offset-4">
+                  className="group block h-full overflow-hidden rounded-2xl [background-color:var(--lms-surface,#fff)] shadow-[0_6px_16px_rgba(20,3,66,0.05)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_30px_60px_-15px_rgba(20,3,66,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--lms-accent)] focus-visible:ring-offset-4">
                   <div className="relative m-2.5 aspect-[16/10] overflow-hidden rounded-xl" style={{ backgroundColor: LAVENDER }}>
                     <TemplateImage
                       src={course.image}
@@ -872,7 +874,7 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
                     {course.badge ? (
                       <div
                         className="absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide"
-                        style={{ backgroundColor: GREEN, color: NAVY }}
+                        style={{ backgroundColor: GREEN, color: TEXT_NAVY }}
                       >
                         {course.badge}
                       </div>
@@ -883,7 +885,7 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
                       <Stars rating={course.rating} />
                       <span className="text-xs" style={{ color: MUTED }}>rating</span>
                     </div>
-                    <h3 className="mt-3 line-clamp-2 text-lg font-bold leading-snug" style={{ color: NAVY }}>
+                    <h3 className="mt-3 line-clamp-2 text-lg font-bold leading-snug" style={{ color: TEXT_NAVY }}>
                       {course.title}
                     </h3>
                     <p className="mt-2 line-clamp-2 text-sm leading-6" style={{ color: MUTED }}>
@@ -891,34 +893,34 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
                     </p>
                     <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]" style={{ color: MUTED }}>
                       <span className="inline-flex items-center gap-1.5">
-                        <BookOpenCheck className="size-4" style={{ color: PURPLE }} aria-hidden="true" />
+                        <BookOpenCheck className="size-4" style={{ color: TEXT_PURPLE }} aria-hidden="true" />
                         {course.lessons}
                       </span>
                       <span className="inline-flex items-center gap-1.5">
-                        <Clock3 className="size-4" style={{ color: PURPLE }} aria-hidden="true" />
+                        <Clock3 className="size-4" style={{ color: TEXT_PURPLE }} aria-hidden="true" />
                         {course.duration}
                       </span>
                       <span className="inline-flex items-center gap-1.5">
-                        <BarChart3 className="size-4" style={{ color: PURPLE }} aria-hidden="true" />
+                        <BarChart3 className="size-4" style={{ color: TEXT_PURPLE }} aria-hidden="true" />
                         {course.level}
                       </span>
                     </div>
                     <div className="mt-5 flex items-center justify-between border-t pt-4" style={{ borderColor: "#EDEDED" }}>
                       {course.instructor ? (
-                        <span className="truncate text-sm font-medium" style={{ color: NAVY }}>
+                        <span className="truncate text-sm font-medium" style={{ color: TEXT_NAVY }}>
                           {course.instructor}
                         </span>
                       ) : (
                         <span
                           className="rounded-full px-3 py-1 text-xs font-bold"
-                          style={{ backgroundColor: LAVENDER, color: PURPLE }}
+                          style={{ backgroundColor: LAVENDER, color: TEXT_PURPLE }}
                         >
                           {course.level}
                         </span>
                       )}
                       <span
                         className="inline-flex shrink-0 items-center gap-1.5 text-sm font-bold transition group-hover:gap-2.5"
-                        style={{ color: PURPLE }}
+                        style={{ color: TEXT_PURPLE }}
                       >
                         View course
                         <ArrowRight className="size-4" aria-hidden="true" />
@@ -999,11 +1001,11 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
             {instructors.map((instructor) => (
               <li key={instructor.name}>
                 <article className="group h-full text-center">
-                  <div className="relative mx-auto aspect-square w-full overflow-hidden rounded-2xl bg-white shadow-[0_6px_16px_rgba(20,3,66,0.06)] transition duration-300 group-hover:-translate-y-1.5 group-hover:shadow-[0_25px_50px_-12px_rgba(20,3,66,0.18)]">
+                  <div className="relative mx-auto aspect-square w-full overflow-hidden rounded-2xl [background-color:var(--lms-surface,#fff)] shadow-[0_6px_16px_rgba(20,3,66,0.06)] transition duration-300 group-hover:-translate-y-1.5 group-hover:shadow-[0_25px_50px_-12px_rgba(20,3,66,0.18)]">
                     <TemplateImage src={instructor.image} alt={`${instructor.name}, ${instructor.role}`} sizes="280px" />
                   </div>
-                  <h3 className="mt-5 text-lg font-bold" style={{ color: NAVY }}>{instructor.name}</h3>
-                  <p className="mt-1 text-sm font-medium" style={{ color: PURPLE }}>{instructor.role}</p>
+                  <h3 className="mt-5 text-lg font-bold" style={{ color: TEXT_NAVY }}>{instructor.name}</h3>
+                  <p className="mt-1 text-sm font-medium" style={{ color: TEXT_PURPLE }}>{instructor.role}</p>
                   <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>{instructor.description}</p>
                   <div className="mt-3 flex justify-center">
                     <Stars />
@@ -1059,7 +1061,7 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
       </section>
 
       {/* ============ Experience CTA + FAQ ============ */}
-      <section id="faq" className="bg-white py-20 lg:py-24">
+      <section id="faq" className="py-20 lg:py-24 [background-color:var(--lms-surface,#fff)]">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8">
           <div
             className="relative overflow-hidden rounded-3xl p-8 text-white sm:p-12"
@@ -1088,7 +1090,7 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
                 <Button
                   asChild
                   className="h-12 rounded-lg bg-white px-7 text-[15px] font-medium hover:bg-white/90"
-                  style={{ color: NAVY }}
+                  style={{ color: TEXT_NAVY }}
                 >
                   <Link href={LOGIN_HREF}>
                     Open my learning
@@ -1106,13 +1108,13 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
             </div>
           </div>
           <div className="rounded-3xl p-7 sm:p-9" style={{ backgroundColor: LIGHT_BG }}>
-            <h2 className="text-2xl font-bold tracking-tight" style={{ color: NAVY }}>
+            <h2 className="text-2xl font-bold tracking-tight" style={{ color: TEXT_NAVY }}>
               Frequently asked questions
             </h2>
             <ul className="mt-6 space-y-4">
               {faqs.map((faq) => (
-                <li key={faq.question} className="rounded-2xl bg-white p-5 shadow-[0_4px_12px_rgba(20,3,66,0.04)]">
-                  <h3 className="text-[15px] font-bold" style={{ color: NAVY }}>{faq.question}</h3>
+                <li key={faq.question} className="rounded-2xl [background-color:var(--lms-surface,#fff)] p-5 shadow-[0_4px_12px_rgba(20,3,66,0.04)]">
+                  <h3 className="text-[15px] font-bold" style={{ color: TEXT_NAVY }}>{faq.question}</h3>
                   <p className="mt-2 text-sm leading-7" style={{ color: MUTED }}>{faq.answer}</p>
                 </li>
               ))}
@@ -1140,7 +1142,7 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
                 asChild
                 size="lg"
                 className="h-14 rounded-lg bg-white px-8 text-[15px] font-medium hover:bg-white/90"
-                style={{ color: NAVY }}
+                style={{ color: TEXT_NAVY }}
               >
                 <Link href={REGISTER_HREF}>Register as student</Link>
               </Button>
@@ -1155,22 +1157,11 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
             </div>
           </div>
 
-          <div className="flex flex-col items-center justify-between gap-6 border-b border-white/10 py-10 md:flex-row">
-            <BrandMark brandSettings={brandSettings} tenantName={tenantName} onDark />
-            <nav className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-white/70" aria-label="Footer">
-              <a href="#categories" className="transition hover:text-white">Categories</a>
-              <Link href="/courses" className="transition hover:text-white">Courses</Link>
-              <a href="#instructors" className="transition hover:text-white">Instructors</a>
-              <a href="#faq" className="transition hover:text-white">FAQ</a>
-              <Link href={LOGIN_HREF} className="transition hover:text-white">Log in</Link>
-            </nav>
-          </div>
-          <div className="flex flex-col items-center justify-between gap-3 py-6 text-sm text-white/50 md:flex-row">
-            <p>© {new Date().getFullYear()} {brandName}. All rights reserved.</p>
-            <p>Powered by the {tenantName} learning portal.</p>
-          </div>
         </div>
       </footer>
+
+      {/* The shared footer, for the same reason as the header above. */}
+      <LmsSiteFooter brandSettings={brandSettings} brandName={tenantName} />
 
       <style>{`
         @keyframes lms-float {

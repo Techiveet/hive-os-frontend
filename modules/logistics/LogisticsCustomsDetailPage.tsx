@@ -1,0 +1,57 @@
+"use client";
+
+import Link from "next/link";
+import * as React from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, CheckCircle2, Landmark, ShieldAlert } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Spinner } from "@/components/ui/spinner";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { usePermissions } from "@/hooks/use-permissions";
+import { logisticsApi } from "@/modules/logistics/api";
+import type { CustomsCase } from "@/modules/logistics/types";
+import { useTranslation } from "@/store/use-translation";
+
+const nextStatuses: Record<string, string[]> = {
+  draft: ["documents_pending", "ready_for_declaration", "cancelled"], documents_pending: ["ready_for_declaration", "cancelled"],
+  ready_for_declaration: ["declaration_submitted", "documents_pending", "cancelled"], declaration_submitted: ["under_review", "rejected", "customs_hold"],
+  under_review: ["assessment_issued", "inspection_required", "cleared", "rejected", "customs_hold"], assessment_issued: ["payment_pending", "inspection_required", "cleared", "customs_hold"],
+  payment_pending: ["under_review", "cleared", "customs_hold"], inspection_required: ["under_inspection", "customs_hold"], under_inspection: ["cleared", "customs_hold", "rejected"],
+  customs_hold: ["under_review", "rejected"], cleared: ["released"],
+};
+
+export default function LogisticsCustomsDetailPage({ customsCaseId }: { customsCaseId: string }) {
+  const { t } = useTranslation(); const cache = useQueryClient(); const { hasAnyPermission } = usePermissions();
+  const canEdit = hasAnyPermission(["update_logistics_customs", "manage_logistics"]); const canSubmit = hasAnyPermission(["submit_logistics_customs", "manage_logistics"]);
+  const canApprove = hasAnyPermission(["approve_logistics_customs", "manage_logistics"]); const canRelease = hasAnyPermission(["release_logistics_customs", "manage_logistics"]);
+  const canHold = hasAnyPermission(["manage_logistics_customs_holds", "manage_logistics"]); const [message, setMessage] = React.useState("");
+  const query = useQuery({ queryKey: ["logistics", "customs", customsCaseId], queryFn: () => logisticsApi.customsCase(customsCaseId).then((r) => r.data.data as CustomsCase) });
+  const refresh = async () => { await cache.invalidateQueries({ queryKey: ["logistics", "customs", customsCaseId] }); await cache.invalidateQueries({ queryKey: ["logistics", "customs"] }); };
+  const transition = useMutation({ mutationFn: (payload: Record<string, unknown>) => logisticsApi.transitionCustomsCase(customsCaseId, payload), onSuccess: async () => { await refresh(); setMessage(t("logistics.messages.customs_updated")); }, onError: () => setMessage(t("logistics.errors.customs_save")) });
+  const checklist = useMutation({ mutationFn: ({ id, complete }: { id: number; complete: boolean }) => logisticsApi.updateCustomsChecklist(customsCaseId, id, { is_complete: complete }), onSuccess: async () => { await refresh(); setMessage(t("logistics.messages.checklist_updated")); }, onError: () => setMessage(t("logistics.errors.customs_save")) });
+  const hold = useMutation({ mutationFn: (payload: Record<string, unknown>) => logisticsApi.placeCustomsHold(customsCaseId, payload), onSuccess: async () => { await refresh(); setMessage(t("logistics.messages.hold_placed")); }, onError: () => setMessage(t("logistics.errors.customs_save")) });
+  const resolve = useMutation({ mutationFn: ({ id, resolution }: { id: number; resolution: string }) => logisticsApi.resolveCustomsHold(customsCaseId, id, resolution), onSuccess: async () => { await refresh(); setMessage(t("logistics.messages.hold_resolved")); }, onError: () => setMessage(t("logistics.errors.customs_save")) });
+  if (query.isLoading) return <div role="status" className="flex items-center gap-2"><Spinner />{t("logistics.loading")}</div>;
+  if (query.isError || !query.data) return <Alert variant="destructive"><AlertTitle>{t("logistics.errors.customs_load_title")}</AlertTitle><AlertDescription>{t("logistics.errors.customs")}</AlertDescription></Alert>;
+  const item = query.data; const transitions = (nextStatuses[item.status] ?? []).filter((status) => status === "declaration_submitted" ? canSubmit : status === "cleared" ? canApprove : status === "released" ? canRelease : canEdit);
+  return <main className="flex flex-col gap-6">
+    <header className="flex flex-wrap items-start justify-between gap-4"><div><Button variant="ghost" asChild className="-ml-3 min-h-11"><Link href="/dashboard/logistics/customs"><ArrowLeft aria-hidden="true" />{t("logistics.actions.back_customs")}</Link></Button><p className="mt-2 font-mono text-sm text-muted-foreground">{item.case_number}</p><h1 className="text-3xl font-black tracking-tight">{t("logistics.customs.overview")}</h1></div><Badge className="mt-3" variant={item.status === "customs_hold" ? "destructive" : item.status === "released" ? "default" : "secondary"}>{t(`logistics.status.${item.status}`)}</Badge></header>
+    <div aria-live="polite">{message ? <Alert><AlertTitle>{message}</AlertTitle></Alert> : null}</div>
+    <Card><CardContent className="grid gap-4 pt-6 sm:grid-cols-2 lg:grid-cols-4"><Datum label={t("logistics.fields.job")} value={item.job?.job_number} /><Datum label={t("logistics.fields.clearance_type")} value={t(`logistics.clearance.${item.clearance_type}`)} /><Datum label={t("logistics.fields.customs_office")} value={item.customs_office} /><Datum label={t("logistics.fields.declaration_reference")} value={item.declaration_reference ?? item.e_sad_reference} /></CardContent></Card>
+    {transitions.length ? <Card><CardHeader><CardTitle>{t("logistics.customs.transition")}</CardTitle></CardHeader><CardContent><form className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" onSubmit={(e) => { e.preventDefault(); const d = new FormData(e.currentTarget); transition.mutate({ status: d.get("status"), declaration_reference: d.get("declaration_reference") || null, release_reference: d.get("release_reference") || null }); }}><Field><FieldLabel htmlFor="customs-next-status">{t("logistics.fields.status")}</FieldLabel><NativeSelect id="customs-next-status" name="status" required>{transitions.map((status) => <option key={status} value={status}>{t(`logistics.status.${status}`)}</option>)}</NativeSelect></Field><Field><FieldLabel htmlFor="customs-transition-reference">{item.status === "cleared" ? t("logistics.fields.release_reference") : t("logistics.fields.declaration_reference")}</FieldLabel><Input id="customs-transition-reference" name={item.status === "cleared" ? "release_reference" : "declaration_reference"} /></Field><Button className="min-h-11 self-end" disabled={transition.isPending}>{transition.isPending ? <Spinner /> : <Landmark aria-hidden="true" />}{t("logistics.actions.advance_status")}</Button></form></CardContent></Card> : null}
+  <div className="grid gap-6 xl:grid-cols-2"><Card><CardHeader><CardTitle>{t("logistics.customs.checklist")}</CardTitle><CardDescription>{t("logistics.customs.checklist_description")}</CardDescription></CardHeader><CardContent className="space-y-2">{item.checklist?.length ? item.checklist.map((entry) => <label key={entry.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border p-3"><Checkbox className="size-5" checked={entry.is_complete} disabled={!canEdit || checklist.isPending} onCheckedChange={(checked) => checklist.mutate({ id: entry.id, complete: checked === true })} /><span className="flex-1">{entry.label_snapshot}</span>{entry.is_required ? <Badge variant="outline">{t("logistics.fields.required")}</Badge> : null}</label>) : <Empty><EmptyHeader><EmptyTitle>{t("logistics.empty.checklist")}</EmptyTitle></EmptyHeader></Empty>}</CardContent></Card>
+      <Card><CardHeader><CardTitle>{t("logistics.customs.holds")}</CardTitle><CardDescription>{t("logistics.customs.holds_description")}</CardDescription></CardHeader><CardContent className="space-y-4">{canHold && !["released", "cancelled"].includes(item.status) ? <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); const d = new FormData(e.currentTarget); hold.mutate({ hold_type: d.get("hold_type"), reason: d.get("reason") }); }}><Field><FieldLabel htmlFor="customs-hold-type">{t("logistics.fields.hold_type")}</FieldLabel><Input id="customs-hold-type" name="hold_type" required /></Field><Field><FieldLabel htmlFor="customs-hold-reason">{t("logistics.fields.hold_reason")}</FieldLabel><Textarea id="customs-hold-reason" name="reason" required /></Field><Button className="min-h-11 justify-self-start" variant="destructive" disabled={hold.isPending}><ShieldAlert aria-hidden="true" />{t("logistics.actions.place_hold")}</Button></form> : null}{item.holds?.length ? item.holds.map((entry) => <div key={entry.id} className="rounded-xl border p-4"><div className="flex flex-wrap items-center justify-between gap-2"><strong>{entry.hold_type}</strong><Badge variant={entry.resolved_at ? "outline" : "destructive"}>{entry.resolved_at ? t("logistics.status.completed") : t("logistics.status.blocked")}</Badge></div><p className="mt-2 text-sm text-muted-foreground">{entry.reason}</p>{canHold && !entry.resolved_at ? <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); const d = new FormData(e.currentTarget); resolve.mutate({ id: entry.id, resolution: String(d.get("resolution")) }); }}><Input name="resolution" aria-label={t("logistics.fields.resolution")} required /><Button className="min-h-11" disabled={resolve.isPending}><CheckCircle2 aria-hidden="true" />{t("logistics.actions.resolve_hold")}</Button></form> : null}</div>) : <Empty><EmptyHeader><EmptyTitle>{t("logistics.empty.holds")}</EmptyTitle></EmptyHeader></Empty>}</CardContent></Card></div>
+    <Card><CardHeader><CardTitle>{t("logistics.customs.events")}</CardTitle></CardHeader><CardContent>{item.events?.length ? <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead scope="col">{t("logistics.fields.status")}</TableHead><TableHead scope="col">{t("logistics.fields.occurred_at")}</TableHead><TableHead scope="col">{t("logistics.fields.notes")}</TableHead></TableRow></TableHeader><TableBody>{item.events.map((event) => <TableRow key={event.id}><TableCell>{event.event_type}</TableCell><TableCell>{new Date(event.occurred_at).toLocaleString()}</TableCell><TableCell>{event.notes ?? "—"}</TableCell></TableRow>)}</TableBody></Table></div> : <Empty><EmptyHeader><EmptyTitle>{t("logistics.empty.events")}</EmptyTitle></EmptyHeader></Empty>}</CardContent></Card>
+  </main>;
+}
+
+function Datum({ label, value }: { label: string; value?: string | null }) { return <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt><dd className="mt-1 font-medium">{value || "—"}</dd></div>; }

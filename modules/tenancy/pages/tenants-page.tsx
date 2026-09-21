@@ -26,7 +26,7 @@ export default function TenantsPage() {
   const tenantTourSteps = [
     {
       target: "#tour-tenant-header",
-      title: t("tour.node_mgmt_title", "Tenant Managment"),
+      title: t("tour.node_mgmt_title", "Tenant Management"),
       content: t("tour.node_mgmt_desc", "This is the master command center for all active tenant accounts on the HIVE.OS network."),
       placement: "bottom" as const,
       skipBeacon: true,
@@ -131,7 +131,7 @@ export default function TenantsPage() {
 
       if (!viewLogged.current) {
         viewLogged.current = true;
-        logFrontendAction({ module: "Tenant Management", action: "access_denied", description: "Operator blocked from accessing Master Tenant Managment." }).catch(() => { });
+        logFrontendAction({ module: "Tenant Management", action: "access_denied", description: "Operator blocked from accessing Master Tenant Management." }).catch(() => { });
       }
 
       const timer = setTimeout(() => router.replace("/dashboard"), 3000);
@@ -141,7 +141,7 @@ export default function TenantsPage() {
     setAccessStatus("granted");
     if (!viewLogged.current) {
       viewLogged.current = true;
-      logFrontendAction({ module: "Tenant Management", action: "viewed", description: "Accessed Master Tenant Managment module." }).catch(() => { });
+      logFrontendAction({ module: "Tenant Management", action: "viewed", description: "Accessed Master Tenant Management module." }).catch(() => { });
     }
   }, [canViewTenants, isLoaded, router]);
 
@@ -188,7 +188,7 @@ export default function TenantsPage() {
         <Breadcrumbs
           items={[
             { label: "Hive.OS", href: "/dashboard", icon: <Home className="h-4 w-4" /> },
-            { label: t("nav.tenants", "Tenant Managment") },
+            { label: t("nav.tenants", "Tenant Management") },
           ]}
         />
       </div>
@@ -198,7 +198,7 @@ export default function TenantsPage() {
           {/* The page title is the document's h1 — this was an h2, so the route
               had no top-level heading for screen readers to announce. */}
           <h1 className="font-space flex items-center gap-2 text-2xl font-black tracking-tight">
-            <Network className="h-6 w-6 text-primary" /> {t("tenants.title", "Tenant Managment")}
+            <Network className="h-6 w-6 text-primary" /> {t("tenants.title", "Tenant Management")}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {t("tenants.subtitle", "Provision, monitor, and configure active tenant databases within the ecosystem.")}

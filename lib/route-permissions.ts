@@ -91,6 +91,15 @@ export const INVENTORY_ROUTE_PERMISSIONS = [
   "view_inventory",
   "manage_inventory",
 ] as const;
+export const LOGISTICS_ROUTE_PERMISSIONS = [
+  "view_logistics_dashboard",
+  "view_logistics_jobs",
+  "manage_logistics",
+] as const;
+export const LOGISTICS_CREATE_ROUTE_PERMISSIONS = [
+  "create_logistics_jobs",
+  "manage_logistics",
+] as const;
 export const WORKFLOW_ROUTE_PERMISSIONS = [
   "view_workflow_automation",
   "manage_workflow_automation",
@@ -577,6 +586,21 @@ export function canAccessDashboardRoute(
 
   if (matchesPrefix(path, "/dashboard/inventory")) {
     return hasSubscribedModule(access, "inventory_control");
+  }
+
+  if (matchesPrefix(path, "/dashboard/logistics")) {
+    if (!hasSubscribedModule(access, "logistics_freight_forwarding")) {
+      return false;
+    }
+
+    if (matchesPrefix(path, "/dashboard/logistics/jobs/create")) {
+      return access.hasAnyPermission([
+        ...LOGISTICS_ROUTE_PERMISSIONS,
+        ...LOGISTICS_CREATE_ROUTE_PERMISSIONS,
+      ]);
+    }
+
+    return access.hasAnyPermission([...LOGISTICS_ROUTE_PERMISSIONS]);
   }
 
   if (matchesPrefix(path, "/dashboard/warehouse")) {

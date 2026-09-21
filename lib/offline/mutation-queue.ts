@@ -1,6 +1,12 @@
 "use client";
 
 import {
+  safeLocalStorageRemoveItem,
+  safeLocalStorageSetItem,
+} from "@/lib/safe-storage";
+
+
+import {
   onlineManager,
   type QueryClient,
   type QueryKey,
@@ -173,6 +179,13 @@ export const readOfflineMutationQueue = (): OfflineQueueItem[] => {
 export const getEmptyOfflineMutationQueue = (): OfflineQueueItem[] =>
   EMPTY_OFFLINE_QUEUE;
 
+export class OfflineMutationStorageError extends Error {
+  constructor() {
+    super("This change could not be saved for offline sync because browser storage is unavailable or full.");
+    this.name = "OfflineMutationStorageError";
+  }
+}
+
 const writeOfflineMutationQueue = (queue: OfflineQueueItem[]): void => {
   if (typeof window === "undefined") {
     return;
@@ -183,9 +196,12 @@ const writeOfflineMutationQueue = (queue: OfflineQueueItem[]): void => {
     queue.length === 0 ? EMPTY_OFFLINE_QUEUE : [...queue];
 
   if (normalizedQueue.length === 0) {
-    window.localStorage.removeItem(storageKey);
+    safeLocalStorageRemoveItem(storageKey);
   } else {
-    window.localStorage.setItem(storageKey, JSON.stringify(normalizedQueue));
+    const serializedQueue = JSON.stringify(normalizedQueue);
+    if (!safeLocalStorageSetItem(storageKey, serializedQueue)) {
+      throw new OfflineMutationStorageError();
+    }
   }
 
   cachedQueueStorageKey = storageKey;

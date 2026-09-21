@@ -22,6 +22,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { syncUserSession } from "@/lib/auth-sync";
 import { getAppOrigin } from "@/lib/runtime-context";
 import { cn } from "@/lib/utils";
+import { roundMoney } from "@/lib/money";
 import {
   previewCurrentTenantSubscriptionCoupon,
   startCurrentTenantSubscriptionActivation,
@@ -136,13 +137,13 @@ export function ModuleSubscriptionCheckoutDialog({
   }, [checkoutChannel, directTransferEnabled]);
 
   const estimatedTotal = React.useMemo(
-    () => estimatedTotalsByCycle?.[billingCycle] ?? estimatedTotalOverride ?? modules.reduce((sum, module) => {
+    () => estimatedTotalsByCycle?.[billingCycle] ?? estimatedTotalOverride ?? roundMoney(modules.reduce((sum, module) => {
       if (module.included_in_plan) {
         return sum;
       }
 
       return sum + Number(module.monthly_price_etb ?? 0);
-    }, 0),
+    }, 0)),
     [billingCycle, estimatedTotalOverride, estimatedTotalsByCycle, modules]
   );
   const payableTotal = couponQuote?.total_amount_etb ?? estimatedTotal;

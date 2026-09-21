@@ -1,37 +1,13 @@
 import type { LucideIcon } from "lucide-react";
 
 export type ModuleId =
-  | "core"
-  | "identity"
-  | "tenancy"
-  | "subscription"
-  | "hospitality"
-  | "inventory"
-  | "warehouse"
-  | "production"
-  | "workflow"
-  | "projectmanagement"
-  | "humanresources"
-  | "identitycards"
-  | "attendance"
-  | "payroll"
-  | "finance"
-  | "performance"
-  | "procurement"
-  | "supplychain"
-  | "sales"
-  | "crm"
-  | "fleet"
-  | "service"
-  | "internal-audit"
-  | "strategy"
-  | "vantage"
-  | "agriculture"
-  | "lms"
-  | "b2b-marketplace"
-  | "landing-templates"
-  | "video-conferencing"
-  | "support_bot";
+  | "core" | "identity" | "tenancy" | "subscription" | "hospitality"
+  | "inventory" | "warehouse" | "production" | "workflow"
+  | "projectmanagement" | "humanresources" | "identitycards" | "attendance"
+  | "payroll" | "finance" | "performance" | "procurement" | "supplychain"
+  | "logistics" | "sales" | "crm" | "fleet" | "service" | "internal-audit"
+  | "strategy" | "vantage" | "agriculture" | "lms" | "b2b-marketplace"
+  | "landing-templates" | "video-conferencing" | "support_bot" | "daily-reports";
 export type DashboardNavPlacement = "primary" | "secondary";
 
 export interface ModuleNavItem {

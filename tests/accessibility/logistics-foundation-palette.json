@@ -1,0 +1,34 @@
+{
+  "checks": [
+    {
+      "id": "teal-primary-button-light",
+      "foreground": "#ffffff",
+      "background": "#0f766e",
+      "type": "text-normal"
+    },
+    {
+      "id": "teal-accent-text-light",
+      "foreground": "#0f766e",
+      "background": "#ffffff",
+      "type": "text-normal"
+    },
+    {
+      "id": "teal-accent-text-dark",
+      "foreground": "#5eead4",
+      "background": "#09090b",
+      "type": "text-normal"
+    },
+    {
+      "id": "teal-status-pill",
+      "foreground": "#f0fdfa",
+      "background": "#042f2e",
+      "type": "text-normal"
+    },
+    {
+      "id": "teal-route-icon-light",
+      "foreground": "#0f766e",
+      "background": "#ffffff",
+      "type": "graphic"
+    }
+  ]
+}

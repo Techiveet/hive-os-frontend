@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { roundMoney } from "@/lib/money";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -561,11 +562,13 @@ export function TenantSubscriptionsClient() {
       .filter((module: TenantCatalogModule) => serverEnabledModules.includes(module.slug) && !module.included_in_plan)
       .reduce((sum: number, module: TenantCatalogModule) => sum + Number(module.monthly_price_etb ?? 0), 0);
 
-    return basePlanPrice + activePaidAddons;
+    // Display-only estimate. The charged amount is the server quote; we round
+    // here so summing add-on prices never leaks a floating-point artefact.
+    return roundMoney(basePlanPrice + activePaidAddons);
   }, [catalog, currentPlan, planPricing, serverEnabledModules]);
   const renewalTotals = React.useMemo(() => ({
-    monthly: renewalEstimate,
-    yearly: renewalEstimate * 12 * (1 - Number(billingPolicy?.yearly_discount_percent ?? 0) / 100),
+    monthly: roundMoney(renewalEstimate),
+    yearly: roundMoney(renewalEstimate * 12 * (1 - Number(billingPolicy?.yearly_discount_percent ?? 0) / 100)),
   }), [billingPolicy?.yearly_discount_percent, renewalEstimate]);
   const activationTotals = billingPolicy?.hybrid_activation_amounts_etb?.[currentPlan];
   const activationOrder = pendingOrders.find((order) => order.scope === "hybrid_activation");

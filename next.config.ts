@@ -36,6 +36,7 @@ const allowedDevOrigins = Array.from(
       "localhost",
       "127.0.0.1",
       "test.test",
+      "10.0.2.2",
       ...(process.env.NEXT_ALLOWED_DEV_ORIGINS?.split(",") ?? []),
     ]
       .map((origin) => origin.trim())

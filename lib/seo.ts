@@ -82,12 +82,29 @@ const centralHosts = (): string[] => {
     ...(process.env.NEXT_PUBLIC_CENTRAL_DOMAINS?.split(",") ?? []).map((value) => normalizeHost(value)),
   ].filter((value): value is string => Boolean(value));
 
-  return Array.from(new Set(["localhost", "127.0.0.1", ...configuredHosts]));
+  return Array.from(new Set(["localhost", "127.0.0.1", "10.0.2.2", ...configuredHosts]));
 };
+
+/**
+ * The tenant a request is for, from its Host header.
+ *
+ * Exported because server components outside this module need it too — the
+ * root loading screen has to know whether it is booting an LMS tenant before
+ * any client code has run.
+ */
+export const tenantSlugFromRequest = (requestHeaders?: HeaderReader): string | null =>
+  tenantIdFromHost(requestHost(requestHeaders));
 
 const tenantIdFromHost = (host: string | null): string | null => {
   const normalized = normalizeHost(host);
-  if (!normalized || centralHosts().includes(normalized)) return null;
+  if (
+    !normalized ||
+    centralHosts().includes(normalized) ||
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "10.0.2.2" ||
+    /^(\d{1,3}\.){3}\d{1,3}$/.test(normalized)
+  ) return null;
 
   if (normalized.endsWith(".localhost")) {
     return normalized.split(".")[0] || null;

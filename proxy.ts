@@ -38,6 +38,7 @@ export function proxy(req: NextRequest) {
         [
             'localhost',
             '127.0.0.1',
+            '10.0.2.2',
             rootDomain, // apex
             `hive.${rootDomain}`, // main subdomain
             `hive-backend.${rootDomain}`,

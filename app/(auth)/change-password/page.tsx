@@ -1,5 +1,8 @@
 "use client";
 
+import { safeLocalStorageSetItem, safeSessionStorageSetItem } from '@/lib/safe-storage';
+
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isAxiosError } from "axios";
 import { toast } from "sonner";
@@ -259,7 +262,7 @@ export default function ChangePasswordPage() {
 
     try {
       const user = JSON.parse(storedUser) as Record<string, unknown>;
-      localStorage.setItem(
+      safeLocalStorageSetItem(
         "hive_user",
         JSON.stringify({ ...user, must_change_password: false }),
       );

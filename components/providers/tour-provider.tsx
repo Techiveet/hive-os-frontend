@@ -1,8 +1,9 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
-import { Joyride, type EventData, type Step, STATUS, EVENTS, type TooltipRenderProps } from "react-joyride";
+import { ACTIONS, Joyride, type EventData, type Step, STATUS, EVENTS, type TooltipRenderProps } from "react-joyride";
 import { Button } from "@/components/ui/button";
+import { safeLocalStorageSetItem } from "@/lib/safe-storage";
 import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
 import { useTranslation } from "@/store/use-translation";
 
@@ -60,8 +61,9 @@ const CustomTooltip = React.forwardRef<HTMLDivElement, TooltipRenderProps & { to
                     size="icon"
                     className="absolute top-5 right-5 h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-full transition-colors border border-transparent hover:border-destructive/20"
                     {...closeProps}
+                    aria-label={t("tour.close", "Close tour")}
                 >
-                    <X className="h-4 w-4" />
+                    <X aria-hidden="true" className="h-4 w-4" />
                 </Button>
 
                 <div className="mb-6 mt-2 pr-6">
@@ -247,6 +249,11 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
     const handleJoyrideEvent = (data: EventData) => {
         const { status, type, action, index, step } = data;
 
+        if (action === ACTIONS.CLOSE) {
+            stopTour();
+            return;
+        }
+
         if (type === EVENTS.STEP_AFTER) {
             const nextIndex = index + (action === 'prev' ? -1 : 1);
 
@@ -289,10 +296,10 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
             if (tabTransitionTimer.current) clearTimeout(tabTransitionTimer.current);
 
             if (tourType === 'welcome') {
-                localStorage.setItem('hive_welcome_tour_completed', 'true');
+                safeLocalStorageSetItem('hive_welcome_tour_completed', 'true');
                 if (isFinished) syncTourCompletion();
             } else {
-                localStorage.setItem('hive_tour_completed', 'true');
+                safeLocalStorageSetItem('hive_tour_completed', 'true');
             }
         }
     };
@@ -303,7 +310,7 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
     return (
         <TourContext.Provider value={{ startTour, stopTour, currentStepTarget, currentStep, stepIndex, isActive: run }}>
             {children}
-            {isMounted && (
+            {isMounted && run && (
                 <Joyride
                     key={locale}
                     steps={steps}

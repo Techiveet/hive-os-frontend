@@ -16,6 +16,7 @@ import { financeModule } from "@/modules/finance/module";
 import { performanceModule } from "@/modules/performance/module";
 import { procurementModule } from "@/modules/procurement/module";
 import { supplyChainModule } from "@/modules/supplychain/module";
+import { logisticsModule } from "@/modules/logistics/module";
 import { salesModule } from "@/modules/sales/module";
 import { crmModule } from "@/modules/crm/module";
 import { fleetModule } from "@/modules/fleet/module";
@@ -29,71 +30,24 @@ import { b2bMarketplaceModule } from "@/modules/b2b-marketplace/module";
 import { landingTemplatesModule } from "@/modules/landing-templates/module";
 import { videoConferencingModule } from "@/modules/video-conferencing/module";
 import { supportBotModule } from "@/modules/support-bot/module";
-import type {
-  FrontendModuleDefinition,
-  ModuleId,
-  ModuleNavItem,
-} from "@/modules/types";
+import { dailyReportsModule } from "@/modules/daily-reports/module";
+import type { FrontendModuleDefinition, ModuleId, ModuleNavItem } from "@/modules/types";
 
 export type { FrontendModuleDefinition, ModuleNavItem } from "@/modules/types";
 
 export const FEATURE_MODULES: FrontendModuleDefinition[] = [
-  coreModule,
-  identityModule,
-  subscriptionModule,
-  tenancyModule,
-  hospitalityModule,
-  inventoryModule,
-  warehouseModule,
-  productionModule,
-  workflowModule,
-  projectManagementModule,
-  humanResourcesModule,
-  identityCardsModule,
-  attendanceModule,
-  payrollModule,
-  financeModule,
-  performanceModule,
-  lmsModule,
-  procurementModule,
-  supplyChainModule,
-  salesModule,
-  crmModule,
-  fleetModule,
-  serviceModule,
-  internalAuditModule,
-  strategyModule,
-  vantageModule,
-  agricultureModule,
-  b2bMarketplaceModule,
-  landingTemplatesModule,
-  videoConferencingModule,
-  supportBotModule,
+  coreModule, identityModule, subscriptionModule, tenancyModule, hospitalityModule,
+  inventoryModule, warehouseModule, productionModule, workflowModule,
+  projectManagementModule, humanResourcesModule, identityCardsModule,
+  attendanceModule, payrollModule, financeModule, performanceModule, lmsModule,
+  procurementModule, supplyChainModule, logisticsModule, salesModule, crmModule,
+  fleetModule, serviceModule, internalAuditModule, strategyModule, vantageModule,
+  agricultureModule, b2bMarketplaceModule, landingTemplatesModule,
+  videoConferencingModule, supportBotModule, dailyReportsModule,
 ];
 
-const SYSTEM_MODULE_IDS = new Set<ModuleId>([
-  "core",
-  "identity",
-  "subscription",
-  "tenancy",
-]);
-
-export const DASHBOARD_MODULE_IDS = new Set<ModuleId>(
-  FEATURE_MODULES.filter((module) => !SYSTEM_MODULE_IDS.has(module.id)).map(
-    (module) => module.id,
-  ),
-);
-
-export const DASHBOARD_NAV: ModuleNavItem[] = FEATURE_MODULES.flatMap(
-  (module) => module.navItems.filter((item) => item.placement === "primary"),
-);
-
-export const DASHBOARD_SECONDARY: ModuleNavItem[] = FEATURE_MODULES.flatMap(
-  (module) => module.navItems.filter((item) => item.placement === "secondary"),
-);
-
-export function getModuleById(
-  id: FrontendModuleDefinition["id"],
-): FrontendModuleDefinition | undefined {
-  return FEATURE_MODULES.find((module) => module.id === id);
-}
+const SYSTEM_MODULE_IDS = new Set<ModuleId>(["core", "identity", "subscription", "tenancy"]);
+export const DASHBOARD_MODULE_IDS = new Set<ModuleId>(FEATURE_MODULES.filter((module) => !SYSTEM_MODULE_IDS.has(module.id)).map((module) => module.id));
+export const DASHBOARD_NAV: ModuleNavItem[] = FEATURE_MODULES.flatMap((module) => module.navItems.filter((item) => item.placement === "primary"));
+export const DASHBOARD_SECONDARY: ModuleNavItem[] = FEATURE_MODULES.flatMap((module) => module.navItems.filter((item) => item.placement === "secondary"));
+export function getModuleById(id: FrontendModuleDefinition["id"]): FrontendModuleDefinition | undefined { return FEATURE_MODULES.find((module) => module.id === id); }

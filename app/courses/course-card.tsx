@@ -23,7 +23,7 @@ export function CourseCard({ course }: { course: LmsPublicCourse }) {
   return (
     <Link
       href={`/courses/${course.id}`}
-      className="group flex h-full flex-col overflow-hidden rounded-2xl bg-white shadow-[0_6px_16px_rgba(20,3,66,0.05)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_30px_60px_-15px_rgba(20,3,66,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6440FB] focus-visible:ring-offset-4"
+      className="group flex h-full flex-col overflow-hidden rounded-2xl [background-color:var(--lms-surface,#fff)] shadow-[0_6px_16px_rgba(20,3,66,0.05)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_30px_60px_-15px_rgba(20,3,66,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6440FB] focus-visible:ring-offset-4"
     >
       <div
         className="relative m-2.5 aspect-[16/10] overflow-hidden rounded-xl"
@@ -53,7 +53,7 @@ export function CourseCard({ course }: { course: LmsPublicCourse }) {
       </div>
       <div className="flex flex-1 flex-col px-5 pb-5 pt-3">
         <div className="flex items-center gap-2">
-          <Stars rating={course.rating} />
+          <Stars rating={course.rating} count={course.rating_count} />
         </div>
         <h3
           className="mt-3 line-clamp-2 text-lg font-bold leading-snug"

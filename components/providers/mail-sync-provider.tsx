@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { initEcho } from "@/lib/echo";
-import { getAccessToken, getTenantId } from "@/lib/runtime-context";
+import { getAccessToken, getTenantId, isTenantSession } from "@/lib/runtime-context";
+import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
 import {
   decryptMailParticipant,
   ensureMailEncryptionIdentity,
@@ -48,8 +49,14 @@ export function MailSyncProvider() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const setEncryptionConfig = useMailStore((state) => state.setEncryptionConfig);
+  const { moduleAccess, hasModule } = useTenantModuleAccess();
+  const canUseMailbox = !isTenantSession() || (moduleAccess !== null && hasModule("mailbox"));
 
   useEffect(() => {
+    if (!canUseMailbox) {
+      return;
+    }
+
     let isMounted = true;
 
     void (async () => {
@@ -66,9 +73,13 @@ export function MailSyncProvider() {
     return () => {
       isMounted = false;
     };
-  }, [setEncryptionConfig]);
+  }, [canUseMailbox, setEncryptionConfig]);
 
   useEffect(() => {
+    if (!canUseMailbox) {
+      return;
+    }
+
     const token = getAccessToken() || localStorage.getItem("token");
 
     if (!token) {
@@ -308,7 +319,7 @@ export function MailSyncProvider() {
       channel.stopListening(".mail.sync");
       echo.leave(channelName);
     };
-  }, [pathname, queryClient, router]);
+  }, [canUseMailbox, pathname, queryClient, router]);
 
   return null;
 }

@@ -918,7 +918,7 @@ function DataTableInner<TData, TValue>({
             className="relative w-full sm:w-[280px]"
           >
             <label htmlFor={searchInputId} className="sr-only">
-              Search {resourceName}
+              {t('datatable.search', 'Search')}
             </label>
             <Search
               aria-hidden="true"
@@ -943,7 +943,7 @@ function DataTableInner<TData, TValue>({
                     setSearchValue("");
                     if (syncWithUrl) updateUrl({ search: "", page: 1 });
                   }}
-                  aria-label={`Clear ${resourceName} search`}
+                  aria-label={t('datatable.clear_search', 'Clear search')}
                 >
                   <X aria-hidden="true" className="h-4 w-4" />
                 </button>
@@ -962,7 +962,7 @@ function DataTableInner<TData, TValue>({
                     className="h-11 w-11 rounded-lg"
                     onClick={() => handleExportAPI("copy")}
                     disabled={loading || busy}
-                    aria-label={`Copy ${resourceName}`}
+                    aria-label={t('datatable.copy', 'Copy')}
                   >
                     <Copy aria-hidden="true" className="h-4 w-4" />
                   </Button>
@@ -977,7 +977,7 @@ function DataTableInner<TData, TValue>({
                         size="icon"
                         className="h-11 w-11 rounded-lg"
                         disabled={loading || busy}
-                        aria-label={`Export ${resourceName}`}
+                        aria-label={t('datatable.export', 'Export')}
                       >
                         <Download aria-hidden="true" className="h-4 w-4" />
                       </Button>
@@ -1019,7 +1019,7 @@ function DataTableInner<TData, TValue>({
                     className="h-11 w-11 rounded-lg"
                     onClick={() => handleExportAPI("print")}
                     disabled={loading || busy}
-                    aria-label={`Print ${resourceName}`}
+                    aria-label={t('datatable.print', 'Print')}
                   >
                     <Printer aria-hidden="true" className="h-4 w-4" />
                   </Button>
@@ -1035,7 +1035,7 @@ function DataTableInner<TData, TValue>({
                 className="h-11 w-11 border-dashed rounded-lg"
                 onClick={handleResetAndReload}
                 disabled={loading || busy}
-                aria-label={`Refresh ${resourceName}`}
+                aria-label={t('datatable.refresh', 'Refresh')}
               >
                 <RotateCcw
                   aria-hidden="true"

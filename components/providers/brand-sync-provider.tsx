@@ -3,33 +3,29 @@
 
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getAccessToken, getAuthHeaders, getBackendApiRoot, getPublicServeUrl, getWorkspaceScopeKey } from "@/lib/runtime-context";
+import { getBackendApiRoot, getPublicServeUrl, getTenantHeaders, getWorkspaceScopeKey } from "@/lib/runtime-context";
 import { applyBrandRuntime } from "@/lib/brand-theme";
-import { handleAuthFailureResponse } from "@/lib/auth-sync";
 import { formatDocumentTitle } from "@/lib/document-title";
 
 export function BrandSyncProvider() {
     const workspaceScope = getWorkspaceScopeKey();
 
-    // 🚀 FETCH PROTECTED BRAND SETTINGS FOR METADATA SYNC
+    // Public brand metadata is tenant-scoped by the signed runtime context.
     const { data: brandData, dataUpdatedAt } = useQuery({
-      queryKey: ['brandSettings', 'protected', workspaceScope],
+      queryKey: ['publicBrandSettings', workspaceScope],
       queryFn: async () => {
-          const token = getAccessToken();
-          if (!token) return null;
-
-          const res = await fetch(`${getBackendApiRoot()}/settings/brand`, {
-              headers: getAuthHeaders(),
+          const res = await fetch(`${getBackendApiRoot()}/settings/brand/public`, {
+              headers: {
+                Accept: "application/json",
+                ...getTenantHeaders(),
+              },
           });
 
-          if (await handleAuthFailureResponse(res)) {
-              return null;
-          }
-
-          if (!res.ok) throw new Error("Failed to fetch brand settings");
+          if (!res.ok) return null;
           return res.json();
       },
-      staleTime: 600000 // Cache for 10 minutes to prevent spamming the backend
+      staleTime: 600000,
+      retry: 1,
     });
 
     const brandSettings = brandData?.data;

@@ -61,7 +61,7 @@ function CheckboxRow({
         <span
           className={cn(
             "grid size-5 place-items-center rounded-md border transition",
-            checked ? "border-transparent text-white" : "border-[#D9DBE4] bg-white"
+            checked ? "border-transparent text-white" : "border-[var(--lms-border,#D9DBE4)] [background-color:var(--lms-surface,#fff)]"
           )}
           style={checked ? { backgroundColor: LMS_TOKENS.purple } : undefined}
         >
@@ -210,7 +210,7 @@ export default function CoursesPage() {
 
   return (
     <main
-      className="min-h-screen bg-white text-[#140342] antialiased"
+      className="min-h-screen antialiased [background-color:var(--lms-surface,#fff)] text-[var(--lms-navy,#140342)]"
       style={styleVars}
     >
       { }
@@ -223,7 +223,7 @@ export default function CoursesPage() {
       />
 
       {/* Page header */}
-      <section className="relative overflow-hidden" style={{ backgroundColor: LMS_TOKENS.navy }}>
+      <section className="relative overflow-hidden" style={{ backgroundColor: LMS_TOKENS.navySolid }}>
         <div
           className="pointer-events-none absolute inset-0"
           aria-hidden="true"
@@ -261,7 +261,7 @@ export default function CoursesPage() {
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Search courses..."
-              className="h-12 w-full rounded-full border bg-white pl-12 pr-4 text-[15px] outline-none transition focus:border-[#6440FB]"
+              className="h-12 w-full rounded-full border [background-color:var(--lms-surface,#fff)] pl-12 pr-4 text-[15px] outline-none transition focus:border-[#6440FB]"
               style={{ borderColor: LMS_TOKENS.border, color: LMS_TOKENS.navy }}
               aria-label="Search courses"
             />
@@ -270,7 +270,7 @@ export default function CoursesPage() {
             <button
               type="button"
               onClick={() => setMobileFiltersOpen(true)}
-              className="inline-flex h-12 items-center gap-2 rounded-full border bg-white px-5 text-[15px] font-medium lg:hidden"
+              className="inline-flex h-12 items-center gap-2 rounded-full border [background-color:var(--lms-surface,#fff)] px-5 text-[15px] font-medium lg:hidden"
               style={{ borderColor: LMS_TOKENS.border, color: LMS_TOKENS.navy }}
             >
               <SlidersHorizontal className="size-4" aria-hidden="true" />
@@ -283,7 +283,7 @@ export default function CoursesPage() {
               <select
                 value={sort}
                 onChange={(event) => setSort(event.target.value as typeof sort)}
-                className="h-12 rounded-full border bg-white px-5 text-[15px] font-medium outline-none focus:border-[#6440FB]"
+                className="h-12 rounded-full border [background-color:var(--lms-surface,#fff)] px-5 text-[15px] font-medium outline-none focus:border-[#6440FB]"
                 style={{ borderColor: LMS_TOKENS.border, color: LMS_TOKENS.navy }}
                 aria-label="Sort courses"
               >
@@ -395,7 +395,7 @@ export default function CoursesPage() {
             onClick={() => setMobileFiltersOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute inset-y-0 left-0 w-[86%] max-w-sm overflow-y-auto bg-white p-6 shadow-2xl">
+          <div className="absolute inset-y-0 left-0 w-[86%] max-w-sm overflow-y-auto [background-color:var(--lms-surface,#fff)] p-6 shadow-2xl">
             <div className="mb-6 flex items-center justify-between">
               <span className="text-base font-bold" style={{ color: LMS_TOKENS.navy }}>
                 Filter courses

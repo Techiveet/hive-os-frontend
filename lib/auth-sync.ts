@@ -1,10 +1,73 @@
+import { safeLocalStorageGetItem, safeLocalStorageSetItem, safeLocalStorageRemoveItem, safeSessionStorageSetItem } from "@/lib/safe-storage";
 import { getAccessToken, getBackendApiRoot, getTenantHeaders, isTenantSession } from "./runtime-context";
 import { clearSessionActivity } from "./session-activity";
 import { clearOfflineState } from "@/lib/offline/storage";
+import { resetQueryCachePersistence } from "@/lib/offline/query-persistence";
 
 export const isImpersonatingSession = (): boolean => {
   if (typeof window === "undefined") return false;
-  return Boolean(localStorage.getItem("hive_original_token"));
+  return Boolean(safeLocalStorageGetItem("hive_original_token"));
+};
+
+const revokeSessionToken = async (
+  token: string,
+  tenantHeaders: Record<string, string>,
+): Promise<boolean> => {
+  const abortController = new AbortController();
+  const timeoutId = window.setTimeout(() => abortController.abort(), 5000);
+
+  try {
+    const response = await fetch(`${getBackendApiRoot()}/logout`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+        ...tenantHeaders,
+      },
+      keepalive: true,
+      signal: abortController.signal,
+    });
+
+    return response.ok || response.status === 401;
+  } catch (error) {
+    console.warn("Could not revoke the server session before local logout", error);
+    return false;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
+
+export const logoutHiveSession = async (): Promise<boolean> => {
+  if (typeof window === "undefined") return false;
+
+  const token = safeLocalStorageGetItem("hive_token");
+  const originalToken = safeLocalStorageGetItem("hive_original_token");
+  const originalContext = safeLocalStorageGetItem("hive_original_context");
+  const originalSignature = safeLocalStorageGetItem("hive_original_context_signature");
+  const revocations: Promise<boolean>[] = [];
+
+  if (token) {
+    revocations.push(revokeSessionToken(token, getTenantHeaders()));
+  }
+
+  if (originalToken && originalToken !== token) {
+    revocations.push(
+      revokeSessionToken(
+        originalToken,
+        originalContext && originalContext !== "central"
+          ? getTenantHeaders({
+              tenantOverride: originalContext,
+              signatureOverride: originalSignature,
+            })
+          : {},
+      ),
+    );
+  }
+
+  const results = await Promise.all(revocations);
+  clearHiveSession();
+
+  return results.length === 0 || results.every(Boolean);
 };
 
 export const startImpersonationSession = (impersonationData: {
@@ -15,36 +78,36 @@ export const startImpersonationSession = (impersonationData: {
 }) => {
   if (typeof window === "undefined") return;
 
-  const currentToken = localStorage.getItem("hive_token");
-  const currentUser = localStorage.getItem("hive_user");
-  const currentContext = localStorage.getItem("hive_context");
-  const currentSignature = localStorage.getItem("hive_context_signature");
+  const currentToken = safeLocalStorageGetItem("hive_token");
+  const currentUser = safeLocalStorageGetItem("hive_user");
+  const currentContext = safeLocalStorageGetItem("hive_context");
+  const currentSignature = safeLocalStorageGetItem("hive_context_signature");
 
   // Save the original super admin session only once (prevent nested overwriting)
-  if (currentToken && !localStorage.getItem("hive_original_token")) {
-    localStorage.setItem("hive_original_token", currentToken);
-    if (currentUser) localStorage.setItem("hive_original_user", currentUser);
-    if (currentContext) localStorage.setItem("hive_original_context", currentContext);
-    if (currentSignature) localStorage.setItem("hive_original_context_signature", currentSignature);
+  if (currentToken && !safeLocalStorageGetItem("hive_original_token")) {
+    safeLocalStorageSetItem("hive_original_token", currentToken);
+    if (currentUser) safeLocalStorageSetItem("hive_original_user", currentUser);
+    if (currentContext) safeLocalStorageSetItem("hive_original_context", currentContext);
+    if (currentSignature) safeLocalStorageSetItem("hive_original_context_signature", currentSignature);
   }
 
-  localStorage.setItem("hive_token", impersonationData.token);
+  safeLocalStorageSetItem("hive_token", impersonationData.token);
   if (impersonationData.user) {
-    localStorage.setItem("hive_user", JSON.stringify(impersonationData.user));
+    safeLocalStorageSetItem("hive_user", JSON.stringify(impersonationData.user));
   } else {
-    localStorage.removeItem("hive_user");
+    safeLocalStorageRemoveItem("hive_user");
   }
 
   if (impersonationData.context && impersonationData.context !== "central") {
-    localStorage.setItem("hive_context", impersonationData.context);
+    safeLocalStorageSetItem("hive_context", impersonationData.context);
   } else {
-    localStorage.removeItem("hive_context");
+    safeLocalStorageRemoveItem("hive_context");
   }
 
   if (impersonationData.context_signature && impersonationData.context !== "central") {
-    localStorage.setItem("hive_context_signature", impersonationData.context_signature);
+    safeLocalStorageSetItem("hive_context_signature", impersonationData.context_signature);
   } else {
-    localStorage.removeItem("hive_context_signature");
+    safeLocalStorageRemoveItem("hive_context_signature");
   }
 
   clearOfflineState();
@@ -56,38 +119,46 @@ export const startImpersonationSession = (impersonationData: {
 export const stopImpersonation = async (targetRedirectUrl = "/dashboard") => {
   if (typeof window === "undefined") return;
 
-  const originalToken = localStorage.getItem("hive_original_token");
-  const originalUser = localStorage.getItem("hive_original_user");
-  const originalContext = localStorage.getItem("hive_original_context");
-  const originalSignature = localStorage.getItem("hive_original_context_signature");
+  const originalToken = safeLocalStorageGetItem("hive_original_token");
+  const originalUser = safeLocalStorageGetItem("hive_original_user");
+  const originalContext = safeLocalStorageGetItem("hive_original_context");
+  const originalSignature = safeLocalStorageGetItem("hive_original_context_signature");
 
   if (originalToken) {
-    localStorage.setItem("hive_token", originalToken);
+    const impersonationToken = safeLocalStorageGetItem("hive_token");
+    if (impersonationToken && impersonationToken !== originalToken) {
+      await revokeSessionToken(impersonationToken, getTenantHeaders());
+    }
+
+    // Clear the borrowed tenant/user cache while that context is still active.
+    // Clearing after restoration targets the administrator's scope instead.
+    clearOfflineState();
+    resetQueryCachePersistence();
+
+    safeLocalStorageSetItem("hive_token", originalToken);
 
     if (originalUser) {
-      localStorage.setItem("hive_user", originalUser);
+      safeLocalStorageSetItem("hive_user", originalUser);
     } else {
-      localStorage.removeItem("hive_user");
+      safeLocalStorageRemoveItem("hive_user");
     }
 
     if (originalContext && originalContext !== "central") {
-      localStorage.setItem("hive_context", originalContext);
+      safeLocalStorageSetItem("hive_context", originalContext);
     } else {
-      localStorage.removeItem("hive_context");
+      safeLocalStorageRemoveItem("hive_context");
     }
 
     if (originalSignature && originalContext !== "central") {
-      localStorage.setItem("hive_context_signature", originalSignature);
+      safeLocalStorageSetItem("hive_context_signature", originalSignature);
     } else {
-      localStorage.removeItem("hive_context_signature");
+      safeLocalStorageRemoveItem("hive_context_signature");
     }
 
-    localStorage.removeItem("hive_original_token");
-    localStorage.removeItem("hive_original_user");
-    localStorage.removeItem("hive_original_context");
-    localStorage.removeItem("hive_original_context_signature");
-
-    clearOfflineState();
+    safeLocalStorageRemoveItem("hive_original_token");
+    safeLocalStorageRemoveItem("hive_original_user");
+    safeLocalStorageRemoveItem("hive_original_context");
+    safeLocalStorageRemoveItem("hive_original_context_signature");
 
     // Fetch fresh Super Admin profile before redirecting to guarantee complete state restoration
     try {
@@ -97,14 +168,20 @@ export const stopImpersonation = async (targetRedirectUrl = "/dashboard") => {
         Accept: "application/json",
         Authorization: `Bearer ${originalToken}`,
       };
-      if (originalContext && originalContext !== "central") {
-        headers["X-Tenant-ID"] = originalContext;
-      }
+      Object.assign(
+        headers,
+        originalContext && originalContext !== "central"
+          ? getTenantHeaders({
+              tenantOverride: originalContext,
+              signatureOverride: originalSignature,
+            })
+          : {},
+      );
       const res = await fetch(`${baseUrl}${endpoint}?t=${Date.now()}`, { headers });
       if (res.ok) {
         const freshSuperAdmin = await res.json();
         if (freshSuperAdmin) {
-          localStorage.setItem("hive_user", JSON.stringify(freshSuperAdmin));
+          safeLocalStorageSetItem("hive_user", JSON.stringify(freshSuperAdmin));
         }
       }
     } catch (e) {
@@ -122,20 +199,21 @@ export const clearHiveSession = (ejectReason?: string) => {
   if (typeof window === "undefined") return;
 
   clearOfflineState();
-  localStorage.removeItem("hive_token");
-  localStorage.removeItem("hive_user");
-  localStorage.removeItem("hive_context");
-  localStorage.removeItem("hive_context_signature");
-  localStorage.removeItem("hive_original_token");
-  localStorage.removeItem("hive_original_user");
-  localStorage.removeItem("hive_original_context");
-  localStorage.removeItem("hive_original_context_signature");
+  resetQueryCachePersistence();
+  safeLocalStorageRemoveItem("hive_token");
+  safeLocalStorageRemoveItem("hive_user");
+  safeLocalStorageRemoveItem("hive_context");
+  safeLocalStorageRemoveItem("hive_context_signature");
+  safeLocalStorageRemoveItem("hive_original_token");
+  safeLocalStorageRemoveItem("hive_original_user");
+  safeLocalStorageRemoveItem("hive_original_context");
+  safeLocalStorageRemoveItem("hive_original_context_signature");
   clearSessionActivity();
   window.dispatchEvent(new Event("hive_session_cleared"));
   window.dispatchEvent(new Event("hive_session_changed"));
 
   if (ejectReason) {
-    sessionStorage.setItem("hive_eject_reason", ejectReason);
+    safeSessionStorageSetItem("hive_eject_reason", ejectReason);
   }
 };
 
@@ -144,7 +222,36 @@ export const notifySessionChanged = (): void => {
   window.dispatchEvent(new Event("hive_session_changed"));
 };
 
+/**
+ * Requests that a signed-out visitor is expected to make.
+ *
+ * Matched on a `public` path segment anywhere, not on a fixed `/api/v1/public/`
+ * prefix: the tenant landing page calls `/api/v1/tenant/public/landing`, which
+ * the prefix form classified as protected and ejected visitors over.
+ */
+export const isPublicEndpoint = (url: string): boolean => {
+  try {
+    const { pathname } = new URL(url, "http://hive.local");
+    return pathname.split("/").includes("public");
+  } catch {
+    return false;
+  }
+};
+
 export const handleAuthFailureResponse = async (response: Response): Promise<boolean> => {
+  /*
+   * A 401 only means "this session is finished" if there was a session to
+   * finish, and if the request needed one.
+   *
+   * Without these two guards, a signed-out visitor loading a tenant landing
+   * page was ejected to /sign-in the moment any public endpoint answered 401 —
+   * the page legitimately calls several, and losing one of them should not
+   * look like an expired login.
+   */
+  if (isPublicEndpoint(response.url) || !getAccessToken()) {
+    return false;
+  }
+
   const isUnauthorized = response.status === 401;
 
   let payload: any = null;
@@ -209,7 +316,7 @@ export const syncUserSession = async () => {
     }
 
     const freshUserData = await response.json();
-    const localUserStr = localStorage.getItem("hive_user");
+    const localUserStr = safeLocalStorageGetItem("hive_user");
 
     if (freshUserData) {
       const localUser = localUserStr ? JSON.parse(localUserStr) : {};
@@ -223,7 +330,7 @@ export const syncUserSession = async () => {
       };
 
       // 🚀 Save the fresh data and ALWAYS dispatch the event
-      localStorage.setItem("hive_user", JSON.stringify(updatedUser));
+      safeLocalStorageSetItem("hive_user", JSON.stringify(updatedUser));
       window.dispatchEvent(new Event("hive_security_cleared"));
     }
   } catch (error) {

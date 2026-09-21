@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { logFrontendAction } from "@/lib/api";
 import { clearHiveSession } from "@/lib/auth-sync";
+import { safeLocalStorageSetItem, safeLocalStorageRemoveItem, safeSessionStorageSetItem, safeSessionStorageRemoveItem, purgeNonEssentialStorage } from "@/lib/safe-storage";
 import {
   getBackendApiRoot,
   getTenantHeaders,
@@ -20,6 +21,7 @@ import {
   persistHiveContext,
 } from "@/lib/runtime-context";
 import { initializeSessionActivity } from "@/lib/session-activity";
+import { resolveHomePath } from "@/lib/home-path";
 import {
   LMS_MY_LEARNING_PATH,
   LMS_TOKENS,
@@ -34,15 +36,25 @@ const POST_LOGIN_REDIRECT_STORAGE_KEY = "hive_post_login_redirect";
 const AUTH_SERVER_UNAVAILABLE_MESSAGE =
   "Unable to connect to the authentication server. Please confirm the Hive backend is running and try again.";
 
-const resolveSafePostLoginRedirect = (): string => {
+/**
+ * An explicit ?redirect= wins; otherwise the user's own home surface decides.
+ * A tenant Super Admin signing in here still belongs in the ERP dashboard,
+ * while everyone else stays inside the LMS interface.
+ */
+const resolveSafePostLoginRedirect = (user?: unknown): string => {
+  const fallback = user
+    ? resolveHomePath(user as Parameters<typeof resolveHomePath>[0])
+    : LMS_MY_LEARNING_PATH;
+  const home = fallback === "/dashboard" ? fallback : LMS_MY_LEARNING_PATH;
+
   if (typeof window === "undefined") {
-    return LMS_MY_LEARNING_PATH;
+    return home;
   }
 
   const redirect = new URLSearchParams(window.location.search).get("redirect")?.trim();
 
   if (!redirect || !redirect.startsWith("/") || redirect.startsWith("//") || redirect.includes("\\")) {
-    return LMS_MY_LEARNING_PATH;
+    return home;
   }
 
   return redirect;
@@ -90,13 +102,13 @@ export default function LmsStudentLoginPage() {
 
       // 2FA global intercept — mirrors the platform sign-in flow.
       if (data.requires_2fa || data.global_2fa_enforced) {
-        sessionStorage.setItem("hive_pending_email", email);
-        sessionStorage.setItem(POST_LOGIN_REDIRECT_STORAGE_KEY, resolveSafePostLoginRedirect());
-        if (data.two_factor_token) sessionStorage.setItem("hive_2fa_token", data.two_factor_token);
+        safeSessionStorageSetItem("hive_pending_email", email);
+        safeSessionStorageSetItem(POST_LOGIN_REDIRECT_STORAGE_KEY, resolveSafePostLoginRedirect());
+        if (data.two_factor_token) safeSessionStorageSetItem("hive_2fa_token", data.two_factor_token);
 
         if (data.requires_2fa_setup && data.qr_code_url) {
-          sessionStorage.setItem("hive_2fa_setup_qr", data.qr_code_url);
-          sessionStorage.setItem("hive_2fa_setup_secret", data.secret);
+          safeSessionStorageSetItem("hive_2fa_setup_qr", data.qr_code_url);
+          safeSessionStorageSetItem("hive_2fa_setup_secret", data.secret);
         } else {
           sessionStorage.removeItem("hive_2fa_setup_qr");
           sessionStorage.removeItem("hive_2fa_setup_secret");
@@ -113,14 +125,15 @@ export default function LmsStudentLoginPage() {
 
       clearHiveSession();
       localStorage.removeItem("hive_original_token");
-      localStorage.setItem("hive_token", data.data.token);
-      localStorage.setItem("hive_user", JSON.stringify(data.data.user));
+      purgeNonEssentialStorage();
+      safeLocalStorageSetItem("hive_token", data.data.token);
+      safeLocalStorageSetItem("hive_user", JSON.stringify(data.data.user));
       persistHiveContext(data.data.context, data.data.context_signature ?? null);
       initializeSessionActivity();
       sessionStorage.removeItem("hive_eject_reason");
 
       await logFrontendAction({ module: "Auth", action: "session_initialized", description: `Learner ${email} authenticated.` }).catch(() => {});
-      window.location.href = resolveSafePostLoginRedirect();
+      window.location.href = resolveSafePostLoginRedirect(data.data.user);
     } catch (err: unknown) {
       const message = getErrorMessage(err, "Invalid credentials provided");
       logFrontendAction({ module: "Auth", action: "login_failed", description: `Failed: ${message}` }).catch(() => {});
@@ -224,23 +237,15 @@ export default function LmsStudentLoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm font-medium text-[#4F547B]">Or sign in using</div>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <button
-              type="button"
-              className="h-12 rounded-2xl border-2 border-[#3B5998] text-sm font-semibold text-[#3B5998] transition hover:bg-[#3B5998] hover:text-white"
-            >
-              Log In via Facebook
-            </button>
-            <button
-              type="button"
-              className="h-12 rounded-2xl border-2 border-[#EA4335] text-sm font-semibold text-[#EA4335] transition hover:bg-[#EA4335] hover:text-white"
-            >
-              Log In via Google
-            </button>
-          </div>
+          {/*
+            The template shipped "Log In via Facebook" and "Log In via Google"
+            buttons here. Neither did anything — there is no social provider
+            configured anywhere in the app — and a sign-in button that silently
+            does nothing is worse than no button at all. They come back the day
+            an OAuth provider exists to put behind them.
+          */}
 
-          <p className="mt-6 rounded-2xl px-4 py-3 text-center text-xs leading-5 text-[#4F547B]" style={{ backgroundColor: `${LMS_TOKENS.lavender}80` }}>
+          <p className="mt-7 rounded-2xl px-4 py-3 text-center text-xs leading-5 text-[#4F547B]" style={{ backgroundColor: `${LMS_TOKENS.lavender}80` }}>
             Demo learner: <strong style={{ color: LMS_TOKENS.navy }}>student@lms-demo.localhost</strong> / <strong style={{ color: LMS_TOKENS.navy }}>password</strong> · signed-in students continue in{" "}
             <strong style={{ color: LMS_TOKENS.navy }}>My Learning</strong>.
           </p>

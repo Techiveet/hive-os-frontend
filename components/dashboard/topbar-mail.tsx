@@ -12,6 +12,7 @@ import { useMailStore, type MailParticipant } from "@/store/mail-store";
 import { formatDistanceToNow } from "date-fns";
 import api from "@/lib/api";
 import { decryptMailParticipants, ensureMailEncryptionIdentity, fetchMailEncryptionConfig, getEncryptedMailBodyFallback } from "@/lib/mail-e2ee";
+import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
 
 type ActiveMailUser = { id?: number | string | null };
 
@@ -20,6 +21,8 @@ export function TopbarMailIcon({ activeUser }: { activeUser: ActiveMailUser | nu
   const queryClient = useQueryClient();
   const { selectMail, setActiveFolder } = useMailStore();
   const [isOpen, setIsOpen] = useState(false);
+  const { moduleAccess, hasModule } = useTenantModuleAccess();
+  const canUseMailbox = !isTenantSession() || (moduleAccess !== null && hasModule("mailbox"));
 
   const getApiUrl = () => {
     return getBackendApiRoot();
@@ -41,7 +44,7 @@ export function TopbarMailIcon({ activeUser }: { activeUser: ActiveMailUser | nu
         if (!res.ok) throw new Error("Failed to fetch count");
         return res.json();
     },
-    enabled: !!activeUser?.id,
+    enabled: !!activeUser?.id && canUseMailbox,
   });
 
   const { data: recentMailsData, isLoading: isLoadingRecent } = useQuery({
@@ -55,7 +58,7 @@ export function TopbarMailIcon({ activeUser }: { activeUser: ActiveMailUser | nu
 
         return { data: decryptedMails };
     },
-    enabled: !!activeUser?.id && isOpen, // Only fetch when dropdown is open
+    enabled: !!activeUser?.id && canUseMailbox && isOpen, // Only fetch when dropdown is open
   });
 
   const unreadCount = unreadMailData?.count || 0;
@@ -86,10 +89,15 @@ export function TopbarMailIcon({ activeUser }: { activeUser: ActiveMailUser | nu
     }
   };
 
+  if (!canUseMailbox) {
+    return null;
+  }
+
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <Button
+          aria-label="Open mailbox"
           variant="ghost"
           className="h-10 w-10 rounded-xl p-0 shrink-0 text-muted-foreground hover:text-foreground relative"
         >
@@ -147,6 +155,7 @@ export function TopbarMailIcon({ activeUser }: { activeUser: ActiveMailUser | nu
                 
                 {/* Read/Unread toggler button */}
                 <button 
+                  aria-label={mail.is_read ? 'Mark as unread' : 'Mark as read'}
                   onClick={(e) => toggleReadStatus(e, mail.mail_message_id, mail.is_read)}
                   className="absolute right-4 bottom-3 h-6 w-6 rounded-full flex items-center justify-center hover:bg-background shadow-sm border border-transparent hover:border-border transition-all"
                   title={mail.is_read ? 'Mark as unread' : 'Mark as read'}

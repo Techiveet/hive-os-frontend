@@ -72,6 +72,7 @@ import { RestaurantLandingTemplate } from "@/modules/tenancy/components/restaura
 import LmsLandingTemplate from "@/modules/tenancy/components/lms-landing-template";
 import B2BLandingTemplate from "@/modules/tenancy/components/b2b-landing-template";
 import { MarketplacePreloader } from "@/modules/b2b-marketplace/components/MarketplacePreloader";
+import { LmsPreloader } from "@/modules/Lms/components/lms-preloader";
 import { formatDocumentTitle } from "@/lib/document-title";
 
 interface LandingUIProps {
@@ -753,6 +754,25 @@ function LandingUI({
 
   if (isTenantExperience) {
     if (isLoadingTenantLanding) {
+      /*
+       * What identifies a tenant as an LMS is business_type on the landing
+       * payload — which is precisely what has not arrived yet at this point.
+       * So the same two signals the nightclub branch below uses: the slug, and
+       * a payload React Query still holds from an earlier visit.
+       *
+       * Without this the LMS fell through to MarketplacePreloader and a student
+       * opening their course site was greeted by a dark grid of shopping carts
+       * reading "Loading marketplace".
+       */
+      const looksLikeLms =
+        tenantLandingPayload?.business_type === "lms" ||
+        detectedTenantSlug === "lms-demo" ||
+        (detectedTenantSlug?.includes("lms") ?? false);
+
+      if (looksLikeLms) {
+        return <LmsPreloader brandName={brandSettings?.app_title || detectedTenantSlug} />;
+      }
+
       if (detectedTenantSlug === "savory-lounge") {
         return (
           <div className="flex h-screen w-screen items-center justify-center bg-[#080510]">
@@ -807,6 +827,34 @@ function LandingUI({
             <p className="text-sm text-slate-400 font-medium">Redirecting to login...</p>
           </div>
         </div>
+      );
+    }
+
+    /*
+     * The LMS academy template is checked before stored custom code.
+     *
+     * Every tenant carries a custom_code landing, so that branch always won and
+     * an LMS tenant's landing rendered as raw HTML inside a full-screen iframe.
+     * That iframe cannot share the React chrome, so the site header, its nav
+     * tabs, the active-tab state, the language switcher and the theme toggle
+     * were all missing from the landing while every other page in the template
+     * had them — the navigation was not the same throughout.
+     *
+     * Scoped to the LMS on purpose: the other business templates keep their
+     * existing custom_code precedence.
+     */
+    if (isLmsTemplate) {
+      return (
+        <LmsLandingTemplate
+          brandSettings={brandSettings}
+          template={resolvedTemplate}
+          tenantName={
+            tenantLandingPayload?.tenant?.name ||
+            brandSettings?.app_title ||
+            detectedTenantSlug ||
+            t('landing.common.tenant_workspace', "Tenant Workspace")
+          }
+        />
       );
     }
 

@@ -1,5 +1,6 @@
 import axios from "axios";
-import { clearHiveSession } from "@/lib/auth-sync";
+import { clearHiveSession, isPublicEndpoint } from "@/lib/auth-sync";
+import { safeSessionStorageSetItem } from "@/lib/safe-storage";
 import { getEchoSocketId } from "@/lib/echo";
 import { getAccessToken, getBackendApiRoot, getTenantHeaders } from "@/lib/runtime-context";
 
@@ -74,6 +75,17 @@ api.interceptors.response.use(
       const isEjected = status === 403 && msg.includes("CRITICAL:");
       const isTelemetryRequest = requestUrl.includes("/logs/client-action");
 
+      /*
+       * Same two guards the fetch path (handleAuthFailureResponse) already
+       * carries, which this interceptor never got: a 401 only means "your
+       * session ended" if there was a session, and if the request needed one.
+       * Without them a signed-out visitor on a tenant landing page — which
+       * legitimately calls several public endpoints — was thrown at /sign-in
+       * the first time one of them answered 401.
+       */
+      const hadSession = Boolean(getAccessToken());
+      const isPublicRequest = isPublicEndpoint(requestUrl);
+
       // The backend blocks every route until a first-login password is
       // replaced. It cannot redirect, being an API, so it answers with this
       // code and the routing happens here. Handled before the sign-out paths
@@ -84,7 +96,7 @@ api.interceptors.response.use(
         if (!onChangePassword) {
           // Remembered so the form can return the user where they were going,
           // rather than dumping everyone on the dashboard root.
-          sessionStorage.setItem(
+          safeSessionStorageSetItem(
             "hive_password_change_intended",
             window.location.pathname + window.location.search,
           );
@@ -101,7 +113,7 @@ api.interceptors.response.use(
       const isBillingRequest = requestUrl.includes("/subscriptions");
 
       if (isSubscriptionLock && !isBillingRequest && !window.location.pathname.startsWith("/dashboard/subscriptions")) {
-        sessionStorage.setItem(
+        safeSessionStorageSetItem(
           "hive_billing_locked_from",
           window.location.pathname + window.location.search,
         );
@@ -109,7 +121,11 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      if ((isUnauthorized && !isTelemetryRequest) || isEjected) {
+      if (
+        hadSession &&
+        !isPublicRequest &&
+        ((isUnauthorized && !isTelemetryRequest) || isEjected)
+      ) {
         const ejectReason = code === "TENANT_CONTEXT_INVALID"
           || code === "TENANT_CONTEXT_SIGNATURE_INVALID"
           || code === "SESSION_EXPIRED"
@@ -119,7 +135,7 @@ api.interceptors.response.use(
         clearHiveSession(ejectReason);
 
         if (isEjected) {
-          sessionStorage.setItem("hive_eject_reason", msg.replace("CRITICAL: ", ""));
+          safeSessionStorageSetItem("hive_eject_reason", msg.replace("CRITICAL: ", ""));
         }
 
         if (!window.location.pathname.includes("/sign-in")) {
