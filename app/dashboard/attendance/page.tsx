@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function AttendancePage() {
-  return <AttendanceWorkspace headingLevel="h1" />;
+  return <AttendanceWorkspace />;
 }

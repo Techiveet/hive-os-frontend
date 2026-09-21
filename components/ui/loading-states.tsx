@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldCheck, Sparkles } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
 
 import DataTableLoading from "@/components/datatable/datatable-loading";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,10 +20,21 @@ function AccentOrb({ className }: { className?: string }) {
 export function FullScreenPlaceholder({
   label = "Preparing secure workspace",
   detail = "Loading your session, language pack, and node configuration.",
+  tone = "loading",
+  actions,
 }: {
   label?: string;
   detail?: string;
+  /**
+   * "error" swaps the skeletons for the supplied actions. Showing loading
+   * placeholders on a screen that will never finish loading told the user to
+   * keep waiting on a page that was already dead.
+   */
+  tone?: "loading" | "error";
+  actions?: React.ReactNode;
 }) {
+  const isError = tone === "error";
+
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-background px-6">
       <AccentOrb className="-left-24 top-12 h-64 w-64" />
@@ -31,8 +42,19 @@ export function FullScreenPlaceholder({
 
       <div className="relative w-full max-w-3xl rounded-[2rem] border border-border/50 bg-card/70 p-8 shadow-2xl backdrop-blur-xl">
         <div className="mb-8 flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
-            <ShieldCheck className="h-6 w-6" />
+          <div
+            className={cn(
+              "flex h-14 w-14 items-center justify-center rounded-2xl border",
+              isError
+                ? "border-destructive/30 bg-destructive/10 text-destructive"
+                : "border-primary/20 bg-primary/10 text-primary"
+            )}
+          >
+            {isError ? (
+              <ShieldAlert aria-hidden="true" className="h-6 w-6" />
+            ) : (
+              <ShieldCheck aria-hidden="true" className="h-6 w-6" />
+            )}
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-black uppercase tracking-[0.35em] text-primary/80">
@@ -45,6 +67,15 @@ export function FullScreenPlaceholder({
           </div>
         </div>
 
+        {isError ? (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="flex flex-wrap gap-3 rounded-[1.5rem] border border-border/50 bg-background/60 p-5"
+          >
+            {actions}
+          </div>
+        ) : (
         <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[1.5rem] border border-border/50 bg-background/60 p-5">
             <div className="flex items-center justify-between gap-3">
@@ -84,6 +115,7 @@ export function FullScreenPlaceholder({
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
@@ -390,8 +422,6 @@ export function ProfileWorkspaceSkeleton() {
     </div>
   );
 }
-
-/** Compact table placeholder — same muted pulse language as DataTableLoading. */
 export function PanelTableSkeleton({
   rows = 6,
   cols = 6,
