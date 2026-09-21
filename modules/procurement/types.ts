@@ -23,23 +23,30 @@ export interface ProcurementLine {
   tax_rate?: number | string;
   line_total?: number | string;
   inventory_item_id?: number | null;
-  warehouse_location_id?: number | null;
   accepted_quantity?: number | string;
   received_quantity?: number | string;
+  rejected_quantity?: number | string;
   lot_number?: string | null;
   batch_number?: string | null;
+  serial_numbers?: string[] | null;
   expiry_date?: string | null;
-  serial_numbers?: string[];
-  // Tracking flags copied onto the receipt line from the selected inventory item
-  // so the receiving editor knows which capture fields to require.
-  track_batches?: boolean;
-  track_expiry?: boolean;
-  track_serials?: boolean;
 }
 export interface SupplierProfile {
   id: number;
   supplier_id: number;
   legal_name?: string | null;
+  tax_identification_number?: string | null;
+  business_license_number?: string | null;
+  country_code?: string | null;
+  region?: string | null;
+  city?: string | null;
+  contact_person?: string | null;
+  payment_terms?: string | null;
+  lead_time_days?: number;
+  categories?: string[] | null;
+  certifications?: string[] | null;
+  banking_details?: Record<string, unknown> | null;
+  eligibility_documents?: string[] | null;
   eligibility_status: string;
   domestic_supplier: boolean;
   quality_score: number | string;
@@ -48,6 +55,7 @@ export interface SupplierProfile {
   invoice_accuracy_score: number | string;
   overall_score: number | string;
   debarred_until?: string | null;
+  last_evaluated_at?: string | null;
   supplier?: Supplier;
 }
 export interface Requisition {
@@ -55,15 +63,31 @@ export interface Requisition {
   number: string;
   title: string;
   business_justification?: string | null;
+  requested_by?: number | null;
+  department_id?: number | null;
+  cost_center_id?: number | null;
+  project_id?: number | null;
   procurement_method: string;
   priority: string;
   required_on?: string | null;
   currency: string;
   items: ProcurementLine[];
+  estimated_subtotal?: number | string;
+  estimated_tax?: number | string;
   estimated_total: number | string;
   budget_status: string;
+  budget_notes?: string | null;
+  budget_checked_at?: string | null;
+  budget_checked_by?: number | null;
   status: string;
   workflow_status: string;
+  rejection_reason?: string | null;
+  attachments?: unknown[] | null;
+  submitted_at?: string | null;
+  approved_at?: string | null;
+  approved_by?: number | null;
+  sourcing_events_count?: number;
+  purchase_orders_count?: number;
   created_at: string;
 }
 export interface SupplierBid {
@@ -73,13 +97,21 @@ export interface SupplierBid {
   items: ProcurementLine[];
   total: number | string;
   delivery_days: number;
+  payment_terms?: string | null;
+  valid_until?: string | null;
+  documents?: string[] | null;
   technical_score: number | string;
   financial_score: number | string;
   preference_score: number | string;
   total_score: number | string;
+  evaluation_notes?: string | null;
   status: string;
   recommended: boolean;
   supplier?: Supplier;
+}
+export interface SourcingEvaluationCriterion {
+  key: string;
+  weight: number;
 }
 export interface SourcingEvent {
   id: number;
@@ -90,9 +122,21 @@ export interface SourcingEvent {
   scope?: string | null;
   estimated_value: number | string;
   currency: string;
+  evaluation_criteria?: SourcingEvaluationCriterion[] | null;
+  invited_supplier_ids?: number[] | null;
+  documents?: string[] | null;
   egp_reference?: string | null;
+  standard_bidding_document?: string | null;
+  bid_security_amount?: number | string;
+  performance_security_percent?: number | string;
+  domestic_preference_percent?: number | string;
+  tax_inclusive_evaluation?: boolean;
   status: string;
+  clarification_deadline?: string | null;
   submission_deadline?: string | null;
+  published_at?: string | null;
+  opened_at?: string | null;
+  awarded_at?: string | null;
   bids?: SupplierBid[];
   bids_count?: number;
   requisition?: Pick<Requisition, "id" | "number" | "title">;
@@ -102,18 +146,29 @@ export interface PurchaseOrder {
   number: string;
   supplier_id: number;
   requisition_id?: number | null;
+  agreement_id?: number | null;
+  sourcing_event_id?: number | null;
+  project_id?: number | null;
+  cost_center_id?: number | null;
   currency: string;
+  exchange_rate?: number | string;
   items: ProcurementLine[];
   total: number | string;
   ordered_on: string;
   expected_on?: string | null;
   delivery_location?: string | null;
+  terms?: Record<string, unknown> | null;
+  attachments?: string[] | null;
+  allow_over_receipt?: boolean;
+  over_receipt_tolerance_percent?: number | string;
   status: string;
   revision_number: number;
   received_percent: number | string;
   invoiced_percent: number | string;
   supplier_confirmation_status: string;
+  supplier_confirmation_reference?: string | null;
   supplier?: Supplier;
+  requisition?: Pick<Requisition, "id" | "number" | "title">;
   receipts_count?: number;
   invoices_count?: number;
 }
@@ -126,8 +181,11 @@ export interface GoodsReceipt {
   items: ProcurementLine[];
   inspection_method: string;
   inspection_status: string;
+  quality_notes?: string | null;
   nonconformance_reference?: string | null;
+  quality_alert_status?: string | null;
   stock_posted_at?: string | null;
+  attachments?: string[] | null;
   status: string;
   purchase_order?: PurchaseOrder;
 }
@@ -141,6 +199,8 @@ export interface SupplierInvoice {
   currency: string;
   items: ProcurementLine[];
   total: number | string;
+  price_tolerance_percent?: number | string;
+  quantity_tolerance_percent?: number | string;
   match_status: string;
   discrepancies?: Array<{
     line: number;
@@ -149,6 +209,8 @@ export interface SupplierInvoice {
     expected?: number;
     actual?: number;
   }>;
+  override_reason?: string | null;
+  attachments?: string[] | null;
   status: string;
   finance_document_id?: number | null;
   purchase_order?: PurchaseOrder;
@@ -165,6 +227,10 @@ export interface Agreement {
   currency: string;
   ceiling_amount: number | string;
   committed_amount: number | string;
+  items?: ProcurementLine[] | null;
+  service_levels?: string[] | Array<Record<string, unknown>> | null;
+  documents?: string[] | null;
+  auto_replenishment?: boolean;
   status: string;
   supplier?: Supplier;
 }
@@ -174,7 +240,9 @@ export interface AuditEvent {
   entity_id: number;
   event: string;
   actor_id?: number | null;
-  context?: Record<string, unknown>;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  context?: Record<string, unknown> | null;
   occurred_at: string;
 }
 export interface ProcurementReferences {
@@ -186,21 +254,10 @@ export interface ProcurementReferences {
     unit: string;
     current_stock: string;
     cost_price: string;
-    track_batches?: boolean;
-    track_expiry?: boolean;
-    track_serials?: boolean;
   }>;
   agreements: Agreement[];
-  warehouse_locations: Array<{
-    id: number;
-    warehouse_id: number;
-    warehouse_name: string | null;
-    code: string;
-    name: string;
-    type: string;
-  }>;
   projects: Array<{ id: number; name: string; status: string }>;
-  cost_centers: Array<{ id: number; code: string; name: string }>;
+  cost_centers: Array<{ id: number; code: string; name: string; is_active?: boolean }>;
   methods: Array<{ value: string; label: string }>;
 }
 export interface ProcurementDashboard {
