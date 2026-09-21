@@ -233,10 +233,18 @@ jobs:
             http://localhost:3001/health
 
       - name: Run focused backend waiter regression suites
-        run: docker compose -f hive-os-infra/docker-compose.yml exec -T backend php artisan test Modules/Hospitality/tests/Feature/RestaurantWaiterPosApiTest.php Modules/Hospitality/tests/Feature/RestaurantWaiterPosPhase3WorkflowTest.php
+        run: |
+          docker compose -f hive-os-infra/docker-compose.yml exec -T db \
+            sh -lc 'createdb -U hive testing 2>/dev/null || true'
+          docker compose -f hive-os-infra/docker-compose.yml exec -T \
+            -e APP_ENV=testing -e DB_DATABASE=testing backend \
+            php artisan test Modules/Hospitality/tests/Feature/RestaurantWaiterPosApiTest.php Modules/Hospitality/tests/Feature/RestaurantWaiterPosPhase3WorkflowTest.php
 
       - name: Run complete Hospitality regression suite
-        run: docker compose -f hive-os-infra/docker-compose.yml exec -T backend php artisan test Modules/Hospitality/tests
+        run: |
+          docker compose -f hive-os-infra/docker-compose.yml exec -T \
+            -e APP_ENV=testing -e DB_DATABASE=testing backend \
+            php artisan test Modules/Hospitality/tests
 
       # Provision the fixture as its own step so teardown is a gated CI step
       # rather than something that only happens if Playwright reaches its own
