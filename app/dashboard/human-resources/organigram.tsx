@@ -50,6 +50,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getWorkspaceScopeKey } from "@/lib/runtime-context";
 import { cn } from "@/lib/utils";
+import { PanelCardGridSkeleton } from "@/components/ui/loading-states";
 import {
   Employee,
   OrganigramPayload,
@@ -57,6 +58,7 @@ import {
   Position,
   hrFetch,
 } from "@/modules/humanresources/api";
+import { invalidateHrEmployeeQueries } from "@/modules/humanresources/query-invalidation";
 
 type PersonTreeNode = {
   employee: Employee;
@@ -753,9 +755,7 @@ export function OrganigramPanel({
     },
     onSuccess: () => {
       toast.success("Reporting line updated.");
-      queryClient.invalidateQueries({ queryKey: ["hr-organigram", scope] });
-      queryClient.invalidateQueries({ queryKey: ["hr-employees"] });
-      queryClient.invalidateQueries({ queryKey: ["hr-employees-table"] });
+      void invalidateHrEmployeeQueries(queryClient, { scope });
     },
     onError: (error) =>
       toast.error(
@@ -954,13 +954,24 @@ export function OrganigramPanel({
 
   if (organigram.isLoading)
     return (
-      <Card className="border-slate-400 dark:border-slate-600">
-        <CardContent className="p-8">
-          <p role="status" className="font-semibold">
-            Building the organization map…
-          </p>
-        </CardContent>
-      </Card>
+      <div className="space-y-4" role="status" aria-label="Loading organigram">
+        <div className="flex flex-wrap gap-3">
+          <div className="h-11 w-48 animate-pulse rounded-xl bg-muted" />
+          <div className="h-11 w-36 animate-pulse rounded-xl bg-muted" />
+          <div className="h-11 w-28 animate-pulse rounded-xl bg-muted" />
+        </div>
+        <Card className="border-border/50">
+          <CardContent className="space-y-4 p-6">
+            <div className="mx-auto h-16 w-56 animate-pulse rounded-2xl bg-muted" />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="h-28 animate-pulse rounded-2xl bg-muted/60" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <PanelCardGridSkeleton count={2} className="lg:grid-cols-2" />
+      </div>
     );
 
   if (organigram.isError)

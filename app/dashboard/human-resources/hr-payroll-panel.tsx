@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Wallet, Calculator, FileCheck, DollarSign, Printer, Plus } from 'lucide-react';
 import { payrollFetch } from '@/modules/payroll/api';
 import { getWorkspaceScopeKey } from '@/lib/runtime-context';
+import { PanelTableSkeleton } from '@/components/ui/loading-states';
 
 export function HrPayrollPanel({ employees }: { employees: any[] }) {
   const queryClient = useQueryClient();
@@ -86,8 +87,20 @@ export function HrPayrollPanel({ employees }: { employees: any[] }) {
     <div className="space-y-6">
       {/* Summary Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+        {payslipsQuery.isLoading
+          ? Array.from({ length: 4 }).map((_, index) => (
+              <div
+                key={index}
+                className="rounded-[1.5rem] border border-border/50 bg-card/50 p-5"
+              >
+                <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+                <div className="mt-3 h-8 w-28 animate-pulse rounded-xl bg-muted/60" />
+              </div>
+            ))
+          : (
+            <>
+        <div className="rounded-xl border border-slate-300 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
             <Wallet className="h-4 w-4 text-emerald-500" />
             Total Monthly Gross
           </div>
@@ -122,6 +135,8 @@ export function HrPayrollPanel({ employees }: { employees: any[] }) {
             {payslips.reduce((acc: number, p: any) => acc + Number(p.net_salary), 0).toLocaleString()} ETB
           </p>
         </div>
+            </>
+          )}
       </div>
 
       {/* Header Actions */}
@@ -149,6 +164,9 @@ export function HrPayrollPanel({ employees }: { employees: any[] }) {
       </div>
 
       {/* Data Table */}
+      {payslipsQuery.isLoading ? (
+        <PanelTableSkeleton rows={6} cols={8} />
+      ) : (
       <div className="rounded-xl border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-950 overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead className="border-b bg-slate-50 font-bold dark:bg-slate-900">
@@ -233,6 +251,7 @@ export function HrPayrollPanel({ employees }: { employees: any[] }) {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Create Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -246,7 +265,7 @@ export function HrPayrollPanel({ employees }: { employees: any[] }) {
               <select
                 value={form.employee_id}
                 onChange={(e) => setForm({ ...form, employee_id: e.target.value })}
-                className="mt-1 w-full rounded-md border p-2 text-xs"
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <option value="">Select Employee</option>
                 {employees.map((emp: any) => (

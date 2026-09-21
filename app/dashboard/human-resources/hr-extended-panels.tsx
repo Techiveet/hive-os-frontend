@@ -48,6 +48,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { PanelTableSkeleton } from "@/components/ui/loading-states";
 import {
   Dialog,
   DialogContent,
@@ -77,6 +78,7 @@ import {
   fetchHrLetterTemplates,
   hrFetch,
 } from "@/modules/humanresources/api";
+import { invalidateHrTransferQueries } from "@/modules/humanresources/query-invalidation";
 
 const controlClass =
   "h-11 border-input bg-background text-foreground focus-visible:ring-2 focus-visible:ring-primary";
@@ -513,6 +515,7 @@ export function EmployeeTransferDialog({
   positions: Position[];
 }) {
   const queryClient = useQueryClient();
+  const scope = getWorkspaceScopeKey();
   const [form, setForm] = useState({
     organization_unit_id: "",
     position_id: "",
@@ -552,17 +555,18 @@ export function EmployeeTransferDialog({
           position_id: Number(form.position_id),
           assignment_type: form.assignment_type,
           started_on: form.started_on,
+          full_time_equivalent: 1,
           hours_per_day: Number(form.hours_per_day),
           hours_per_week: Number(form.hours_per_week),
           is_primary: true,
+          change_reason: form.reason || "Internal transfer",
         }),
       });
     },
     onSuccess: () => {
       toast.success(`Transfer recorded for ${employee?.primary_name}.`);
       onOpenChange(false);
-      queryClient.invalidateQueries({ queryKey: ["hr-employees"] });
-      queryClient.invalidateQueries({ queryKey: ["hr-summary"] });
+      void invalidateHrTransferQueries(queryClient, scope);
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to record transfer.");
@@ -690,355 +694,7 @@ export function EmployeeTransferDialog({
 // ==========================================
 // 3. EMPLOYEE RELATIONS & DISCIPLINARY PANEL
 // ==========================================
-export function EmployeeRelationsPanel() {
-  const [activeTab, setActiveTab] = useState("administrative");
-  const [adminCases, setAdminCases] = useState([
-    {
-      id: 1,
-      employee: "Abebe Bikila (EMP-0001)",
-      type: "Written Warning (የጽሁፍ ማስጠንቀቂያ)",
-      reason: "Unexcused late attendance checkpoint",
-      status: "Active / Logged",
-      date: "2026-05-10",
-      officer: "HR Manager",
-    },
-  ]);
-  const [judiciaryCases, setJudiciaryCases] = useState([
-    {
-      id: 1,
-      employee: "Tsion Hailu (EMP-0002)",
-      court_name: "Federal First Instance Court (ፌደራል የመጀመሪያ ደረጃ ፍርድ ቤት)",
-      case_number: "FFC/2026/9041",
-      type: "Salary Garnishment / Injunction (የደመወዝ መያዝ መመሪያ)",
-      penalty_amount: "5,000 ETB",
-      status: "In Effect",
-      date: "2026-04-15",
-    },
-  ]);
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [category, setCategory] = useState<"administrative" | "judiciary">("administrative");
-  const [newAdmin, setNewAdmin] = useState({
-    employee: "",
-    type: "Written Warning (የጽሁፍ ማስጠንቀቂያ)",
-    reason: "",
-    date: new Date().toISOString().slice(0, 10),
-  });
-  const [newJudiciary, setNewJudiciary] = useState({
-    employee: "",
-    court_name: "Federal First Instance Court",
-    case_number: "",
-    type: "Court Ruling / Judgment (የፍርድ ቤት ውሳኔ)",
-    penalty_amount: "",
-    date: new Date().toISOString().slice(0, 10),
-  });
-
-  const handleAddAdmin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAdmin.employee.trim()) return;
-    setAdminCases([
-      ...adminCases,
-      {
-        id: Date.now(),
-        employee: newAdmin.employee,
-        type: newAdmin.type,
-        reason: newAdmin.reason,
-        status: "Active / Logged",
-        date: newAdmin.date,
-        officer: "HR Compliance Officer",
-      },
-    ]);
-    toast.success("Administrative punishment recorded.");
-    setDialogOpen(false);
-    setNewAdmin({ employee: "", type: "Written Warning (የጽሁፍ ማስጠንቀቂያ)", reason: "", date: new Date().toISOString().slice(0, 10) });
-  };
-
-  const handleAddJudiciary = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newJudiciary.employee.trim()) return;
-    setJudiciaryCases([
-      ...judiciaryCases,
-      {
-        id: Date.now(),
-        employee: newJudiciary.employee,
-        court_name: newJudiciary.court_name,
-        case_number: newJudiciary.case_number,
-        type: newJudiciary.type,
-        penalty_amount: newJudiciary.penalty_amount ? `${newJudiciary.penalty_amount} ETB` : "N/A",
-        status: "In Effect",
-        date: newJudiciary.date,
-      },
-    ]);
-    toast.success("Judiciary punishment / court order recorded.");
-    setDialogOpen(false);
-    setNewJudiciary({ employee: "", court_name: "Federal First Instance Court", case_number: "", type: "Court Ruling / Judgment (የፍርድ ቤት ውሳኔ)", penalty_amount: "", date: new Date().toISOString().slice(0, 10) });
-  };
-
-  return (
-    <Card className="border-slate-300 dark:border-slate-700">
-      <CardContent className="p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b pb-5">
-          <div>
-            <h2 className="text-xl font-black flex items-center gap-2">
-              <ShieldAlert className="h-5 w-5 text-amber-500" />
-              Employee Relations & Disciplinary Management (የቅጣት መዝገብ)
-            </h2>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              Manage Administrative Punishments (አስተዳደራዊ ቅጣቶች) and Judiciary Court Orders (ፍርድ ቤታዊ/ህጋዊ ቅጣቶች).
-            </p>
-          </div>
-          <Button onClick={() => setDialogOpen(true)} className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">
-            <UserMinus className="mr-2 h-4 w-4" />
-            Record Punishment Case
-          </Button>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6 space-y-4">
-          <TabsList className="h-auto justify-start rounded-xl border bg-slate-100 p-1 dark:bg-slate-900">
-            <TabsTrigger value="administrative" className="min-h-10 px-4 font-bold">
-              1. Administrative Punishments (አስተዳደራዊ ቅጣቶች)
-            </TabsTrigger>
-            <TabsTrigger value="judiciary" className="min-h-10 px-4 font-bold">
-              2. Judiciary Punishments (ፍርድ ቤታዊ/ህጋዊ ቅጣቶች)
-            </TabsTrigger>
-          </TabsList>
-
-          {/* 1. ADMINISTRATIVE PUNISHMENTS */}
-          <TabsContent value="administrative">
-            <div className="overflow-x-auto rounded-xl border border-slate-300 dark:border-slate-700">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b bg-slate-100 text-xs uppercase font-bold text-slate-600 dark:bg-slate-900 dark:text-slate-400">
-                  <tr>
-                    <th className="p-3">Employee</th>
-                    <th className="p-3">Punishment Type</th>
-                    <th className="p-3">Details / Reason</th>
-                    <th className="p-3">Issued Date</th>
-                    <th className="p-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {adminCases.map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-900">
-                      <td className="p-3 font-bold">{c.employee}</td>
-                      <td className="p-3">
-                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                          {c.type}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-600 dark:text-slate-300">{c.reason}</td>
-                      <td className="p-3 text-xs font-medium">{c.date}</td>
-                      <td className="p-3">
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
-                          {c.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </TabsContent>
-
-          {/* 2. JUDICIARY PUNISHMENTS */}
-          <TabsContent value="judiciary">
-            <div className="overflow-x-auto rounded-xl border border-slate-300 dark:border-slate-700">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b bg-slate-100 text-xs uppercase font-bold text-slate-600 dark:bg-slate-900 dark:text-slate-400">
-                  <tr>
-                    <th className="p-3">Employee</th>
-                    <th className="p-3">Court Name & Case No.</th>
-                    <th className="p-3">Judiciary Ruling Type</th>
-                    <th className="p-3">Penalty / Garnishment</th>
-                    <th className="p-3">Ruling Date</th>
-                    <th className="p-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {judiciaryCases.map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-900">
-                      <td className="p-3 font-bold">{c.employee}</td>
-                      <td className="p-3">
-                        <div className="font-bold text-xs">{c.court_name}</div>
-                        <div className="text-xs text-slate-500 font-mono">Case: {c.case_number}</div>
-                      </td>
-                      <td className="p-3">
-                        <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-900 dark:bg-red-950 dark:text-red-200">
-                          {c.type}
-                        </span>
-                      </td>
-                      <td className="p-3 font-bold text-slate-900 dark:text-slate-100">{c.penalty_amount}</td>
-                      <td className="p-3 text-xs font-medium">{c.date}</td>
-                      <td className="p-3">
-                        <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">
-                          {c.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        {/* RECORD PUNISHMENT DIALOG */}
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-xl font-black">
-                <ShieldAlert className="h-5 w-5 text-red-500" />
-                Record Punishment Case (የቅጣት መዝገብ)
-              </DialogTitle>
-              <DialogDescription>
-                Select category: Administrative HR Punishment or Judiciary Court Order.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="flex gap-2 border-b pb-3">
-              <Button
-                type="button"
-                variant={category === "administrative" ? "default" : "outline"}
-                onClick={() => setCategory("administrative")}
-                className="flex-1 font-bold text-xs sm:text-sm"
-              >
-                Administrative (አስተዳደራዊ)
-              </Button>
-              <Button
-                type="button"
-                variant={category === "judiciary" ? "default" : "outline"}
-                onClick={() => setCategory("judiciary")}
-                className="flex-1 font-bold text-xs sm:text-sm"
-              >
-                Judiciary (ፍርድ ቤታዊ/ህጋዊ)
-              </Button>
-            </div>
-
-            {category === "administrative" ? (
-              <form onSubmit={handleAddAdmin} className="space-y-4 pt-2">
-                <div>
-                  <Label htmlFor="admin-emp">Employee Name / ID *</Label>
-                  <Input
-                    id="admin-emp"
-                    placeholder="e.g. Abebe Bikila (EMP-0001)"
-                    value={newAdmin.employee}
-                    onChange={(e) => setNewAdmin({ ...newAdmin, employee: e.target.value })}
-                    required
-                    className={controlClass}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="admin-type">Administrative Punishment Type *</Label>
-                  <select
-                    id="admin-type"
-                    value={newAdmin.type}
-                    onChange={(e) => setNewAdmin({ ...newAdmin, type: e.target.value })}
-                    className={selectClass}
-                  >
-                    <option value="Verbal Warning (የቃል ማስጠንቀቂያ)">Verbal Warning (የቃል ማስጠንቀቂያ)</option>
-                    <option value="Written Warning (የጽሁፍ ማስጠንቀቂያ)">Written Warning (የጽሁፍ ማስጠንቀቂያ)</option>
-                    <option value="Final Written Warning (የመጨረሻ የጽሁፍ ማስጠንቀቂያ)">Final Written Warning (የመጨረሻ የጽሁፍ ማስጠንቀቂያ)</option>
-                    <option value="Salary Deduction / Fine (የደመወዝ ቅጣት)">Salary Deduction / Fine (የደመወዝ ቅጣት)</option>
-                    <option value="Temporary Suspension (ጊዜያዊ እገዳ)">Temporary Suspension (ጊዜያዊ እገዳ)</option>
-                    <option value="Termination of Employment (ከስራ ማሰናበት)">Termination of Employment (ከስራ ማሰናበት)</option>
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="admin-reason">Reason / Infraction Details *</Label>
-                  <Textarea
-                    id="admin-reason"
-                    placeholder="Describe infraction, dates, and HR findings..."
-                    value={newAdmin.reason}
-                    onChange={(e) => setNewAdmin({ ...newAdmin, reason: e.target.value })}
-                    required
-                    className="h-20"
-                  />
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Save Administrative Case</Button>
-                </DialogFooter>
-              </form>
-            ) : (
-              <form onSubmit={handleAddJudiciary} className="space-y-4 pt-2">
-                <div>
-                  <Label htmlFor="jud-emp">Employee Name / ID *</Label>
-                  <Input
-                    id="jud-emp"
-                    placeholder="e.g. Tsion Hailu (EMP-0002)"
-                    value={newJudiciary.employee}
-                    onChange={(e) => setNewJudiciary({ ...newJudiciary, employee: e.target.value })}
-                    required
-                    className={controlClass}
-                  />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <Label htmlFor="jud-court">Court Name *</Label>
-                    <Input
-                      id="jud-court"
-                      placeholder="e.g. Federal First Instance Court"
-                      value={newJudiciary.court_name}
-                      onChange={(e) => setNewJudiciary({ ...newJudiciary, court_name: e.target.value })}
-                      required
-                      className={controlClass}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="jud-case">Case / File Number *</Label>
-                    <Input
-                      id="jud-case"
-                      placeholder="e.g. FFC/2026/9041"
-                      value={newJudiciary.case_number}
-                      onChange={(e) => setNewJudiciary({ ...newJudiciary, case_number: e.target.value })}
-                      required
-                      className={controlClass}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="jud-type">Judiciary Ruling Type *</Label>
-                  <select
-                    id="jud-type"
-                    value={newJudiciary.type}
-                    onChange={(e) => setNewJudiciary({ ...newJudiciary, type: e.target.value })}
-                    className={selectClass}
-                  >
-                    <option value="Court Ruling / Judgment (የፍርድ ቤት ውሳኔ)">Court Ruling / Judgment (የፍርድ ቤት ውሳኔ)</option>
-                    <option value="Salary Garnishment / Injunction (የደመወዝ መያዝ መመሪያ)">Salary Garnishment / Injunction (የደመወዝ መያዝ መመሪያ)</option>
-                    <option value="Legal Penalty / Fine (ህጋዊ የገንዘብ ቅጣት)">Legal Penalty / Fine (ህጋዊ የገንዘብ ቅጣት)</option>
-                    <option value="Restraining / Injunction Order (የፍርድ ቤት ዕገዳ)">Restraining / Injunction Order (የፍርድ ቤት ዕገዳ)</option>
-                    <option value="Bail / Guarantor Enforcement (የዋስትና ማስከበር)">Bail / Guarantor Enforcement (የዋስትና ማስከበር)</option>
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="jud-amount">Fine / Garnishment Amount (ETB)</Label>
-                  <Input
-                    id="jud-amount"
-                    type="number"
-                    placeholder="e.g. 5000"
-                    value={newJudiciary.penalty_amount}
-                    onChange={(e) => setNewJudiciary({ ...newJudiciary, penalty_amount: e.target.value })}
-                    className={controlClass}
-                  />
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" className="bg-red-600 text-white hover:bg-red-700">
-                    Save Judiciary Record
-                  </Button>
-                </DialogFooter>
-              </form>
-            )}
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
-  );
-}
+export { EmployeeRelationsPanel } from "./hr-relations-panel";
 
 // ==========================================
 // 4. HR FORMS & DOCUMENT GENERATOR PANEL
@@ -1101,7 +757,9 @@ export function HrFormsPanel() {
     queryKey: ["hr-letter-templates", scope],
     queryFn: fetchHrLetterTemplates,
   });
-  const customLetterTemplates = letterTemplatesQuery.data ?? [];
+  const customLetterTemplates = Array.isArray(letterTemplatesQuery.data)
+    ? letterTemplatesQuery.data
+    : [];
 
   useEffect(
     () => () => {
@@ -1236,27 +894,33 @@ export function HrFormsPanel() {
     referencePrefix.replace(/^\/+|\/+$/g, "") || "HE/HR";
   const referenceCode = `${normalizedReferencePrefix}/${documentDate.getFullYear() || new Date().getFullYear()}/${String(refNum).padStart(4, "0")}`;
 
-  // Workflow Module Approvers Query
+  // Workflow Module Approvers Query (real approval roles only — no mock fallback)
   const workflowApproversQuery = useQuery({
-    queryKey: ['workflow-approvers-list', scope],
-    queryFn: () => fetchApprovalRoles(),
+    queryKey: ["workflow-approvers-list", scope],
+    queryFn: () => fetchApprovalRoles({ per_page: 100, status: "active" }),
   });
 
-  const workflowRoles = workflowApproversQuery.data?.data ?? [
-    { id: 1, name: "HR Director", users: [{ name: "Tewodros Kassahun", title: "Human Resources Director" }] },
-    { id: 2, name: "General Manager", users: [{ name: "Mulugeta Tesfaye", title: "Managing Director" }] },
-    { id: 3, name: "Finance Lead", users: [{ name: "Tsion Hailu", title: "Finance & Payroll Manager" }] },
-    { id: 4, name: "Operations Head", users: [{ name: "Abebe Bikila", title: "Head of Operations" }] },
-  ];
-  const workflowSignerOptions = Array.isArray(workflowRoles)
-    ? workflowRoles.flatMap((role: { id: number; name: string; users?: Array<{ id?: number; name: string; title?: string }> }) =>
-        (role.users ?? []).map((user) => ({
+  const workflowRoles = Array.isArray(workflowApproversQuery.data?.data)
+    ? workflowApproversQuery.data.data
+    : [];
+  const workflowSignerOptions: Array<{
+    value: string;
+    name: string;
+    title: string;
+  }> = workflowRoles.flatMap(
+    (role: {
+      id: number;
+      name: string;
+      users?: Array<{ id?: number; name: string; title?: string; email?: string }>;
+    }) =>
+      (role.users ?? [])
+        .filter((user) => Boolean(user?.name))
+        .map((user) => ({
           value: `${role.id}:${user.id ?? user.name}`,
           name: user.name,
           title: user.title || role.name,
-        }))
-      )
-    : [];
+        })),
+  );
 
   // Template Body Editor Content
   const getInitialContent = (tplId: string, emp: string, empId: string, pos: string, sal: string) => {
@@ -1388,16 +1052,49 @@ export function HrFormsPanel() {
 
     if (purpose === "editor-media") {
       const normalizedName = fileName.toLowerCase();
-      const mediaType =
-        mimeType.startsWith("video/") || /\.(mp4|webm|mov)$/i.test(normalizedName)
-          ? "video"
-          : mimeType.startsWith("audio/") || /\.(mp3|wav|ogg|m4a)$/i.test(normalizedName)
-            ? "audio"
-            : "image";
+      const isVideo =
+        mimeType.startsWith("video/") || /\.(mp4|webm|mov)$/i.test(normalizedName);
+      const isAudio =
+        mimeType.startsWith("audio/") || /\.(mp3|wav|ogg|m4a)$/i.test(normalizedName);
+      const isImage =
+        mimeType.startsWith("image/") ||
+        /\.(png|jpe?g|webp|gif|svg)$/i.test(normalizedName);
 
-      letterEditorRef.current?.insertMedia(resolvedUrl, mediaType, fileName);
-      setFilePickerPurpose(null);
-      toast.success(`${fileName} was added to the letter editor.`);
+      if (isVideo || isAudio || !isImage) {
+        toast.error(
+          "Letters only support image media on the paper and in PDF. Choose a PNG, JPEG, WEBP, or GIF.",
+        );
+        return;
+      }
+
+      setIsFilePickerSelecting(true);
+      try {
+        const response = await fetch(resolvedUrl, {
+          headers: getAuthHeaders({ Accept: "image/*" }),
+        });
+        if (!response.ok) {
+          throw new Error("The selected image could not be loaded from File Manager.");
+        }
+
+        const blob = await response.blob();
+        if (!blob.type.startsWith("image/")) {
+          throw new Error("The selected File Manager item is not an image.");
+        }
+        if (blob.size > 1_500_000) {
+          throw new Error("Choose an image smaller than 1.5 MB for reliable letter PDF output.");
+        }
+
+        const dataUrl = await blobToDataUrl(blob);
+        letterEditorRef.current?.insertMedia(dataUrl, "image", fileName);
+        setFilePickerPurpose(null);
+        toast.success(`${fileName} was added to the letter and will appear on print/PDF.`);
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Unable to add the image to the letter.",
+        );
+      } finally {
+        setIsFilePickerSelecting(false);
+      }
       return;
     }
 
@@ -1973,7 +1670,9 @@ export function HrFormsPanel() {
                 </select>
                 {!workflowApproversQuery.isLoading && workflowSignerOptions.length === 0 ? (
                   <p className="mt-1 text-xs text-red-700 dark:text-red-300">
-                    No users are assigned to an active workflow approval role.
+                    {workflowApproversQuery.isError
+                      ? "Could not load approval roles. Type the signer name below, or open Workflow → Approval Roles."
+                      : "No users are assigned to an active approval role. Add people under Workflow → Approval Roles, or type the signer name below."}
                   </p>
                 ) : null}
               </div>
@@ -2333,6 +2032,12 @@ export function HrFormsPanel() {
             }
             #hr-printable-letter .letter-rendered-body p {
               margin: 0 0 1rem;
+            }
+            #hr-printable-letter .letter-rendered-body img {
+              display: block;
+              max-width: 100%;
+              height: auto;
+              margin: 0.75rem 0;
             }
             #hr-printable-letter .letter-rendered-body ul,
             #hr-printable-letter .letter-rendered-body ol {
@@ -2828,332 +2533,8 @@ export function HrFormsPanel() {
 // ==========================================
 // 5. EMPLOYEE PROFILE & PERSONAL INFO PANEL
 // ==========================================
-export function EmployeeProfilePanel({ canManage = true }: { canManage?: boolean }) {
-  const [selectedSection, setSelectedSection] = useState("address");
-  const [selectedEmp, setSelectedEmp] = useState("EMP-0001");
-
-  const sections = [
-    { id: "address", name: "1. Address (አድራሻ)", icon: MapPin },
-    { id: "bank_accounts", name: "2. Bank Accounts (የባንክ ሂሳብ)", icon: Building2 },
-    { id: "disability", name: "3. Disability Info (የአካል ጉዳት)", icon: Info },
-    { id: "higher_education", name: "4. Higher Education (ከፍተኛ ትምህርት)", icon: GraduationCap },
-    { id: "school_education", name: "5. Elementary & Secondary Education (1ኛ እና 2ኛ ደረጃ)", icon: GraduationCap },
-    { id: "emergency", name: "6. Emergency Contacts (ድንገተኛ አድራሻ)", icon: Phone },
-    { id: "guarantor", name: "7. Guarantor Info (ተያዥ)", icon: HeartHandshake },
-    { id: "family", name: "8. Family Members (የቤተሰብ መረጃ)", icon: UsersRound },
-    { id: "languages", name: "9. Languages (ቋንቋዎች)", icon: FileText },
-    { id: "licenses", name: "10. Licenses & Permits (የስራ/መንጃ ፈቃድ)", icon: BadgeCheck },
-    { id: "other_info", name: "11. Other Info (ተጨማሪ መረጃ)", icon: FileCheck },
-    { id: "experience", name: "12. Work Experience (የስራ ልምድ)", icon: History },
-    { id: "disasters", name: "13. Disaster Record (የአደጋ መዝገብ)", icon: AlertTriangle },
-    { id: "certifications_awards", name: "14. Certifications & Awards (ምስክር ወረቀትና ሽልማት)", icon: Award },
-    { id: "files", name: "15. Attached Files & Documents (የዲጂታል ፋይሎች)", icon: FolderOpen },
-  ];
-
-  return (
-    <Card className="border-slate-300 dark:border-slate-700">
-      <CardContent className="p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b pb-5">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black flex items-center gap-2">
-                <UserCheck className="h-5 w-5 text-amber-500" />
-                Employee Personal Information & Self-Service (የግል መረጃ)
-              </h2>
-              {canManage ? (
-                <span className="rounded-full bg-purple-100 px-3 py-0.5 text-xs font-bold text-purple-900 dark:bg-purple-950 dark:text-purple-200">
-                  Central Super Admin / HR Manager
-                </span>
-              ) : (
-                <span className="rounded-full bg-blue-100 px-3 py-0.5 text-xs font-bold text-blue-900 dark:bg-blue-950 dark:text-blue-200">
-                  Employee Self-Service Mode
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              {canManage
-                ? "Central Super Admin & HR Managers can view and manage personal sub-records for all employees in the organization."
-                : "Employees can directly update their own personal information sub-records, education, bank accounts, and guarantors."}
-            </p>
-          </div>
-
-          {canManage && (
-            <div className="flex items-center gap-3">
-              <Label htmlFor="emp-select" className="text-xs font-bold uppercase">Target Employee:</Label>
-              <select
-                id="emp-select"
-                value={selectedEmp}
-                onChange={(e) => setSelectedEmp(e.target.value)}
-                className="h-10 rounded-lg border border-slate-400 bg-background px-3 text-sm font-bold"
-              >
-                <option value="EMP-0001">Abebe Bikila (EMP-0001)</option>
-                <option value="EMP-0002">Tsion Hailu (EMP-0002)</option>
-                <option value="EMP-0003">Kebede Tessema (EMP-0003)</option>
-              </select>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
-          {/* SIDEBAR SUB-MENU */}
-          <div className="space-y-1.5 rounded-2xl border bg-slate-50 p-2 dark:bg-slate-900">
-            <Label className="px-3 pt-2 text-xs font-bold uppercase tracking-wider text-slate-500">Personal Information Sub-records</Label>
-            {sections.map((sec) => {
-              const Icon = sec.icon;
-              return (
-                <button
-                  key={sec.id}
-                  onClick={() => setSelectedSection(sec.id)}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all",
-                    selectedSection === sec.id
-                      ? "bg-amber-400 text-slate-950 font-black shadow-sm"
-                      : "text-slate-700 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800"
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{sec.name}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* DISPLAY CONTENT PANEL */}
-          <div className="rounded-2xl border p-6 dark:border-slate-800">
-            {selectedSection === "address" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">1. Address Details (የመኖሪያ አድራሻ)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Add Address</Button>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900">
-                    <span className="text-xs font-bold text-amber-600 uppercase">Permanent Residence</span>
-                    <p className="mt-2 text-sm font-bold">Addis Ababa, Bole Sub-city</p>
-                    <p className="text-xs text-slate-500">Woreda 03 · Kebele 05 · House No. 1204</p>
-                  </div>
-                  <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900">
-                    <span className="text-xs font-bold text-blue-600 uppercase">Temporary Residence</span>
-                    <p className="mt-2 text-sm font-bold">Addis Ababa, Yeka Sub-city</p>
-                    <p className="text-xs text-slate-500">Woreda 08 · House No. 405</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "bank_accounts" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">2. Bank Accounts (የባንክ ሂሳብ)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Add Bank Account</Button>
-                </div>
-                <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold uppercase text-emerald-600">Commercial Bank of Ethiopia (CBE)</span>
-                    <p className="text-lg font-mono font-black mt-1">1000294819284</p>
-                    <p className="text-xs text-slate-500">Bole Branch · Payroll Savings Account</p>
-                  </div>
-                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">Primary Payroll</span>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "disability" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">3. Disability Information (የአካል ጉዳት)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Record Disability</Button>
-                </div>
-                <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900">
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No Disability Registered</p>
-                  <p className="text-xs text-slate-500 mt-1">Employee has no registered physical or visual impairments.</p>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "higher_education" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">4. Higher Education (ከፍተኛ ትምህርት)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Add Higher Education</Button>
-                </div>
-                <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900 space-y-1">
-                  <span className="text-xs font-bold uppercase text-amber-600">Bachelor's Degree (BSc)</span>
-                  <p className="text-base font-bold">Software Engineering & Computer Science</p>
-                  <p className="text-xs text-slate-500">Addis Ababa University (AAU) · Graduated: 2021 · Cumulative GPA: 3.75</p>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "school_education" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">5. Elementary & Secondary Education (1ኛ እና 2ኛ ደረጃ ትምህርት)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Add School</Button>
-                </div>
-                <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900 space-y-1">
-                  <span className="text-xs font-bold uppercase text-blue-600">Grade 12 National Exam Complete</span>
-                  <p className="text-base font-bold">Bole Senior Secondary School</p>
-                  <p className="text-xs text-slate-500">Completed 2017 · Certificate No. SEC/2017/89201</p>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "emergency" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">6. Emergency Contacts (ድንገተኛ አድራሻ)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Add Emergency Contact</Button>
-                </div>
-                <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900 space-y-1">
-                  <span className="text-xs font-bold uppercase text-red-600">Primary Emergency Contact</span>
-                  <p className="text-base font-bold">Kebede Bikila (Father / ወላጅ)</p>
-                  <p className="text-xs text-slate-500">Phone: +251 911 223 344 · Addis Ababa, Bole Woreda 03</p>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "guarantor" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">7. Guarantor Information (ተያዥ / የዋስትና ውል)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Add Guarantor (ተያዥ)</Button>
-                </div>
-                <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900 space-y-1">
-                  <span className="text-xs font-bold uppercase text-emerald-600">Verified Corporate Guarantor (ተያዥ)</span>
-                  <p className="text-base font-bold">Ato Girma Wolde (Senior Manager, Commercial Bank of Ethiopia)</p>
-                  <p className="text-xs text-slate-500">Guarantee Guarantee Amount: 100,000 ETB · Signed Agreement Ref: G-2022/901</p>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "family" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">8. Family Members & Dependents (የቤተሰብ መረጃ)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Add Family Member</Button>
-                </div>
-                <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900 space-y-1">
-                  <span className="text-xs font-bold uppercase text-indigo-600">Spouse (ሚስት)</span>
-                  <p className="text-base font-bold">Hiwot Tadesse</p>
-                  <p className="text-xs text-slate-500">DOB: 1994-08-12 · Covered under company medical insurance</p>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "languages" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">9. Languages (ቋንቋዎች)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Add Language</Button>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border p-3 bg-slate-50 dark:bg-slate-900">
-                    <p className="font-bold">Amharic (አማርኛ)</p>
-                    <p className="text-xs text-slate-500">Native / Mother Tongue (የአፍ መፈቻ)</p>
-                  </div>
-                  <div className="rounded-xl border p-3 bg-slate-50 dark:bg-slate-900">
-                    <p className="font-bold">English (እንግሊዝኛ)</p>
-                    <p className="text-xs text-slate-500">Advanced / Fluent (ከፍተኛ/ተናጋሪ)</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "licenses" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">10. Licenses & Permits (የስራ/መንጃ ፈቃድ)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Add License</Button>
-                </div>
-                <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900 space-y-1">
-                  <span className="text-xs font-bold uppercase text-amber-600">Driving License - Auto (Grade 2)</span>
-                  <p className="text-base font-bold">License No: ET-DRV-90812</p>
-                  <p className="text-xs text-slate-500">Issued: Addis Ababa Transport Bureau · Expires: 2028-06-30</p>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "other_info" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">11. Other Info (ተጨማሪ መረጃ)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Edit Info</Button>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 text-sm">
-                  <div className="rounded-lg border p-3 bg-slate-50 dark:bg-slate-900"><span className="text-xs text-slate-500 font-bold">Blood Group:</span> <p className="font-bold">O Positive (O+)</p></div>
-                  <div className="rounded-lg border p-3 bg-slate-50 dark:bg-slate-900"><span className="text-xs text-slate-500 font-bold">TIN Number:</span> <p className="font-bold font-mono">0094182901</p></div>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "experience" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">12. Work Experience (የስራ ልምድ)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Add Experience</Button>
-                </div>
-                <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900 space-y-1">
-                  <span className="text-xs font-bold uppercase text-blue-600">Previous Software Developer</span>
-                  <p className="text-base font-bold">Ethio Telecom (ኢትዮ ቴሌኮም)</p>
-                  <p className="text-xs text-slate-500">Duration: 2020 – 2022 (2 Years) · Reason for leaving: Career growth</p>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "disasters" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">13. Disaster & Accident Record (የአደጋ መዝገብ)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Record Incident</Button>
-                </div>
-                <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900">
-                  <p className="text-sm font-bold text-emerald-600">No Workplace Accidents Recorded</p>
-                  <p className="text-xs text-slate-500 mt-1">Clean safety and accident-free workplace record.</p>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "certifications_awards" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">14. Certifications & Awards (ምስክር ወረቀትና ሽልማት)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Add Award / Cert</Button>
-                </div>
-                <div className="rounded-xl border p-4 bg-slate-50 dark:bg-slate-900 space-y-1">
-                  <span className="text-xs font-bold uppercase text-amber-600">AWS Certified Solutions Architect</span>
-                  <p className="text-base font-bold">Amazon Web Services (AWS)</p>
-                  <p className="text-xs text-slate-500">Issued: 2023 · Validation Code: AWS-908124</p>
-                </div>
-              </div>
-            )}
-
-            {selectedSection === "files" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3">
-                  <h3 className="text-lg font-bold">15. Attached Files & Digital Documents (የዲጂታል ፋይሎች)</h3>
-                  <Button size="sm" className="bg-amber-300 font-bold text-slate-950 hover:bg-amber-200">+ Upload Document</Button>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between rounded-lg border p-3 bg-slate-50 dark:bg-slate-900">
-                    <div className="flex items-center gap-3">
-                      <FolderOpen className="h-5 w-5 text-amber-500" />
-                      <div>
-                        <p className="text-xs text-slate-500">PDF Document · 1.4 MB · Uploaded 2022-01-08</p>
-                      </div>
-                    </div>
-                    <Button size="sm" variant="outline"><Download className="h-4 w-4" /></Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-      </CardContent>
-    </Card>
-  );
-}
+export { EmployeeProfileWorkspace } from "./hr-profile-panel";
+export { EmployeeProfileWorkspace as EmployeeProfilePanel } from "./hr-profile-panel";
 
 export function EmployeeTransfersPanel() {
   const scope = getWorkspaceScopeKey();
@@ -3169,7 +2550,7 @@ export function EmployeeTransfersPanel() {
     employee_id: "",
     to_unit_id: "",
     to_position_id: "",
-    left_reason: "Internal Transfer / ዛወር",
+    left_reason: "",
     effective_date: new Date().toISOString().slice(0, 10),
     remarks: "",
   });
@@ -3191,27 +2572,51 @@ export function EmployeeTransfersPanel() {
 
   const transfersQuery = useQuery({
     queryKey: ["hr-transfers-list", scope],
-    queryFn: async () => {
-      try {
-        const res = await hrFetch<any>("/employee-experiences?per_page=100");
-        return res;
-      } catch {
-        return { data: [] };
-      }
-    },
+    queryFn: () => hrFetch<any>("/employee-transfers"),
   });
+
+  const filteredTargetPositions = (positionsQuery.data?.data || []).filter(
+    (p: any) =>
+      !formData.to_unit_id ||
+      Number(p.organization_unit_id) === Number(formData.to_unit_id),
+  );
 
   const createTransferMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      return hrFetch<any>(`/employees/${data.employee_id}/transfer/store`, {
+      const employee =
+        employeesQuery.data?.data?.find(
+          (emp: any) => String(emp.id) === String(data.employee_id),
+        ) ?? null;
+      const current = employee?.primary_assignment;
+      const changeReason = [data.left_reason, data.remarks].filter(Boolean).join(" — ");
+
+      return hrFetch<any>(`/employees/${data.employee_id}/assignments`, {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          organization_unit_id: Number(data.to_unit_id),
+          position_id: Number(data.to_position_id),
+          assignment_type: "substantive",
+          started_on: data.effective_date,
+          full_time_equivalent: current?.full_time_equivalent ?? 1,
+          hours_per_day: current?.hours_per_day ?? 8,
+          hours_per_week: current?.hours_per_week ?? 48,
+          is_primary: true,
+          change_reason: changeReason || "Internal transfer",
+          reports_to_employee_id: current?.reports_to_employee_id ?? null,
+        }),
       });
     },
     onSuccess: () => {
       toast.success("Employee transfer recorded successfully!");
-      queryClient.invalidateQueries({ queryKey: ["hr-transfers-list"] });
-      queryClient.invalidateQueries({ queryKey: ["hr-employees-list-transfers"] });
+      void invalidateHrTransferQueries(queryClient, scope);
+      setFormData({
+        employee_id: "",
+        to_unit_id: "",
+        to_position_id: "",
+        left_reason: "",
+        effective_date: new Date().toISOString().slice(0, 10),
+        remarks: "",
+      });
       setOpenModal(false);
     },
     onError: (err: any) => {
@@ -3221,49 +2626,14 @@ export function EmployeeTransfersPanel() {
 
   const employees = employeesQuery.data?.data || [];
   const units = unitsQuery.data?.data || [];
-  const positions = positionsQuery.data?.data || [];
-  const transfers = transfersQuery.data?.data || [
-    {
-      id: 101,
-      employee_name: "Abebe Bikila",
-      emp_id: "EMP-0042",
-      from_unit: "Software Development Dept",
-      to_unit: "Enterprise Solutions Unit",
-      from_position: "Junior Developer",
-      to_position: "Senior Systems Analyst",
-      reason: "Internal Promotion / ዛወር",
-      effective_date: "2026-07-01",
-      status: "Completed",
-    },
-    {
-      id: 102,
-      employee_name: "Tigist Assefa",
-      emp_id: "EMP-0089",
-      from_unit: "Human Resources Dept",
-      to_unit: "Operations & Logistics",
-      from_position: "HR Specialist",
-      to_position: "Operations Coordinator",
-      reason: "Departmental Restructuring",
-      effective_date: "2026-06-15",
-      status: "Completed",
-    },
-    {
-      id: 103,
-      employee_name: "Dawit Kebede",
-      emp_id: "EMP-0112",
-      from_unit: "Finance & Accounting",
-      to_unit: "Internal Audit Division",
-      from_position: "Accountant",
-      to_position: "Senior Internal Auditor",
-      reason: "Strategic Realignment",
-      effective_date: "2026-05-20",
-      status: "Completed",
-    },
-  ];
+  const transfers = transfersQuery.data?.data || [];
 
   const filteredTransfers = transfers.filter((t: any) => {
     const nameMatch = (t.employee_name || t.employee?.primary_name || "").toLowerCase().includes(search.toLowerCase());
-    const unitMatch = unitFilter === "all" || t.to_unit === unitFilter || t.organization_unit_id == unitFilter;
+    const unitMatch =
+      unitFilter === "all" ||
+      t.to_unit === unitFilter ||
+      String(t.organization_unit_id) === String(unitFilter);
     return nameMatch && unitMatch;
   });
 
@@ -3310,7 +2680,7 @@ export function EmployeeTransfersPanel() {
           >
             <option value="all">All Organization Units</option>
             {units.map((u: any) => (
-              <option key={u.id} value={u.name || u.id}>
+              <option key={u.id} value={String(u.id)}>
                 {u.name}
               </option>
             ))}
@@ -3321,6 +2691,9 @@ export function EmployeeTransfersPanel() {
         </div>
 
         {/* Transfers DataTable */}
+        {transfersQuery.isLoading ? (
+          <PanelTableSkeleton rows={6} cols={8} />
+        ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-100 dark:bg-slate-900 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 border-b">
@@ -3395,6 +2768,7 @@ export function EmployeeTransfersPanel() {
             </tbody>
           </table>
         </div>
+        )}
 
         {/* Initiate Transfer Modal */}
         <Dialog open={openModal} onOpenChange={setOpenModal}>
@@ -3420,15 +2794,32 @@ export function EmployeeTransfersPanel() {
                 <select
                   required
                   value={formData.employee_id}
-                  onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      employee_id: e.target.value,
+                      to_unit_id: "",
+                      to_position_id: "",
+                    })
+                  }
                   className="mt-1 w-full h-11 rounded-lg border border-slate-300 bg-background px-3 text-sm dark:border-slate-700"
+                  disabled={employeesQuery.isLoading}
+                  aria-busy={employeesQuery.isLoading}
                 >
-                  <option value="">-- Select Employee --</option>
-                  {employees.map((emp: any) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.primary_name || emp.en_name} ({emp.emp_id || "EMP-" + emp.id})
-                    </option>
-                  ))}
+                  {employeesQuery.isLoading ? (
+                    <option value="">Loading employees...</option>
+                  ) : employeesQuery.isError ? (
+                    <option value="">Failed to load employees</option>
+                  ) : (
+                    <>
+                      <option value="">-- Select Employee --</option>
+                      {employees.map((emp: any) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.primary_name || emp.en_name} ({emp.employee_number || "EMP-" + emp.id})
+                        </option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -3438,15 +2829,31 @@ export function EmployeeTransfersPanel() {
                   <select
                     required
                     value={formData.to_unit_id}
-                    onChange={(e) => setFormData({ ...formData, to_unit_id: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        to_unit_id: e.target.value,
+                        to_position_id: "",
+                      })
+                    }
                     className="mt-1 w-full h-11 rounded-lg border border-slate-300 bg-background px-3 text-sm dark:border-slate-700"
+                    disabled={unitsQuery.isLoading}
+                    aria-busy={unitsQuery.isLoading}
                   >
-                    <option value="">-- Select Target Unit --</option>
-                    {units.map((u: any) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
+                    {unitsQuery.isLoading ? (
+                      <option value="">Loading organization units...</option>
+                    ) : unitsQuery.isError ? (
+                      <option value="">Failed to load units</option>
+                    ) : (
+                      <>
+                        <option value="">-- Select Target Unit --</option>
+                        {units.map((u: any) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}
+                          </option>
+                        ))}
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -3457,13 +2864,29 @@ export function EmployeeTransfersPanel() {
                     value={formData.to_position_id}
                     onChange={(e) => setFormData({ ...formData, to_position_id: e.target.value })}
                     className="mt-1 w-full h-11 rounded-lg border border-slate-300 bg-background px-3 text-sm dark:border-slate-700"
+                    disabled={
+                      !formData.to_unit_id ||
+                      positionsQuery.isLoading ||
+                      (!!formData.to_unit_id && filteredTargetPositions.length === 0)
+                    }
+                    aria-busy={positionsQuery.isLoading}
                   >
-                    <option value="">-- Select Target Position --</option>
-                    {positions.map((p: any) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title || p.code || "Position #" + p.id}
-                      </option>
-                    ))}
+                    {positionsQuery.isLoading ? (
+                      <option value="">Loading positions...</option>
+                    ) : positionsQuery.isError ? (
+                      <option value="">Failed to load positions</option>
+                    ) : formData.to_unit_id && filteredTargetPositions.length === 0 ? (
+                      <option value="">No positions for this organization</option>
+                    ) : (
+                      <>
+                        <option value="">-- Select Target Position --</option>
+                        {filteredTargetPositions.map((p: any) => (
+                          <option key={p.id} value={p.id}>
+                            {p.title || p.code || "Position #" + p.id}
+                          </option>
+                        ))}
+                      </>
+                    )}
                   </select>
                 </div>
               </div>

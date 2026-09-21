@@ -66,6 +66,11 @@ import {
   hrReferenceOptions,
   referenceOptionLabel,
 } from "@/modules/humanresources/api";
+import {
+  invalidateHrEmployeeQueries,
+  invalidateHrOrganizationQueries,
+  invalidateHrPositionQueries,
+} from "@/modules/humanresources/query-invalidation";
 import { LeavePanel } from "./leave-attendance";
 import { ErpReferenceSettings } from "@/components/settings/erp-reference-settings";
 import {
@@ -81,8 +86,8 @@ import { HrAssetsPanel } from "./hr-assets-panel";
 import { HrExpensesPanel } from "./hr-expenses-panel";
 import {
   EmployeeRelationsPanel,
+  EmployeeProfileWorkspace,
   HrFormsPanel,
-  EmployeeProfilePanel,
   EmployeeTransfersPanel,
 } from "./hr-extended-panels";
 
@@ -107,6 +112,7 @@ type EmployeeForm = {
   probation_working_days: string;
   probation_ends_on: string;
   contract_signed_at: string;
+  salary_amount: string;
   organization_unit_id: string;
   position_id: string;
   hours_per_day: string;
@@ -130,11 +136,19 @@ const EMPTY_EMPLOYEE: EmployeeForm = {
   probation_working_days: "0",
   probation_ends_on: "",
   contract_signed_at: "",
+  salary_amount: "",
   organization_unit_id: "",
   position_id: "",
   hours_per_day: "8",
   hours_per_week: "48",
 };
+
+function salaryAmountFromEmployee(employee: Employee | null): string {
+  const raw = employee?.custom_fields?.salary_amount;
+  if (raw == null || raw === "") return "";
+  const amount = Number(raw);
+  return Number.isFinite(amount) ? String(amount) : "";
+}
 
 type WorkspaceUserOption = {
   id: number;
@@ -383,6 +397,7 @@ function EmployeeDialog({
             probation_working_days: String(employee.probation_working_days),
             probation_ends_on: employee.probation_ends_on ?? "",
             contract_signed_at: employee.contract_signed_at?.slice(0, 16) ?? "",
+            salary_amount: salaryAmountFromEmployee(employee),
           }
         : {
             ...EMPTY_EMPLOYEE,
@@ -424,6 +439,20 @@ function EmployeeDialog({
         );
       }
 
+      const existingCustomFields =
+        employee?.custom_fields && typeof employee.custom_fields === "object"
+          ? { ...employee.custom_fields }
+          : {};
+      const salaryTrimmed = form.salary_amount.trim();
+      const salaryAmount =
+        salaryTrimmed === "" ? null : Number(salaryTrimmed);
+      if (
+        salaryAmount !== null &&
+        (!Number.isFinite(salaryAmount) || salaryAmount < 0)
+      ) {
+        throw new Error("Monthly salary must be a valid amount of 0 or more.");
+      }
+
       const payload = {
         user_id: form.user_id ? Number(form.user_id) : null,
         primary_name:
@@ -442,6 +471,10 @@ function EmployeeDialog({
         probation_working_days: Number(form.probation_working_days),
         probation_ends_on: form.probation_ends_on || null,
         contract_signed_at: form.contract_signed_at || null,
+        custom_fields: {
+          ...existingCustomFields,
+          salary_amount: salaryAmount,
+        },
         ...(!employee && form.organization_unit_id && form.position_id
           ? {
               organization_unit_id: Number(form.organization_unit_id),
@@ -461,14 +494,7 @@ function EmployeeDialog({
         employee ? "Employee record updated." : "Employee record created.",
       );
       onOpenChange(false);
-      queryClient.invalidateQueries({ queryKey: ["hr-employees"] });
-      queryClient.invalidateQueries({ queryKey: ["hr-employees-table"] });
-      queryClient.invalidateQueries({ queryKey: ["all-employees-list"] });
-      queryClient.invalidateQueries({ queryKey: ["hr-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["hr-positions"] });
-      queryClient.invalidateQueries({
-        queryKey: ["hr-unassigned-users", scope],
-      });
+      void invalidateHrEmployeeQueries(queryClient, { scope });
     },
     onError: (failure) => {
       setError(
@@ -713,6 +739,26 @@ function EmployeeDialog({
                   className={controlClass}
                 />
               </FormField>
+              <FormField
+                id="salary-amount"
+                label="Monthly salary (ETB)"
+                help="Used by payroll for basic salary and work-entry rates. Leave blank if not set yet."
+              >
+                <Input
+                  id="salary-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  placeholder="e.g. 15000"
+                  value={form.salary_amount}
+                  onChange={(e) =>
+                    setForm({ ...form, salary_amount: e.target.value })
+                  }
+                  aria-describedby="salary-amount-help"
+                  className={controlClass}
+                />
+              </FormField>
               <FormField id="contract-type" label="Contract type" required>
                 <select
                   id="contract-type"
@@ -947,6 +993,7 @@ function UnitDialog({
   referenceOptions: ReferenceOptionsByCatalog;
 }) {
   const queryClient = useQueryClient();
+  const scope = getWorkspaceScopeKey();
   const errorRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState(EMPTY_UNIT);
   const [error, setError] = useState("");
@@ -979,7 +1026,7 @@ function UnitDialog({
     onSuccess: () => {
       toast.success("Organization unit created.");
       onOpenChange(false);
-      queryClient.invalidateQueries({ queryKey: ["hr-units"] });
+      void invalidateHrOrganizationQueries(queryClient);
     },
     onError: (failure) => {
       setError(
@@ -1119,6 +1166,7 @@ function PositionDialog({
   referenceOptions: ReferenceOptionsByCatalog;
 }) {
   const queryClient = useQueryClient();
+  const scope = getWorkspaceScopeKey();
   const errorRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState(EMPTY_POSITION);
   const [error, setError] = useState("");
@@ -1156,8 +1204,7 @@ function PositionDialog({
     onSuccess: () => {
       toast.success("Position created.");
       onOpenChange(false);
-      queryClient.invalidateQueries({ queryKey: ["hr-positions"] });
-      queryClient.invalidateQueries({ queryKey: ["hr-summary"] });
+      void invalidateHrPositionQueries(queryClient);
     },
     onError: (failure) => {
       setError(
@@ -1376,12 +1423,14 @@ export function HumanResourcesClient({
     queryKey: ["hr-units", scope],
     queryFn: () =>
       hrFetch<Paginated<OrganizationUnit>>("/organization-units?per_page=100"),
-    enabled: isLoaded && canViewOrganization,
+    // Also load for employee viewers so directory filters/dialogs can populate.
+    enabled: isLoaded && (canViewOrganization || canViewEmployees),
   });
   const positions = useQuery({
     queryKey: ["hr-positions", scope],
     queryFn: () => hrFetch<Paginated<Position>>("/positions?per_page=100"),
-    enabled: isLoaded && canViewPositions,
+    // Also load for employee viewers so directory filters/dialogs can populate.
+    enabled: isLoaded && (canViewPositions || canViewEmployees),
   });
   const allEmployeesQuery = useQuery({
     queryKey: ["all-employees-list", scope],
@@ -2256,6 +2305,8 @@ export function HumanResourcesClient({
               referenceOptions.data?.["employee-statuses"],
               "employee-statuses",
             )}
+            units={units.data?.data ?? []}
+            positions={positions.data?.data ?? []}
             onEdit={(employee) => {
               setEditingEmployee(employee);
               setEmployeeOpen(true);
@@ -2340,18 +2391,17 @@ export function HumanResourcesClient({
           </TabsContent>
         )}
         <TabsContent value="relations">
-          <EmployeeRelationsPanel />
+          <EmployeeRelationsPanel employees={allEmployeesQuery.data?.data ?? []} />
         </TabsContent>
         <TabsContent value="forms">
           <HrFormsPanel />
         </TabsContent>
         <TabsContent value="profile">
-          <EmployeeProfilePanel canManage={canManageEmployees} />
+          <EmployeeProfileWorkspace canManage={canManageEmployees} />
         </TabsContent>
         <TabsContent value="recruitment">
           <HrRecruitmentPanel />
         </TabsContent>
-
         <TabsContent value="appraisals">
           <HrAppraisalPanel employees={allEmployeesQuery.data?.data ?? []} />
         </TabsContent>

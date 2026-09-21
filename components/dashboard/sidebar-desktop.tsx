@@ -386,9 +386,7 @@ function SidebarInner({
   );
 
   const moduleNavItems = [
-    ...filteredNav.filter((item) =>
-      DASHBOARD_MODULE_IDS.has(item.moduleId),
-    ),
+    ...filteredNav.filter((item) => DASHBOARD_MODULE_IDS.has(item.moduleId)),
     ...accessibleSecondary.filter((item) =>
       DASHBOARD_MODULE_IDS.has(item.moduleId),
     ),
@@ -906,7 +904,19 @@ function SidebarInner({
                      pathname.startsWith("/dashboard/human-resources") ||
                      pathname.startsWith("/dashboard/attendance") ||
                      pathname.startsWith("/dashboard/payroll") ||
-                     pathname.startsWith("/dashboard/finance"))
+                     pathname.startsWith("/dashboard/finance") ||
+                     pathname.startsWith("/dashboard/performance") ||
+                     pathname.startsWith("/dashboard/procurement") ||
+                     pathname.startsWith("/dashboard/supply-chain") ||
+                     pathname.startsWith("/dashboard/sales") ||
+                     pathname.startsWith("/dashboard/crm") ||
+                     pathname.startsWith("/dashboard/fleet") ||
+                     pathname.startsWith("/dashboard/service") ||
+                     pathname.startsWith("/dashboard/internal-audit") ||
+                     pathname.startsWith("/dashboard/strategy") ||
+                     pathname.startsWith("/dashboard/vantage") ||
+                     pathname.startsWith("/dashboard/agriculture") ||
+                     pathname.startsWith("/dashboard/production"))
                       ? "hive-sidebar-nav-active font-extrabold"
                       : "hive-sidebar-section-idle"
                   )}
@@ -1176,43 +1186,44 @@ function SidebarInner({
                             )}
                           </button>
                         </h3>
-                        <div
-                          id="desktop-human-resources-links"
-                          hidden={!isHumanResourcesOpen}
-                          className="flex flex-col gap-1 pl-4"
-                        >
-                          {humanResourcesModuleItems.map((item) => {
-                            const active =
-                              pathname === item.href ||
-                              (item.href !== "/dashboard/human-resources" &&
-                                pathname.startsWith(`${item.href}/`));
-                            const Icon = item.icon;
-                            const label = t(
-                              item.translationKey,
-                              item.fallbackLabel,
-                            );
-                            return (
-                              <Link
-                                key={item.href}
-                                id={item.tourId}
-                                href={item.href}
-                                aria-current={active ? "page" : undefined}
-                                className={cn(
-                                  "group flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-[13px] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                                  active
-                                    ? "hive-sidebar-nested-active"
-                                    : "hive-sidebar-nested-idle",
-                                )}
-                              >
-                                <Icon
-                                  aria-hidden="true"
-                                  className="h-4 w-4 shrink-0"
-                                />
-                                <span className="truncate">{label}</span>
-                              </Link>
-                            );
-                          })}
-                        </div>
+                        {isHumanResourcesOpen && (
+                          <div
+                            id="desktop-human-resources-links"
+                            className="flex flex-col gap-1 pl-4"
+                          >
+                            {humanResourcesModuleItems.map((item) => {
+                              const active =
+                                pathname === item.href ||
+                                (item.href !== "/dashboard/human-resources" &&
+                                  pathname.startsWith(`${item.href}/`));
+                              const Icon = item.icon;
+                              const label = t(
+                                item.translationKey,
+                                item.fallbackLabel,
+                              );
+                              return (
+                                <Link
+                                  key={item.href}
+                                  id={item.tourId}
+                                  href={item.href}
+                                  aria-current={active ? "page" : undefined}
+                                  className={cn(
+                                    "group flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-[13px] transition-all duration-200",
+                                    active
+                                      ? "hive-sidebar-nested-active"
+                                      : "hive-sidebar-nested-idle",
+                                  )}
+                                >
+                                  <Icon
+                                    aria-hidden="true"
+                                    className="h-4 w-4 shrink-0"
+                                  />
+                                  <span className="truncate">{label}</span>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
 

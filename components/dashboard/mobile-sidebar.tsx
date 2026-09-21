@@ -1071,8 +1071,7 @@ export function MobileSidebar() {
                           label: t("nav.attendance", "Attendance Management"),
                           icon: Fingerprint,
                           openState: isAttendanceOpen,
-                          onToggle: () =>
-                            setIsAttendanceOpen((value) => !value),
+                          onToggle: () => setIsAttendanceOpen((value) => !value),
                         })}
 
                         {renderModuleSection({
