@@ -125,6 +125,12 @@ export type UserLinkingSummary = {
   employees_missing_enrolment: number;
 };
 
+export type UserLinkingCandidate = {
+  employee_id: number;
+  employee_number: string | null;
+  employee_name: string | null;
+};
+
 export type UserLinkingRecord = {
   id: string;
   user_id: number | null;
@@ -137,17 +143,31 @@ export type UserLinkingRecord = {
   enrolment_status: "enrolled" | "pending_enrolment" | "unlinked";
   match_method: string;
   conflict_reason: string | null;
+  candidates?: UserLinkingCandidate[];
+};
+
+export type UserLinkingMatchRow = {
+  user_id?: number;
+  user_name?: string;
+  user_email?: string;
+  employee_id?: number;
+  employee_number?: string | null;
+  employee_name?: string | null;
+  match_method?: string;
+  reason?: string;
+  candidates?: UserLinkingCandidate[];
+  work_email?: string | null;
 };
 
 export type UserLinkingPreview = {
   summary: UserLinkingSummary;
-  already_linked: unknown[];
-  will_link: unknown[];
-  ambiguous: unknown[];
-  conflicts: unknown[];
-  unlinked_users: unknown[];
-  unlinked_employees: unknown[];
-  missing_enrolment: unknown[];
+  already_linked: UserLinkingMatchRow[];
+  will_link: UserLinkingMatchRow[];
+  ambiguous: UserLinkingMatchRow[];
+  conflicts: UserLinkingMatchRow[];
+  unlinked_users: UserLinkingMatchRow[];
+  unlinked_employees: UserLinkingMatchRow[];
+  missing_enrolment: UserLinkingMatchRow[];
 };
 
 export async function fetchUserLinkingSummary(): Promise<UserLinkingSummary> {
@@ -165,12 +185,14 @@ export async function fetchUserLinkingRecords(
   perPage = 25,
   search = "",
   status = "all",
+  enrolment = "all",
 ): Promise<{ data: UserLinkingRecord[]; meta: { current_page: number; last_page: number; total: number } }> {
   const query = new URLSearchParams({
     page: String(page),
     per_page: String(perPage),
     search,
     status,
+    enrolment,
   });
   try {
     return await attendanceFetch<{ data: UserLinkingRecord[]; meta: { current_page: number; last_page: number; total: number } }>(

@@ -36,6 +36,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
+import { notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -753,8 +754,12 @@ export function OrganigramPanel({
         },
       );
     },
-    onSuccess: () => {
-      toast.success("Reporting line updated.");
+    onSuccess: (data) => {
+      notifyMutationOutcome(data, {
+        savedMessage: "Reporting line updated.",
+        submittedMessage: "Submitted for approval.",
+        queryClient,
+      });
       void invalidateHrEmployeeQueries(queryClient, { scope });
     },
     onError: (error) =>

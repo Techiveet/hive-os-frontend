@@ -23,7 +23,11 @@ export const talentApi = {
   createCompetency: (data: Payload) => http.post(`${BASE_URL}/competencies`, data),
   updateCompetency: (id: number, data: Payload) => http.put(`${BASE_URL}/competencies/${id}`, data),
   deleteCompetency: (id: number) => http.delete(`${BASE_URL}/competencies/${id}`),
+  listEmployeeCompetencies: (params?: Params) =>
+    http.get(`${BASE_URL}/competencies/employees`, { params }),
   setEmployeeCompetency: (data: Payload) => http.post(`${BASE_URL}/competencies/employees`, data),
+  listPositionCompetencies: (params?: Params) =>
+    http.get(`${BASE_URL}/competencies/positions`, { params }),
   setPositionCompetency: (data: Payload) => http.post(`${BASE_URL}/competencies/positions`, data),
 
   // -------------------------------------------------------------- succession
@@ -57,6 +61,7 @@ export const talentApi = {
   listSessions: (params?: Params) => http.get(`${BASE_URL}/training/sessions`, { params }),
   createSession: (data: Payload) => http.post(`${BASE_URL}/training/sessions`, data),
   updateSession: (id: number, data: Payload) => http.put(`${BASE_URL}/training/sessions/${id}`, data),
+  deleteSession: (id: number) => http.delete(`${BASE_URL}/training/sessions/${id}`),
   enrol: (sessionId: number, data: Payload) =>
     http.post(`${BASE_URL}/training/sessions/${sessionId}/enrol`, data),
 
@@ -76,7 +81,10 @@ export const talentApi = {
   createTravel: (data: Payload) => http.post(`${BASE_URL}/travel`, data),
   updateTravel: (id: number, data: Payload) => http.put(`${BASE_URL}/travel/${id}`, data),
   transitionTravel: (id: number, status: string, notes?: string) =>
-    http.post(`${BASE_URL}/travel/${id}/transition`, { status, ...(notes ? { notes } : {}) }),
+    http.post(`${BASE_URL}/travel/${id}/transition`, {
+      status,
+      ...(notes ? { decision_notes: notes } : {}),
+    }),
   addTravelExpense: (id: number, data: Payload) => http.post(`${BASE_URL}/travel/${id}/expenses`, data),
   decideTravelExpense: (expenseId: number, data: Payload) =>
     http.post(`${BASE_URL}/travel/expenses/${expenseId}/decide`, data),
@@ -92,6 +100,8 @@ export const talentApi = {
     http.post(`${BASE_URL}/offboarding/tasks/${taskId}/status`, data),
   clearOffboarding: (id: number) => http.post(`${BASE_URL}/offboarding/${id}/clear`, {}),
   settleOffboarding: (id: number, data: Payload) => http.post(`${BASE_URL}/offboarding/${id}/settle`, data),
+  cancelOffboarding: (id: number, data?: Payload) =>
+    http.post(`${BASE_URL}/offboarding/${id}/cancel`, data ?? {}),
 };
 
 export default talentApi;

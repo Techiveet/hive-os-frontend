@@ -46,6 +46,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
+import { notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PanelTableSkeleton } from "@/components/ui/loading-states";
@@ -563,8 +564,12 @@ export function EmployeeTransferDialog({
         }),
       });
     },
-    onSuccess: () => {
-      toast.success(`Transfer recorded for ${employee?.primary_name}.`);
+    onSuccess: (data) => {
+      notifyMutationOutcome(data, {
+        savedMessage: `Transfer recorded for ${employee?.primary_name}.`,
+        submittedMessage: "Submitted for approval.",
+        queryClient,
+      });
       onOpenChange(false);
       void invalidateHrTransferQueries(queryClient, scope);
     },
@@ -2606,8 +2611,12 @@ export function EmployeeTransfersPanel() {
         }),
       });
     },
-    onSuccess: () => {
-      toast.success("Employee transfer recorded successfully!");
+    onSuccess: (data) => {
+      notifyMutationOutcome(data, {
+        savedMessage: "Employee transfer recorded successfully!",
+        submittedMessage: "Submitted for approval.",
+        queryClient,
+      });
       void invalidateHrTransferQueries(queryClient, scope);
       setFormData({
         employee_id: "",

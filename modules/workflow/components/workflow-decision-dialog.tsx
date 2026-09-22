@@ -270,12 +270,25 @@ export function WorkflowDecisionDialog({
                         return null;
                       }
 
+                      const normalizedKey = key.toLowerCase().replace(/[\s_]+/g, " ");
+                      if (
+                        normalizedKey.includes("idempotency") ||
+                        normalizedKey.includes("saga flow") ||
+                        normalizedKey.includes("target type") ||
+                        normalizedKey === "name" ||
+                        normalizedKey === "subtitle"
+                      ) {
+                        return null;
+                      }
+
                       const displayKey = key.includes(" ")
                         ? key
                         : key.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
                       const isLink =
                         typeof value === "string" &&
-                        (key.toLowerCase().includes("open in") || value.startsWith("/dashboard/"));
+                        (normalizedKey.includes("open in") ||
+                          normalizedKey.includes("open record") ||
+                          value.startsWith("/dashboard/"));
 
                       if (isLink) {
                         return (
@@ -291,8 +304,21 @@ export function WorkflowDecisionDialog({
                         );
                       }
 
-                      const displayValue =
+                      let displayValue =
                         typeof value === "object" ? JSON.stringify(value) : String(value);
+
+                      if (
+                        typeof value === "string" &&
+                        /^\d{4}-\d{2}-\d{2}T/.test(value)
+                      ) {
+                        const parsed = new Date(value);
+                        if (!Number.isNaN(parsed.getTime())) {
+                          displayValue = parsed.toLocaleString(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          });
+                        }
+                      }
 
                       return (
                         <div key={key} className="flex items-start justify-between gap-4 text-sm">

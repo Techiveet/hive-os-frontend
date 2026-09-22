@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
 
 import { FileManagerClient } from "@/components/dashboard/file-manager-client";
 import { Badge } from "@/components/ui/badge";
@@ -363,19 +364,14 @@ function ReadinessPanel({
     },
     {
       label: "Approval route",
-      ready: Boolean(
-        preview &&
-          preview.workflow.configured &&
-          !preview.workflow.configuration_error &&
-          (preview.workflow.approver_count ?? 0) > 0,
-      ),
+      ready: Boolean(preview && !preview.workflow.configuration_error),
       detail: !preview
         ? "Checked after dates are set"
         : preview.workflow.configuration_error
           ? preview.workflow.configuration_error
           : preview.workflow.configured
             ? `${preview.workflow.approver_count ?? 0} approver${preview.workflow.approver_count === 1 ? "" : "s"}`
-            : "Configure a leave approval workflow before submitting",
+            : "No workflow rule — request will be created immediately",
     },
   ];
 
@@ -688,11 +684,14 @@ function RequestComposer({
       };
     },
     onSuccess: (result, action) => {
-      toast.success(
-        action === "draft"
-          ? "Leave request saved as a draft."
-          : "Leave request sent for approval.",
-      );
+      if (action === "draft") {
+        toast.success("Leave request saved as a draft.");
+      } else {
+        notifyMutationOutcome(result, {
+          savedMessage: "Leave request created.",
+          submittedMessage: "Submitted for approval.",
+        });
+      }
       onSaved(result.data);
       onOpenChange(false);
     },
@@ -704,13 +703,9 @@ function RequestComposer({
       ),
   });
 
-  const workflowConfigured = Boolean(
-    preview.data?.data.workflow.configured &&
-      !preview.data?.data.workflow.configuration_error &&
-      (preview.data?.data.workflow.approver_count ?? 0) > 0,
-  );
+  const workflowReady = !preview.data?.data.workflow.configuration_error;
   const canSendForApproval = Boolean(
-    canPreview && preview.data?.data.is_submittable && workflowConfigured,
+    canPreview && preview.data?.data.is_submittable && workflowReady,
   );
 
   const previewError =
@@ -1185,7 +1180,9 @@ function RequestComposer({
                 ) : (
                   <Send aria-hidden="true" />
                 )}
-                Send for approval
+                {preview.data?.data.workflow.configured
+                  ? "Send for approval"
+                  : "Create leave request"}
               </Button>
             </DialogFooter>
           </>
@@ -1234,14 +1231,18 @@ function ChangeRequestDialog({
         }),
       });
     },
-    onSuccess: () => {
-      toast.success(
-        mode === "withdraw"
-          ? "Leave request withdrawn."
-          : mode === "cancel"
-            ? "Cancellation sent for approval."
-            : "Early return sent for approval.",
-      );
+    onSuccess: (data) => {
+      if (mode === "withdraw") {
+        toast.success("Leave request withdrawn.");
+      } else {
+        notifyMutationOutcome(data, {
+          savedMessage:
+            mode === "cancel"
+              ? "Leave cancellation applied."
+              : "Early leave return applied.",
+          submittedMessage: "Submitted for approval.",
+        });
+      }
       onComplete();
       onClose();
     },
@@ -1376,8 +1377,11 @@ function RequestDetails({
         method: "POST",
         body: JSON.stringify({}),
       }),
-    onSuccess: () => {
-      toast.success("Draft sent for approval.");
+    onSuccess: (data) => {
+      notifyMutationOutcome(data, {
+        savedMessage: "Leave request submitted.",
+        submittedMessage: "Submitted for approval.",
+      });
       details.refetch();
       onRefresh();
     },

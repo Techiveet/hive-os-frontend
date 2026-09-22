@@ -597,6 +597,27 @@ export function AttendanceCorrections({ date }: { date: string }) {
       ),
   });
 
+  const withdrawCorrection = useMutation({
+    mutationFn: (correctionId: number) =>
+      attendanceFetch<{ data: AttendanceCorrectionRequest }>(
+        `/attendance/correction-requests/${correctionId}/withdraw`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      toast.success("Correction request withdrawn.");
+      void queryClient.invalidateQueries({
+        queryKey: ["hr-attendance", scope, "corrections"],
+      });
+    },
+    onError: (failure) =>
+      toast.error(
+        errorMessage(
+          failure,
+          "The correction request could not be withdrawn.",
+        ),
+      ),
+  });
+
   const calculationRows = calculations.data?.data ?? [];
   const exceptionRows =
     exceptions.data?.data ??
@@ -927,6 +948,9 @@ export function AttendanceCorrections({ date }: { date: string }) {
                     <TableHead scope="col">Employee</TableHead>
                     <TableHead scope="col">Change</TableHead>
                     <TableHead scope="col">Status</TableHead>
+                    <TableHead scope="col" className="text-right">
+                      Actions
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -958,12 +982,30 @@ export function AttendanceCorrections({ date }: { date: string }) {
                             </span>
                           )}
                         </TableCell>
+                        <TableCell className="text-right">
+                          {canRequestCorrection &&
+                            (correction.status === "draft" ||
+                              correction.status === "submitted") && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="min-h-10 text-xs text-red-700 dark:text-red-300"
+                                disabled={withdrawCorrection.isPending}
+                                onClick={() =>
+                                  withdrawCorrection.mutate(correction.id)
+                                }
+                              >
+                                Withdraw
+                              </Button>
+                            )}
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
                       <TableCell
-                        colSpan={4}
+                        colSpan={5}
                         className="py-10 text-center text-slate-600 dark:text-slate-300"
                       >
                         No correction requests for this date.

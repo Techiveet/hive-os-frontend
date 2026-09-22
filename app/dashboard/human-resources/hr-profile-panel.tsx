@@ -27,6 +27,17 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -346,6 +357,8 @@ export function EmployeeProfileWorkspace({
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [file, setFile] = useState<File | null>(null);
   const [otherInfo, setOtherInfo] = useState<EmployeeProfileOtherInfo>({});
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [recordToDelete, setRecordToDelete] = useState<Record<string, unknown> | null>(null);
 
   const employeesQuery = useQuery({
     queryKey: ["hr-employees-profile", scope],
@@ -852,18 +865,42 @@ export function EmployeeProfileWorkspace({
                               <Pencil className="mr-1 h-3.5 w-3.5" />
                               Edit
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => {
-                                if (confirm("Delete this record?")) {
-                                  deleteMutation.mutate(record);
-                                }
-                              }}
-                            >
-                              <Trash2 className="mr-1 h-3.5 w-3.5" />
-                              Delete
-                            </Button>
+                            <AlertDialog open={deleteConfirmOpen && recordToDelete === record} onOpenChange={(open) => setDeleteConfirmOpen(open)}>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="rounded-full"
+                                  onClick={() => setRecordToDelete(record)}
+                                >
+                                  <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                  Delete
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Record?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This action cannot be undone. This will permanently delete this {activeSection?.name?.toLowerCase() || "record"}.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel className="rounded-xl" onClick={() => setRecordToDelete(null)}>
+                                    Cancel
+                                  </AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="rounded-xl bg-destructive hover:bg-destructive/90"
+                                    onClick={() => {
+                                      deleteMutation.mutate(record);
+                                      setRecordToDelete(null);
+                                      setDeleteConfirmOpen(false);
+                                    }}
+                                  >
+                                    Confirm Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </div>
                       ))}

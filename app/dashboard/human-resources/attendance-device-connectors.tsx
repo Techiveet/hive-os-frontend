@@ -20,6 +20,14 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,6 +48,15 @@ import {
 } from "@/modules/humanresources/api";
 import { attendanceFetch } from "@/modules/attendance/api";
 
+const POLLABLE_ADAPTERS = new Set([
+  "hikvision_isapi",
+  "suprema_biostar2",
+  "mock",
+]);
+const API_CREDENTIAL_ADAPTERS = new Set([
+  "suprema_biostar2",
+  "hikvision_isapi",
+]);
 const controlClass =
   "h-11 border-slate-500 focus-visible:ring-2 focus-visible:ring-blue-700 dark:border-slate-400 dark:focus-visible:ring-cyan-300";
 const selectClass =
@@ -68,6 +85,10 @@ const deviceTypeDefaults: Record<string, { code: string; name: string }> = {
     code: "SUPREMA-BIOSTATION-2",
     name: "Suprema BioStation 2",
   },
+  hikvision_isapi: {
+    code: "HIKVISION-ISAPI",
+    name: "Hikvision ISAPI terminal",
+  },
   generic_webhook: {
     code: "ATTENDANCE-WEBHOOK",
     name: "Generic attendance webhook",
@@ -84,8 +105,18 @@ const deviceTypeDefaults: Record<string, { code: string; name: string }> = {
 
 export function AttendanceDeviceConnectors({
   employees,
+  workspaceData,
+  workspaceLoading,
+  workspaceError,
+  onRefresh,
+  isRefreshing,
 }: {
   employees: Employee[];
+  workspaceData?: AttendanceDeviceWorkspace;
+  workspaceLoading?: boolean;
+  workspaceError?: boolean;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }) {
   const scope = getWorkspaceScopeKey();
   const queryClient = useQueryClient();
@@ -104,6 +135,12 @@ export function AttendanceDeviceConnectors({
   } | null>(null);
   const [bioStarDiscovery, setBioStarDiscovery] =
     useState<AttendanceDeviceDiscovery | null>(null);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [confirmAction, setConfirmAction] = useState<
+    "rotate" | "import" | "sync" | "unmap" | null
+  >(null);
+  const [pendingSyncCode, setPendingSyncCode] = useState<string | null>(null);
+  const [pendingUnmapId, setPendingUnmapId] = useState<number | null>(null);
   const [deviceForm, setDeviceForm] = useState({
     device_code: "SUPREMA-BIOSTATION-2",
     name: "Suprema BioStation 2",
@@ -129,12 +166,15 @@ export function AttendanceDeviceConnectors({
     device_code: "",
     employee_id: "",
     external_employee_identifier: "",
+    effective_from: "",
+    effective_to: "",
   });
   const [importForm, setImportForm] = useState({
     device_id: "",
     file: null as File | null,
   });
 
+  const usesParentWorkspace = workspaceData !== undefined;
   const workspace = useQuery({
     queryKey: ["hr-attendance-devices", scope],
     queryFn: () =>
@@ -142,13 +182,40 @@ export function AttendanceDeviceConnectors({
         "/attendance/devices/workspace",
       ),
     refetchInterval: 15_000,
+    enabled: !usesParentWorkspace,
   });
-  const data = workspace.data?.data;
-  const refresh = () =>
-    queryClient.invalidateQueries({
+  const data = usesParentWorkspace ? workspaceData : workspace.data?.data;
+  const refresh = () => {
+    if (onRefresh) {
+      onRefresh();
+      return;
+    }
+    void queryClient.invalidateQueries({
       queryKey: ["hr-attendance-devices", scope],
     });
+    void queryClient.invalidateQueries({
+      queryKey: ["hr-attendance-devices-workspace", scope],
+    });
+  };
+  const isWorkspaceLoading = usesParentWorkspace
+    ? Boolean(workspaceLoading)
+    : workspace.isLoading;
+  const isWorkspaceError = usesParentWorkspace
+    ? Boolean(workspaceError)
+    : workspace.isError;
+  const isWorkspaceFetching = usesParentWorkspace
+    ? Boolean(isRefreshing)
+    : workspace.isFetching;
 
+  const filteredEmployees = employees.filter((employee) => {
+    const q = employeeSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      employee.primary_name.toLowerCase().includes(q) ||
+      employee.employee_number.toLowerCase().includes(q) ||
+      (employee.work_email ?? "").toLowerCase().includes(q)
+    );
+  });
   const createDevice = useMutation({
     mutationFn: () =>
       attendanceFetch<{
@@ -166,27 +233,41 @@ export function AttendanceDeviceConnectors({
           adapter_type: deviceForm.adapter_type,
           timezone: deviceForm.timezone,
           manufacturer:
-            deviceForm.adapter_type === "suprema_biostar2" ? "Suprema" : null,
+            deviceForm.adapter_type === "suprema_biostar2"
+              ? "Suprema"
+              : deviceForm.adapter_type === "hikvision_isapi"
+                ? "Hikvision"
+                : null,
           model:
             deviceForm.adapter_type === "suprema_biostar2"
               ? "BioStation 2"
-              : null,
+              : deviceForm.adapter_type === "hikvision_isapi"
+                ? "ISAPI Terminal"
+                : null,
           configuration:
-            deviceForm.adapter_type === "suprema_biostar2"
+            deviceForm.adapter_type === "suprema_biostar2" ||
+            deviceForm.adapter_type === "hikvision_isapi"
               ? {
                   base_url: deviceForm.base_url,
-                  biostar_device_id: deviceForm.biostar_device_id || undefined,
+                  biostar_device_id:
+                    deviceForm.adapter_type === "suprema_biostar2"
+                      ? deviceForm.biostar_device_id || undefined
+                      : undefined,
                   verify_tls: deviceForm.verify_tls === "true",
                   allow_http:
                     deviceForm.verify_tls === "false" &&
                     deviceForm.base_url.startsWith("http://"),
                   event_limit: 100,
-                  tna_key_map: {
-                    "1": "clock_in",
-                    "2": "clock_out",
-                    "3": "break_start",
-                    "4": "break_end",
-                  },
+                  ...(deviceForm.adapter_type === "suprema_biostar2"
+                    ? {
+                        tna_key_map: {
+                          "1": "clock_in",
+                          "2": "clock_out",
+                          "3": "break_start",
+                          "4": "break_end",
+                        },
+                      }
+                    : {}),
                 }
               : {},
         }),
@@ -260,12 +341,12 @@ export function AttendanceDeviceConnectors({
         }));
       }
       toast.success(
-        `BioStar returned ${response.data.device_count} device(s) and ${response.data.user_count} user(s).`,
+        `Discovery returned ${response.data.device_count} device(s) and ${response.data.user_count} user(s).`,
       );
       void refresh();
     },
     onError: (error) =>
-      toast.error(errorMessage(error, "BioStar discovery failed.")),
+      toast.error(errorMessage(error, "Device discovery failed.")),
   });
 
   const updateDeviceConfiguration = useMutation({
@@ -301,6 +382,8 @@ export function AttendanceDeviceConnectors({
         (item) => item.device_code === credentialForm.device_code,
       );
       const isBioStar = device?.adapter_type === "suprema_biostar2";
+      const isHikvision = device?.adapter_type === "hikvision_isapi";
+      const usesApiCredentials = isBioStar || isHikvision;
 
       return attendanceFetch<{
         data: unknown;
@@ -314,25 +397,34 @@ export function AttendanceDeviceConnectors({
         {
           method: "POST",
           body: JSON.stringify({
-            credential_type: isBioStar ? "biostar2_api" : "connector_hmac",
-            principal: isBioStar ? credentialForm.principal : null,
-            secret: isBioStar ? credentialForm.secret : null,
-            configuration: isBioStar
+            credential_type: isBioStar
+              ? "biostar2_api"
+              : isHikvision
+                ? "hikvision_isapi"
+                : "connector_hmac",
+            principal: usesApiCredentials ? credentialForm.principal : null,
+            secret: usesApiCredentials ? credentialForm.secret : null,
+            configuration: usesApiCredentials
               ? {
                   base_url: credentialForm.base_url,
-                  biostar_device_id:
-                    credentialForm.biostar_device_id || undefined,
+                  biostar_device_id: isBioStar
+                    ? credentialForm.biostar_device_id || undefined
+                    : undefined,
                   verify_tls: credentialForm.verify_tls === "true",
                   allow_http:
                     credentialForm.verify_tls === "false" &&
                     credentialForm.base_url.startsWith("http://"),
                   event_limit: 100,
-                  tna_key_map: {
-                    [credentialForm.tna_clock_in]: "clock_in",
-                    [credentialForm.tna_clock_out]: "clock_out",
-                    [credentialForm.tna_break_start]: "break_start",
-                    [credentialForm.tna_break_end]: "break_end",
-                  },
+                  ...(isBioStar
+                    ? {
+                        tna_key_map: {
+                          [credentialForm.tna_clock_in]: "clock_in",
+                          [credentialForm.tna_clock_out]: "clock_out",
+                          [credentialForm.tna_break_start]: "break_start",
+                          [credentialForm.tna_break_end]: "break_end",
+                        },
+                      }
+                    : {}),
                 }
               : null,
           }),
@@ -352,10 +444,11 @@ export function AttendanceDeviceConnectors({
         secret: "",
       }));
       toast.success("Device credential rotated.");
+      setConfirmAction(null);
       const selected = data?.devices.find(
         (device) => device.device_code === credentialForm.device_code,
       );
-      if (selected?.adapter_type === "suprema_biostar2") {
+      if (selected && API_CREDENTIAL_ADAPTERS.has(selected.adapter_type)) {
         discoverDevice.mutate(credentialForm.device_code);
       }
       void refresh();
@@ -372,6 +465,8 @@ export function AttendanceDeviceConnectors({
             employee_id: Number(mappingForm.employee_id),
             external_employee_identifier:
               mappingForm.external_employee_identifier,
+            effective_from: mappingForm.effective_from || null,
+            effective_to: mappingForm.effective_to || null,
           }),
         },
       ),
@@ -380,10 +475,35 @@ export function AttendanceDeviceConnectors({
         ...current,
         employee_id: "",
         external_employee_identifier: "",
+        effective_from: "",
+        effective_to: "",
       }));
       toast.success("External device identity mapped to the employee.");
       void refresh();
     },
+  });
+
+  const unmapEmployee = useMutation({
+    mutationFn: (mappingId: number) => {
+      const mapping = data?.mappings.find((row) => row.id === mappingId);
+      const deviceCode =
+        mapping?.device?.device_code ??
+        data?.devices.find((d) => d.id === mapping?.attendance_device_id)
+          ?.device_code;
+      if (!deviceCode) throw new Error("Mapping device not found.");
+      return attendanceFetch(
+        `/attendance/devices/${encodeURIComponent(deviceCode)}/employee-mappings/${mappingId}`,
+        { method: "DELETE" },
+      );
+    },
+    onSuccess: () => {
+      toast.success("Employee mapping deactivated.");
+      setConfirmAction(null);
+      setPendingUnmapId(null);
+      void refresh();
+    },
+    onError: (error) =>
+      toast.error(errorMessage(error, "Mapping could not be deactivated.")),
   });
 
   const testDevice = useMutation({
@@ -413,6 +533,8 @@ export function AttendanceDeviceConnectors({
       ),
     onSuccess: () => {
       toast.success("Device sync queued.");
+      setConfirmAction(null);
+      setPendingSyncCode(null);
       void refresh();
     },
   });
@@ -432,6 +554,7 @@ export function AttendanceDeviceConnectors({
       setImportForm((current) => ({ ...current, file: null }));
       if (fileRef.current) fileRef.current.value = "";
       toast.success("Attendance import queued.");
+      setConfirmAction(null);
       void refresh();
     },
   });
@@ -441,20 +564,30 @@ export function AttendanceDeviceConnectors({
   );
   const isBioStarCredential =
     selectedCredentialDevice?.adapter_type === "suprema_biostar2";
-  const hasActiveBioStarCredential =
+  const isHikvisionCredential =
+    selectedCredentialDevice?.adapter_type === "hikvision_isapi";
+  const isApiCredential = isBioStarCredential || isHikvisionCredential;
+  const hasActiveApiCredential =
     selectedCredentialDevice?.credentials?.some(
       (credential) =>
-        credential.credential_type === "biostar2_api" &&
+        ((isBioStarCredential &&
+          credential.credential_type === "biostar2_api") ||
+          (isHikvisionCredential &&
+            credential.credential_type === "hikvision_isapi")) &&
         credential.status === "active",
     ) ?? false;
   const selectedMappingDevice = data?.devices.find(
     (device) => device.device_code === mappingForm.device_code,
   );
   const discoveredUsers =
-    selectedMappingDevice?.adapter_type === "suprema_biostar2" &&
+    selectedMappingDevice &&
+    API_CREDENTIAL_ADAPTERS.has(selectedMappingDevice.adapter_type) &&
     bioStarDiscovery?.device_code === selectedMappingDevice.device_code
       ? bioStarDiscovery.users
       : [];
+  const activeMappings = (data?.mappings ?? []).filter(
+    (mapping) => mapping.status === "active",
+  );
   const bioStarTnaKeys = [
     credentialForm.tna_clock_in.trim(),
     credentialForm.tna_clock_out.trim(),
@@ -470,6 +603,7 @@ export function AttendanceDeviceConnectors({
     discoverDevice.error ||
     updateDeviceConfiguration.error ||
     mapEmployee.error ||
+    unmapEmployee.error ||
     importEvents.error;
 
   return (
@@ -505,12 +639,12 @@ export function AttendanceDeviceConnectors({
               type="button"
               variant="outline"
               onClick={() => void refresh()}
-              disabled={workspace.isFetching}
+              disabled={isWorkspaceFetching}
               className="min-h-11 bg-background/70 focus-visible:ring-2 focus-visible:ring-ring"
             >
               <RefreshCw
                 aria-hidden="true"
-                className={`mr-2 h-4 w-4 ${workspace.isFetching ? "animate-spin" : ""}`}
+                className={`mr-2 h-4 w-4 ${isWorkspaceFetching ? "animate-spin" : ""}`}
               />
               Refresh connector status
             </Button>
@@ -592,14 +726,14 @@ export function AttendanceDeviceConnectors({
         </div>
       )}
 
-      {workspace.isLoading ? (
+      {isWorkspaceLoading ? (
         <div
           role="status"
           className="rounded-xl border border-slate-500 p-8 text-center font-semibold text-slate-700 dark:border-slate-400 dark:text-slate-200"
         >
           Loading device connectors…
         </div>
-      ) : workspace.isError || !data ? (
+      ) : isWorkspaceError || !data ? (
         <div className="rounded-xl border border-red-700 bg-red-50 p-4 text-red-900 dark:border-red-300 dark:bg-red-950 dark:text-red-100">
           Device connectors could not be loaded.
         </div>
@@ -621,10 +755,10 @@ export function AttendanceDeviceConnectors({
                         id={deviceHintId}
                         className="mt-1 text-sm text-slate-600 dark:text-slate-300"
                       >
-                        BioStation 2 uses the BioStar 2 server API. Generic
-                        sources receive signed pushes through the local
-                        connector endpoint. Use guided Device Onboarding for
-                      </p>
+                        BioStation 2 and Hikvision use their vendor APIs. Generic
+                        sources receive signed pushes through the local connector
+                        endpoint. Use guided Device Onboarding for full
+                        manufacturer setup and recovery profiles.</p>
                     </div>
                   </div>
                   <form
@@ -658,7 +792,8 @@ export function AttendanceDeviceConnectors({
                             name: defaults.name,
                             device_code: defaults.code,
                             base_url:
-                              adapter === "suprema_biostar2"
+                              adapter === "suprema_biostar2" ||
+                              adapter === "hikvision_isapi"
                                 ? current.base_url
                                 : "",
                             biostar_device_id:
@@ -679,8 +814,8 @@ export function AttendanceDeviceConnectors({
                         id={deviceTypeHintId}
                         className="text-xs text-slate-600 dark:text-slate-300"
                       >
-                        Choosing Suprema BioStation 2 automatically uses the
-                        BioStar 2 API adapter.
+                        Pollable adapters (BioStar, Hikvision, mock) can queue
+                        event syncs; edge/webhook adapters push into Hive.
                       </p>
                     </div>
                     <div className="space-y-2">
@@ -730,11 +865,14 @@ export function AttendanceDeviceConnectors({
                         required
                       />
                     </div>
-                    {deviceForm.adapter_type === "suprema_biostar2" && (
+                    {(deviceForm.adapter_type === "suprema_biostar2" ||
+                      deviceForm.adapter_type === "hikvision_isapi") && (
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="biostar-server">
-                            BioStar 2 server URL
+                            {deviceForm.adapter_type === "hikvision_isapi"
+                              ? "Hikvision device URL"
+                              : "BioStar 2 server URL"}
                           </Label>
                           <Input
                             id="biostar-server"
@@ -747,30 +885,35 @@ export function AttendanceDeviceConnectors({
                                 base_url: event.target.value,
                               }))
                             }
-                            placeholder="https://biostar.example.internal"
-                          />
-                          <p className="text-xs text-slate-600 dark:text-slate-300">
-                            Leave this empty to save the device as configuration
-                            required, then add the real URL with its encrypted
-                            credential.
-                          </p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="biostar-device-id">
-                            BioStar device ID
-                          </Label>
-                          <Input
-                            id="biostar-device-id"
-                            className={controlClass}
-                            value={deviceForm.biostar_device_id}
-                            onChange={(event) =>
-                              setDeviceForm((current) => ({
-                                ...current,
-                                biostar_device_id: event.target.value,
-                              }))
+                            placeholder={
+                              deviceForm.adapter_type === "hikvision_isapi"
+                                ? "https://192.168.1.64"
+                                : "https://biostar.example.internal"
                             }
                           />
+                          <p className="text-xs text-slate-600 dark:text-slate-300">
+                            Leave empty to save as configuration required, then
+                            add the URL with encrypted credentials.
+                          </p>
                         </div>
+                        {deviceForm.adapter_type === "suprema_biostar2" && (
+                          <div className="space-y-2">
+                            <Label htmlFor="biostar-device-id">
+                              BioStar device ID
+                            </Label>
+                            <Input
+                              id="biostar-device-id"
+                              className={controlClass}
+                              value={deviceForm.biostar_device_id}
+                              onChange={(event) =>
+                                setDeviceForm((current) => ({
+                                  ...current,
+                                  biostar_device_id: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                        )}
                         <div className="space-y-2">
                           <Label htmlFor="biostar-tls">
                             TLS certificate verification
@@ -827,8 +970,9 @@ export function AttendanceDeviceConnectors({
                         id={credentialHintId}
                         className="mt-1 text-sm text-slate-600 dark:text-slate-300"
                       >
-                        BioStar usernames and passwords are encrypted. Inbound
-                        connector secrets are generated and displayed once.
+                        BioStar and Hikvision usernames/passwords are encrypted.
+                        Inbound connector secrets are generated and displayed
+                        once.
                       </p>
                     </div>
                   </div>
@@ -836,7 +980,7 @@ export function AttendanceDeviceConnectors({
                     className="mt-5 grid gap-4"
                     onSubmit={(event: FormEvent) => {
                       event.preventDefault();
-                      rotateCredential.mutate();
+                      setConfirmAction("rotate");
                     }}
                     aria-describedby={credentialHintId}
                   >
@@ -912,11 +1056,13 @@ export function AttendanceDeviceConnectors({
                         ))}
                       </select>
                     </div>
-                    {isBioStarCredential && (
+                    {isApiCredential && (
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="biostar-credential-server">
-                            BioStar 2 server URL
+                            {isHikvisionCredential
+                              ? "Hikvision device URL"
+                              : "BioStar 2 server URL"}
                           </Label>
                           <Input
                             id="biostar-credential-server"
@@ -929,26 +1075,32 @@ export function AttendanceDeviceConnectors({
                                 base_url: event.target.value,
                               }))
                             }
-                            placeholder="https://biostar.example.internal"
+                            placeholder={
+                              isHikvisionCredential
+                                ? "https://192.168.1.64"
+                                : "https://biostar.example.internal"
+                            }
                             required
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="biostar-credential-device-id">
-                            BioStar device ID
-                          </Label>
-                          <Input
-                            id="biostar-credential-device-id"
-                            className={controlClass}
-                            value={credentialForm.biostar_device_id}
-                            onChange={(event) =>
-                              setCredentialForm((current) => ({
-                                ...current,
-                                biostar_device_id: event.target.value,
-                              }))
-                            }
-                          />
-                        </div>
+                        {isBioStarCredential && (
+                          <div className="space-y-2">
+                            <Label htmlFor="biostar-credential-device-id">
+                              BioStar device ID
+                            </Label>
+                            <Input
+                              id="biostar-credential-device-id"
+                              className={controlClass}
+                              value={credentialForm.biostar_device_id}
+                              onChange={(event) =>
+                                setCredentialForm((current) => ({
+                                  ...current,
+                                  biostar_device_id: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                        )}
                         <div className="space-y-2">
                           <Label htmlFor="biostar-credential-tls">
                             TLS certificate verification
@@ -970,6 +1122,7 @@ export function AttendanceDeviceConnectors({
                             </option>
                           </select>
                         </div>
+                        {isBioStarCredential && (
                         <fieldset className="space-y-3 rounded-xl border border-slate-400 p-4 dark:border-slate-500">
                           <legend className="px-1 text-sm font-semibold text-slate-950 dark:text-slate-50">
                             BioStar T&amp;A key mapping
@@ -1057,9 +1210,12 @@ export function AttendanceDeviceConnectors({
                             </p>
                           )}
                         </fieldset>
+                        )}
                         <div className="space-y-2">
                           <Label htmlFor="biostar-login">
-                            BioStar 2 login ID
+                            {isHikvisionCredential
+                              ? "Hikvision username"
+                              : "BioStar 2 login ID"}
                           </Label>
                           <Input
                             id="biostar-login"
@@ -1077,7 +1233,9 @@ export function AttendanceDeviceConnectors({
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="biostar-password">
-                            BioStar 2 password
+                            {isHikvisionCredential
+                              ? "Hikvision password"
+                              : "BioStar 2 password"}
                           </Label>
                           <Input
                             id="biostar-password"
@@ -1107,23 +1265,26 @@ export function AttendanceDeviceConnectors({
                       className="min-h-11 border-teal-800 text-teal-950 hover:bg-teal-50 focus-visible:ring-2 focus-visible:ring-teal-800 dark:border-teal-200 dark:text-teal-100 dark:hover:bg-teal-950 dark:focus-visible:ring-teal-200"
                     >
                       <KeyRound aria-hidden="true" className="mr-2 h-4 w-4" />
-                      {isBioStarCredential
-                        ? "Save encrypted BioStar credential"
+                      {isApiCredential
+                        ? isHikvisionCredential
+                          ? "Save encrypted Hikvision credential"
+                          : "Save encrypted BioStar credential"
                         : "Rotate connector secret"}
                     </Button>
                   </form>
-                  {isBioStarCredential && (
+                  {isApiCredential && (
                     <div className="mt-5 rounded-xl border border-slate-500 bg-slate-50 p-4 dark:border-slate-400 dark:bg-slate-950">
                       <p className="font-black text-slate-950 dark:text-slate-50">
-                        BioStar directory
+                        {isHikvisionCredential
+                          ? "Hikvision directory"
+                          : "BioStar directory"}
                       </p>
                       <p
                         id={discoveryHintId}
                         className="mt-1 text-sm text-slate-700 dark:text-slate-200"
                       >
-                        Save the encrypted credential, then discover the
-                        BioStation devices and user IDs available through this
-                        BioStar 2 server.
+                        Save the encrypted credential, then discover devices and
+                        user IDs available through this vendor API.
                       </p>
                       <Button
                         type="button"
@@ -1131,8 +1292,7 @@ export function AttendanceDeviceConnectors({
                         aria-describedby={discoveryHintId}
                         className="mt-4 min-h-11 border-teal-800 text-teal-950 hover:bg-white focus-visible:ring-2 focus-visible:ring-teal-800 dark:border-teal-200 dark:text-teal-100 dark:hover:bg-slate-900 dark:focus-visible:ring-teal-200"
                         disabled={
-                          !hasActiveBioStarCredential ||
-                          discoverDevice.isPending
+                          !hasActiveApiCredential || discoverDevice.isPending
                         }
                         onClick={() =>
                           discoverDevice.mutate(credentialForm.device_code)
@@ -1145,12 +1305,12 @@ export function AttendanceDeviceConnectors({
                           }`}
                         />
                         {discoverDevice.isPending
-                          ? "Discovering BioStar…"
-                          : "Discover BioStar devices and users"}
+                          ? "Discovering…"
+                          : "Discover devices and users"}
                       </Button>
-                      {!hasActiveBioStarCredential && (
+                      {!hasActiveApiCredential && (
                         <p className="mt-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                          Save a BioStar login ID and password first.
+                          Save a vendor login and password first.
                         </p>
                       )}
                       {bioStarDiscovery?.device_code ===
@@ -1160,58 +1320,68 @@ export function AttendanceDeviceConnectors({
                             role="status"
                             className="rounded-lg border border-slate-500 bg-white p-3 text-sm font-semibold text-slate-800 dark:border-slate-400 dark:bg-slate-900 dark:text-slate-100"
                           >
-                            BioStar returned {bioStarDiscovery.device_count}{" "}
+                            Discovery returned {bioStarDiscovery.device_count}{" "}
                             device(s) and {bioStarDiscovery.user_count} user(s)
                             at {formatDateTime(bioStarDiscovery.fetched_at)}.
                           </p>
-                          <div className="space-y-2">
-                            <Label htmlFor="biostar-discovered-device">
-                              BioStar device
-                            </Label>
-                            <select
-                              id="biostar-discovered-device"
-                              className={selectClass}
-                              aria-describedby={discoveredDeviceHintId}
-                              value={credentialForm.biostar_device_id}
-                              onChange={(event) =>
-                                setCredentialForm((current) => ({
-                                  ...current,
-                                  biostar_device_id: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="">Select a BioStar device</option>
-                              {bioStarDiscovery.devices.map((device) => (
-                                <option key={device.id} value={device.id}>
-                                  {device.name}
-                                  {device.model ? ` · ${device.model}` : ""}
-                                  {` · ${device.id}`}
-                                </option>
-                              ))}
-                            </select>
-                            <p
-                              id={discoveredDeviceHintId}
-                              className="text-xs text-slate-600 dark:text-slate-300"
-                            >
-                              Event synchronization will be limited to this
-                              device ID.
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            className="min-h-11 bg-teal-900 text-white hover:bg-teal-950 focus-visible:ring-2 focus-visible:ring-teal-900 dark:bg-teal-200 dark:text-teal-950 dark:hover:bg-teal-100 dark:focus-visible:ring-teal-200"
-                            disabled={
-                              !credentialForm.biostar_device_id ||
-                              updateDeviceConfiguration.isPending
-                            }
-                            onClick={() => updateDeviceConfiguration.mutate()}
-                          >
-                            <CheckCircle2
-                              aria-hidden="true"
-                              className="mr-2 h-4 w-4"
-                            />
-                            Use selected BioStar device
-                          </Button>
+                          {isBioStarCredential && (
+                            <>
+                              <div className="space-y-2">
+                                <Label htmlFor="biostar-discovered-device">
+                                  BioStar device
+                                </Label>
+                                <select
+                                  id="biostar-discovered-device"
+                                  className={selectClass}
+                                  aria-describedby={discoveredDeviceHintId}
+                                  value={credentialForm.biostar_device_id}
+                                  onChange={(event) =>
+                                    setCredentialForm((current) => ({
+                                      ...current,
+                                      biostar_device_id: event.target.value,
+                                    }))
+                                  }
+                                >
+                                  <option value="">
+                                    Select a BioStar device
+                                  </option>
+                                  {bioStarDiscovery.devices.map((device) => (
+                                    <option key={device.id} value={device.id}>
+                                      {device.name}
+                                      {device.model
+                                        ? ` · ${device.model}`
+                                        : ""}
+                                      {` · ${device.id}`}
+                                    </option>
+                                  ))}
+                                </select>
+                                <p
+                                  id={discoveredDeviceHintId}
+                                  className="text-xs text-slate-600 dark:text-slate-300"
+                                >
+                                  Event synchronization will be limited to this
+                                  device ID.
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                className="min-h-11 bg-teal-900 text-white hover:bg-teal-950 focus-visible:ring-2 focus-visible:ring-teal-900 dark:bg-teal-200 dark:text-teal-950 dark:hover:bg-teal-100 dark:focus-visible:ring-teal-200"
+                                disabled={
+                                  !credentialForm.biostar_device_id ||
+                                  updateDeviceConfiguration.isPending
+                                }
+                                onClick={() =>
+                                  updateDeviceConfiguration.mutate()
+                                }
+                              >
+                                <CheckCircle2
+                                  aria-hidden="true"
+                                  className="mr-2 h-4 w-4"
+                                />
+                                Use selected BioStar device
+                              </Button>
+                            </>
+                          )}
                           <p className="text-xs text-slate-600 dark:text-slate-300">
                             Hive reads directory identifiers only. Fingerprint
                             templates, face templates, and profile photos are
@@ -1280,6 +1450,20 @@ export function AttendanceDeviceConnectors({
                       </select>
                     </div>
                     <div className="space-y-2">
+                      <Label htmlFor="mapping-employee-search">
+                        Search employees
+                      </Label>
+                      <Input
+                        id="mapping-employee-search"
+                        className={controlClass}
+                        value={employeeSearch}
+                        onChange={(event) =>
+                          setEmployeeSearch(event.target.value)
+                        }
+                        placeholder="Filter by name, code, or email…"
+                      />
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="mapping-employee">ERP employee</Label>
                       <select
                         id="mapping-employee"
@@ -1294,16 +1478,57 @@ export function AttendanceDeviceConnectors({
                         required
                       >
                         <option value="">Select an employee</option>
-                        {employees.map((employee) => (
+                        {filteredEmployees.map((employee) => (
                           <option key={employee.id} value={employee.id}>
                             {employee.primary_name} · {employee.employee_number}
                           </option>
                         ))}
                       </select>
+                      {filteredEmployees.length === 0 && (
+                        <p className="text-xs text-amber-800 dark:text-amber-200">
+                          No employees match this search.
+                        </p>
+                      )}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="mapping-effective-from">
+                          Effective from
+                        </Label>
+                        <Input
+                          id="mapping-effective-from"
+                          type="date"
+                          className={controlClass}
+                          value={mappingForm.effective_from}
+                          onChange={(event) =>
+                            setMappingForm((current) => ({
+                              ...current,
+                              effective_from: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="mapping-effective-to">
+                          Effective to
+                        </Label>
+                        <Input
+                          id="mapping-effective-to"
+                          type="date"
+                          className={controlClass}
+                          value={mappingForm.effective_to}
+                          onChange={(event) =>
+                            setMappingForm((current) => ({
+                              ...current,
+                              effective_to: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
                     </div>
                     {discoveredUsers.length ? (
                       <div className="space-y-2">
-                        <Label htmlFor="biostar-user">BioStar user</Label>
+                        <Label htmlFor="biostar-user">Discovered device user</Label>
                         <select
                           id="biostar-user"
                           className={selectClass}
@@ -1317,7 +1542,7 @@ export function AttendanceDeviceConnectors({
                           }
                           required
                         >
-                          <option value="">Select a BioStar user</option>
+                          <option value="">Select a device user</option>
                           {discoveredUsers.map((user) => (
                             <option
                               key={user.user_id}
@@ -1369,6 +1594,63 @@ export function AttendanceDeviceConnectors({
                       Save employee mapping
                     </Button>
                   </form>
+                  {data.permissions.can_map_employees &&
+                    activeMappings.length > 0 && (
+                      <div className="mt-5 overflow-x-auto rounded-xl border border-slate-500 dark:border-slate-400">
+                        <Table>
+                          <TableCaption>
+                            Active device-to-employee identity mappings.
+                          </TableCaption>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead scope="col">Device</TableHead>
+                              <TableHead scope="col">Employee</TableHead>
+                              <TableHead scope="col">External ID</TableHead>
+                              <TableHead scope="col">Effective</TableHead>
+                              <TableHead scope="col" className="text-right">
+                                Actions
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {activeMappings.map((mapping) => (
+                              <TableRow key={mapping.id}>
+                                <TableCell className="font-semibold">
+                                  {mapping.device?.name ?? "Device"}
+                                </TableCell>
+                                <TableCell>
+                                  {mapping.employee?.primary_name ?? "—"}
+                                  <div className="font-mono text-xs text-slate-600 dark:text-slate-300">
+                                    {mapping.employee?.employee_number}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">
+                                  {mapping.external_identifier_hint}
+                                </TableCell>
+                                <TableCell className="text-xs text-slate-600 dark:text-slate-300">
+                                  {mapping.effective_from ?? "—"} →{" "}
+                                  {mapping.effective_to ?? "open"}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="min-h-10 text-red-700 dark:text-red-300"
+                                    onClick={() => {
+                                      setPendingUnmapId(mapping.id);
+                                      setConfirmAction("unmap");
+                                    }}
+                                  >
+                                    Unmap
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
                 </CardContent>
               </Card>
             )}
@@ -1398,7 +1680,7 @@ export function AttendanceDeviceConnectors({
                     className="mt-5 grid gap-4"
                     onSubmit={(event: FormEvent) => {
                       event.preventDefault();
-                      importEvents.mutate();
+                      setConfirmAction("import");
                     }}
                     aria-describedby={importHintId}
                   >
@@ -1554,16 +1836,15 @@ export function AttendanceDeviceConnectors({
                                 </Button>
                               )}
                               {data.permissions.can_sync_devices &&
-                                ["suprema_biostar2", "mock"].includes(
-                                  device.adapter_type,
-                                ) && (
+                                POLLABLE_ADAPTERS.has(device.adapter_type) && (
                                   <Button
                                     type="button"
                                     size="sm"
                                     disabled={syncDevice.isPending}
-                                    onClick={() =>
-                                      syncDevice.mutate(device.device_code)
-                                    }
+                                    onClick={() => {
+                                      setPendingSyncCode(device.device_code);
+                                      setConfirmAction("sync");
+                                    }}
                                     className="min-h-10 bg-blue-800 text-white hover:bg-blue-950 focus-visible:ring-2 focus-visible:ring-blue-800 dark:bg-cyan-200 dark:text-slate-950 dark:hover:bg-cyan-100 dark:focus-visible:ring-cyan-200"
                                   >
                                     Queue event sync
@@ -1656,6 +1937,75 @@ export function AttendanceDeviceConnectors({
           </Card>
         </>
       )}
+
+      <Dialog
+        open={confirmAction !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmAction(null);
+            setPendingSyncCode(null);
+            setPendingUnmapId(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction === "rotate"
+                ? "Rotate device credential?"
+                : confirmAction === "import"
+                  ? "Queue protected import?"
+                  : confirmAction === "unmap"
+                    ? "Deactivate this mapping?"
+                    : "Queue device sync?"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction === "rotate"
+                ? "Previous credentials of the same type will be revoked. Store any newly displayed secret immediately."
+                : confirmAction === "import"
+                  ? "The selected file will be queued for normalized import into the tenant attendance ledger."
+                  : confirmAction === "unmap"
+                    ? "The device identity will stop matching attendance events. Historical events stay preserved."
+                    : "Up to 100 recent events will be polled from the selected device."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11"
+              onClick={() => {
+                setConfirmAction(null);
+                setPendingSyncCode(null);
+                setPendingUnmapId(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="min-h-11"
+              variant={confirmAction === "unmap" ? "destructive" : "default"}
+              disabled={
+                rotateCredential.isPending ||
+                importEvents.isPending ||
+                syncDevice.isPending ||
+                unmapEmployee.isPending
+              }
+              onClick={() => {
+                if (confirmAction === "rotate") rotateCredential.mutate();
+                else if (confirmAction === "import") importEvents.mutate();
+                else if (confirmAction === "unmap" && pendingUnmapId != null)
+                  unmapEmployee.mutate(pendingUnmapId);
+                else if (confirmAction === "sync" && pendingSyncCode)
+                  syncDevice.mutate(pendingSyncCode);
+              }}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

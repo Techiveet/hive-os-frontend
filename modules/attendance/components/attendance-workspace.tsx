@@ -26,13 +26,14 @@ export function AttendanceWorkspace() {
   const employees = useQuery({
     queryKey: ["hr-attendance", scope, "schedule-employees"],
     queryFn: () =>
-      attendanceFetch<Paginated<Employee>>("/employees?per_page=100"),
+      attendanceFetch<Paginated<Employee>>("/employees?per_page=200"),
     enabled: isLoaded && canSchedules,
   });
 
   return (
     <>
       <AttendanceWorkspaceView
+        headingLevel="h1"
         onAddSchedule={
           canSchedules ? () => setScheduleOpen(true) : undefined
         }
