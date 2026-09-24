@@ -238,6 +238,9 @@ export const isPublicEndpoint = (url: string): boolean => {
   }
 };
 
+export const isPublicPage = (): boolean =>
+  typeof window !== "undefined" && window.location.pathname.startsWith("/track/");
+
 export const handleAuthFailureResponse = async (response: Response): Promise<boolean> => {
   /*
    * A 401 only means "this session is finished" if there was a session to
@@ -248,7 +251,7 @@ export const handleAuthFailureResponse = async (response: Response): Promise<boo
    * the page legitimately calls several, and losing one of them should not
    * look like an expired login.
    */
-  if (isPublicEndpoint(response.url) || !getAccessToken()) {
+  if (isPublicEndpoint(response.url) || isPublicPage() || !getAccessToken()) {
     return false;
   }
 

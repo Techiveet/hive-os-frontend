@@ -1,5 +1,5 @@
 import axios from "axios";
-import { clearHiveSession, isPublicEndpoint } from "@/lib/auth-sync";
+import { clearHiveSession, isPublicEndpoint, isPublicPage } from "@/lib/auth-sync";
 import { safeSessionStorageSetItem } from "@/lib/safe-storage";
 import { getEchoSocketId } from "@/lib/echo";
 import { getAccessToken, getBackendApiRoot, getTenantHeaders } from "@/lib/runtime-context";
@@ -124,6 +124,7 @@ api.interceptors.response.use(
       if (
         hadSession &&
         !isPublicRequest &&
+        !isPublicPage() &&
         ((isUnauthorized && !isTelemetryRequest) || isEjected)
       ) {
         const ejectReason = code === "TENANT_CONTEXT_INVALID"
