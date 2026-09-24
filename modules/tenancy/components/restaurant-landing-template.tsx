@@ -1,5 +1,6 @@
 "use client";
 
+import { sanitizeRichText } from "@/lib/security/sanitize-rich-text";
 import * as React from "react";
 import { ArrowRight, ArrowUp, ChevronDown, Menu, Quote, Utensils, Clock, MapPin, Phone, Star, CheckCircle2, X, Wine, Martini, Box, Image as ImageIcon } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -1062,7 +1063,7 @@ export function RestaurantLandingTemplate({
               {specialtiesDescription.includes("<") ? (
                 <div 
                   className="text-xl text-muted-foreground mb-10 leading-relaxed font-medium text-left [&_p]:mb-4 [&_strong]:text-foreground [&_a]:text-[#FF1A43] [&_a]:underline [&_ul]:list-disc [&_ul]:ml-6 [&_ol]:list-decimal [&_ol]:ml-6 [&_li]:mb-1"
-                  dangerouslySetInnerHTML={{ __html: specialtiesDescription }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(specialtiesDescription) }}
                 />
               ) : (
                 <p className="text-xl text-muted-foreground mb-10 leading-relaxed font-medium">
@@ -1202,7 +1203,7 @@ export function RestaurantLandingTemplate({
                 {template?.menus?.description?.includes("<") ? (
                   <div
                     className="text-lg text-muted-foreground font-medium leading-relaxed html-content"
-                    dangerouslySetInnerHTML={{ __html: t("landing.menus.description", template.menus.description) }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(t("landing.menus.description", template.menus.description)) }}
                   />
                 ) : (
                   <p className="text-lg text-muted-foreground font-medium leading-relaxed">

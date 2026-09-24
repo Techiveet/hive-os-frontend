@@ -1,5 +1,6 @@
 "use client";
 
+import { sanitizeRichText } from "@/lib/security/sanitize-rich-text";
 import { SignaturePad } from "@/components/ui/signature-pad";
 import { fetchApprovalRoles } from "@/modules/workflow/api";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/ui/rich-text-editor";
@@ -2268,7 +2269,7 @@ export function HrFormsPanel() {
               </div>
               <div
                 className="letter-rendered-body mt-5 font-serif text-[12.5px] leading-7 text-slate-950"
-                dangerouslySetInnerHTML={{ __html: editorContent }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(editorContent) }}
               />
 
               <section
