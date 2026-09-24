@@ -321,9 +321,14 @@ const getLocalPathname = (url: string): string => {
 };
 
 /**
- * Legacy synchronous media URL adapter used by viewers that cannot await a
- * signed URL. Reusable audio/video players should use
- * getSignedMediaStreamUrl so the bearer token never enters the media URL.
+ * Synchronous media URL adapter.
+ *
+ * public-serve URLs gain the tenant query they need because a media element
+ * cannot send X-Tenant. Protected /files/{id}/serve URLs are returned as an
+ * absolute backend URL that still needs authorization: render them through
+ * SecureAssetImage, PdfViewer/DocumentViewer with fetchHeaders, or
+ * VideoPlayer / getSignedMediaStreamUrl. The bearer token is never put in the
+ * URL, where it would land in proxy logs, browser history and Referer headers.
  */
 export const getStreamUrl = (url: string | null | undefined): string => {
   if (!url) return "";
@@ -331,8 +336,8 @@ export const getStreamUrl = (url: string | null | undefined): string => {
   /*
    * public-serve is deliberately NOT rewritten into a signed stream URL: that
    * exchange needs storage permissions a learner does not have, so it answered
-   * 403. It is a public endpoint already — it only needs the tenant naming it,
-   * which is added below because a media element cannot send X-Tenant.
+   * 403. The backend signs public URLs itself; only the tenant naming it is
+   * added here.
    */
   const publicServe = url.match(/\/api\/v1\/files\/(\d+)\/public-serve/);
   if (publicServe) {
@@ -345,23 +350,10 @@ export const getStreamUrl = (url: string | null | undefined): string => {
   const match = url.match(/\/api\/v1\/files\/(\d+)\/serve/);
   if (!match) return url;
 
-  const fileId = match[1];
-  const apiRoot = getBackendApiRoot();
-  const token =
-    typeof window !== "undefined" ? safeLocalStorageGetItem("hive_token") : null;
-  const tenantId = getTenantId();
-  const tenantSignature = getStoredHiveContextSignature();
+  const path = getLocalPathname(url).split("?")[0];
+  const query = url.includes("?") ? url.slice(url.indexOf("?")) : "";
 
-  const params = new URLSearchParams();
-  if (token) params.set("token", token);
-  if (tenantId) params.set("tenant", tenantId);
-
-  // Only add signature for tenant-scoped requests (not central)
-  if (tenantId && tenantId !== "central" && tenantSignature) {
-    params.set("signature", tenantSignature);
-  }
-
-  return `${apiRoot}/media/stream/${fileId}?${params.toString()}`;
+  return `${getBackendApiRoot().replace(/\/api\/v1$/, "")}${path}${query}`;
 };
 
 const extractMediaFileId = (url: string): string | null => {
