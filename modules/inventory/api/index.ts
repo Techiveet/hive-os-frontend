@@ -267,3 +267,4 @@ export const runInventoryDocumentAction = async (
 
 export * from "./goods";
 export * from "./operations";
+export * from "./analytics";
