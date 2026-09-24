@@ -44,6 +44,7 @@ import {
   Telescope,
   Truck,
   Handshake,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
@@ -240,6 +241,7 @@ function SidebarInner({
   const [isCrmOpen, setIsCrmOpen] = useState(false);
   const [isFleetOpen, setIsFleetOpen] = useState(false);
   const [isServiceOpen, setIsServiceOpen] = useState(false);
+  const [isPropertyOpen, setIsPropertyOpen] = useState(false);
   const [isInternalAuditOpen, setIsInternalAuditOpen] = useState(false);
   const [isStrategyOpen, setIsStrategyOpen] = useState(false);
   const [isDailyReportsOpen, setIsDailyReportsOpen] = useState(false);
@@ -288,6 +290,7 @@ function SidebarInner({
       setIsCrmOpen(true);
       setIsFleetOpen(true);
       setIsServiceOpen(true);
+      setIsPropertyOpen(true);
       setIsInternalAuditOpen(true);
       setIsStrategyOpen(true);
       setIsDailyReportsOpen(true);
@@ -457,6 +460,9 @@ function SidebarInner({
   const serviceModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "service",
   );
+  const propertyModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "property",
+  );
   const internalAuditModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "internal-audit",
   );
@@ -571,6 +577,10 @@ function SidebarInner({
     if (pathname.startsWith("/dashboard/service")) {
       setIsModulesOpen(true);
       setIsServiceOpen(true);
+    }
+    if (pathname.startsWith("/dashboard/property")) {
+      setIsModulesOpen(true);
+      setIsPropertyOpen(true);
     }
     if (pathname.startsWith("/dashboard/internal-audit")) {
       setIsModulesOpen(true);
@@ -1321,6 +1331,14 @@ function SidebarInner({
                       icon: LifeBuoy,
                       openState: isServiceOpen,
                       onToggle: () => setIsServiceOpen((value) => !value),
+                    })}
+
+                    {renderModuleSection({
+                      items: propertyModuleItems,
+                      label: t("nav.property", "Property Management"),
+                      icon: Building2,
+                      openState: isPropertyOpen,
+                      onToggle: () => setIsPropertyOpen((value) => !value),
                     })}
 
                     {renderModuleSection({

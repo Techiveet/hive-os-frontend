@@ -281,6 +281,76 @@ export const SERVICE_ROUTE_PERMISSIONS = [
   "export_service_reports",
 ] as const;
 
+export const PROPERTY_ROUTE_PERMISSIONS = [
+  "view_properties",
+  "create_properties",
+  "update_properties",
+  "delete_properties",
+  "manage_properties",
+  "view_buildings",
+  "create_buildings",
+  "update_buildings",
+  "delete_buildings",
+  "manage_buildings",
+  "view_floors",
+  "manage_floors",
+  "view_zones",
+  "manage_zones",
+  "view_units",
+  "create_units",
+  "update_units",
+  "delete_units",
+  "manage_units",
+  "change_unit_status",
+  "view_property_owners",
+  "manage_property_owners",
+  "view_property_tenants",
+  "manage_property_tenants",
+  "view_property_documents",
+  "manage_property_documents",
+  "view_viewings",
+  "manage_viewings",
+  "view_reservations",
+  "manage_reservations",
+  "view_leases",
+  "manage_leases",
+  "create_leases",
+  "update_leases",
+  "submit_leases",
+  "approve_leases",
+  "activate_leases",
+  "terminate_leases",
+  "view_lease_deposits",
+  "manage_lease_deposits",
+  "refund_lease_deposits",
+  "view_utilities",
+  "manage_utilities",
+  "create_meter_readings",
+  "correct_meter_readings",
+  "view_mall_operations",
+  "manage_mall_operations",
+  "view_mall_sales",
+  "submit_mall_sales",
+  "verify_mall_sales",
+  "view_mall_footfall",
+  "manage_mall_footfall",
+  "view_mall_promotions",
+  "manage_mall_promotions",
+  "view_advertising_spaces",
+  "manage_advertising_spaces",
+  "manage_advertising_bookings",
+  "view_parking",
+  "manage_parking",
+  "view_vehicles",
+  "manage_vehicles",
+  "view_access_credentials",
+  "manage_access_credentials",
+  "view_visitors",
+  "manage_visitors",
+  "view_property_reports",
+  "view_owner_statements",
+] as const;
+
 export const INTERNAL_AUDIT_ROUTE_PERMISSIONS = [
   "view_internal_audit",
   "manage_internal_audit",
@@ -788,6 +858,13 @@ export function canAccessDashboardRoute(
     return (
       hasSubscribedModule(access, "service_management") &&
       access.hasAnyPermission([...SERVICE_ROUTE_PERMISSIONS])
+    );
+  }
+
+  if (matchesPrefix(path, "/dashboard/property")) {
+    return (
+      hasSubscribedModule(access, "property_management") &&
+      access.hasAnyPermission([...PROPERTY_ROUTE_PERMISSIONS])
     );
   }
 

@@ -44,6 +44,7 @@ import {
   Telescope,
   Truck,
   Handshake,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -230,6 +231,7 @@ export function MobileSidebar() {
   const [isCrmOpen, setIsCrmOpen] = useState(false);
   const [isFleetOpen, setIsFleetOpen] = useState(false);
   const [isServiceOpen, setIsServiceOpen] = useState(false);
+  const [isPropertyOpen, setIsPropertyOpen] = useState(false);
   const [isInternalAuditOpen, setIsInternalAuditOpen] = useState(false);
   const [isStrategyOpen, setIsStrategyOpen] = useState(false);
   const [isDailyReportsOpen, setIsDailyReportsOpen] = useState(false);
@@ -459,6 +461,9 @@ export function MobileSidebar() {
   const serviceModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "service",
   );
+  const propertyModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "property",
+  );
   const internalAuditModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "internal-audit",
   );
@@ -579,6 +584,10 @@ export function MobileSidebar() {
     if (pathname.startsWith("/dashboard/service")) {
       setIsModulesOpen(true);
       setIsServiceOpen(true);
+    }
+    if (pathname.startsWith("/dashboard/property")) {
+      setIsModulesOpen(true);
+      setIsPropertyOpen(true);
     }
     if (pathname.startsWith("/dashboard/internal-audit")) {
       setIsModulesOpen(true);
@@ -1148,6 +1157,14 @@ export function MobileSidebar() {
                           icon: LifeBuoy,
                           openState: isServiceOpen,
                           onToggle: () => setIsServiceOpen((value) => !value),
+                        })}
+
+                        {renderModuleSection({
+                          items: propertyModuleItems,
+                          label: t("nav.property", "Property Management"),
+                          icon: Building2,
+                          openState: isPropertyOpen,
+                          onToggle: () => setIsPropertyOpen((value) => !value),
                         })}
 
                         {renderModuleSection({
