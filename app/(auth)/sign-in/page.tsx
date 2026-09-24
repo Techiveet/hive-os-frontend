@@ -65,9 +65,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [portalName, setPortalName] = useState(t('auth.login.central_portal', 'HIVE.OS CENTRAL'));
   const [isTenant, setIsTenant] = useState(false);
+  const [clientReady, setClientReady] = useState(false);
+  const [workspaceScope, setWorkspaceScope] = useState("server");
 
   const viewLogged = useRef(false);
-  const workspaceScope = getWorkspaceScopeKey();
 
   const { data: brandData } = useQuery({
     queryKey: ["publicBrandSettings", workspaceScope],
@@ -83,9 +84,12 @@ export default function LoginPage() {
     },
     staleTime: 600000,
     retry: 1,
+    enabled: clientReady,
   });
 
-  const brandSettings = brandData?.data;
+  // React Query may restore a browser-persisted brand result before hydration.
+  // Keep the initial render deterministic, then enable host-scoped branding.
+  const brandSettings = clientReady ? brandData?.data : undefined;
   // Sign-in renders before authentication, so the asset has to come from the
   // public-serve route. getBackendStorageUrl returns the token-protected
   // /files/{id}/serve path, which 401s here and left the background blank.
@@ -98,6 +102,9 @@ export default function LoginPage() {
   const authWelcomeMessage = t('auth.login.welcome_desc', brandSettings?.auth_welcome_message || 'Authenticate your identity to decrypt your management workspace.');
 
   useEffect(() => {
+    setClientReady(true);
+    setWorkspaceScope(getWorkspaceScopeKey());
+
     if (!viewLogged.current) {
       viewLogged.current = true;
       logFrontendAction({ module: 'Auth', action: 'viewed', description: 'Login portal accessed.' }).catch(()=>{});
@@ -285,7 +292,7 @@ export default function LoginPage() {
                     disabled={loading} 
                     className="pl-10 pr-10 h-12 bg-muted/30 border-border focus:ring-1 focus:ring-primary/50 transition-all font-mono" 
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  <button type="button" aria-label={showPassword ? t('auth.login.hide_password', 'Hide password') : t('auth.login.show_password', 'Show password')} onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>

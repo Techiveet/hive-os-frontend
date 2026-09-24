@@ -26,7 +26,7 @@ export default function GlobalError({ error, reset, unstable_retry }: GlobalErro
             <p id="global-error-message" className="mt-4 max-w-prose text-base leading-7 text-slate-200">
               Your data has not been changed. Try again, or return to the previous page and retry the action.
             </p>
-            {error.digest ? (
+            {error?.digest ? (
               <p className="mt-4 text-sm leading-6 text-slate-300">Reference: {error.digest}</p>
             ) : null}
             <div className="mt-8 flex flex-wrap gap-3">

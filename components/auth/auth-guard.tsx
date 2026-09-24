@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { FullScreenPlaceholder } from "@/components/ui/loading-states";
 import { safeLocalStorageSetItem, safeSessionStorageSetItem } from "@/lib/safe-storage";
 
+const SESSION_VERIFY_ATTEMPTS = 3;
+const SESSION_VERIFY_TIMEOUT_MS = 20_000;
+const RETRYABLE_SESSION_STATUSES = new Set([500, 502, 503, 504]);
+
+const waitForSessionRetry = (attempt: number): Promise<void> =>
+  new Promise((resolve) => window.setTimeout(resolve, attempt * 750));
+
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -30,6 +37,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    const pendingRequests = new Set<AbortController>();
     setCheckingAuth(true);
     setIsAuthorized(false);
     setAuthError(null);
@@ -68,14 +76,46 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
       try {
         const endpoint = isTenantSession() ? "/tenant/user" : "/user";
+        let response: Response | null = null;
 
-        const response = await fetch(`${getBackendApiRoot()}${endpoint}`, {
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-            ...getTenantHeaders(),
-          },
-        });
+        for (let attempt = 1; attempt <= SESSION_VERIFY_ATTEMPTS; attempt += 1) {
+          const controller = new AbortController();
+          pendingRequests.add(controller);
+          const timeoutId = window.setTimeout(
+            () => controller.abort(),
+            SESSION_VERIFY_TIMEOUT_MS,
+          );
+
+          try {
+            response = await fetch(`${getBackendApiRoot()}${endpoint}`, {
+              cache: "no-store",
+              headers: {
+                Accept: "application/json",
+                Authorization: `Bearer ${token}`,
+                ...getTenantHeaders(),
+              },
+              signal: controller.signal,
+            });
+          } catch (error) {
+            if (!isMounted) return;
+            if (attempt === SESSION_VERIFY_ATTEMPTS) throw error;
+          } finally {
+            window.clearTimeout(timeoutId);
+            pendingRequests.delete(controller);
+          }
+
+          if (response && !RETRYABLE_SESSION_STATUSES.has(response.status)) {
+            break;
+          }
+
+          if (attempt < SESSION_VERIFY_ATTEMPTS) {
+            await waitForSessionRetry(attempt);
+          }
+        }
+
+        if (!response) {
+          throw new Error("Session verification did not receive a response.");
+        }
 
         if (await handleAuthFailureResponse(response)) {
           if (isMounted) {
@@ -173,6 +213,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false;
+      pendingRequests.forEach((controller) => controller.abort());
+      pendingRequests.clear();
     };
   }, [router, pathname, retryToken]);
 
