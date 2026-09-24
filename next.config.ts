@@ -44,13 +44,26 @@ const allowedDevOrigins = Array.from(
   ),
 );
 
+const distDir = process.env.NEXT_DIST_DIR?.trim() || ".next";
+
 const nextConfig: NextConfig = {
   output: "standalone",
+  // A separate cache lets authenticated acceptance run without competing with
+  // an already-open developer browser that is compiling unrelated routes.
+  distDir,
   poweredByHeader: false,
   typescript: {
     ignoreBuildErrors: skipBuildTypecheck,
   },
   allowedDevOrigins,
+  experimental: {
+    // Hive's large modular dashboard can otherwise retain enough Webpack state
+    // while compiling many development routes to exhaust the shared WSL VM.
+    // These are Next.js-supported memory controls; they trade a small amount
+    // of compile latency for a substantially lower peak footprint.
+    webpackMemoryOptimizations: true,
+    preloadEntriesOnStart: false,
+  },
 
   async headers() {
     return [

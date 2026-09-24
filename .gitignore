@@ -20,6 +20,7 @@
 # next.js
 /.next/
 /.next-dev*
+/.next-e2e/
 /out/
 
 # production
@@ -48,3 +49,4 @@ next-env.d.ts
 # Local merge and verification artifacts
 *.orig
 /verify_role_dashboard.mjs
+/p4g3_build.log
