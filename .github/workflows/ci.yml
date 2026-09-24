@@ -83,7 +83,7 @@ jobs:
           HIVE_BACKEND_READ_PAT: ${{ secrets.HIVE_BACKEND_READ_PAT }}
         run: |
           if [ -z "${HIVE_BACKEND_READ_PAT}" ]; then
-            echo "::error::HIVE_BACKEND_READ_PAT is not set. A repository admin must add a read-only PAT with access to mcmike2223/hive-os-backend under Settings > Secrets and variables > Actions."
+            echo "::error::HIVE_BACKEND_READ_PAT is not set. A repository admin must add a read-only PAT with access to Techiveet/hive-os-backend under Settings > Secrets and variables > Actions."
             exit 1
           fi
           echo "HIVE_BACKEND_READ_PAT is present."
@@ -91,7 +91,7 @@ jobs:
       - name: Checkout backend required by the acceptance fixture
         uses: actions/checkout@v4
         with:
-          repository: mcmike2223/hive-os-backend
+          repository: Techiveet/hive-os-backend
           ref: main
           path: hive-os-backend
           token: ${{ secrets.HIVE_BACKEND_READ_PAT }}
@@ -99,7 +99,7 @@ jobs:
       - name: Checkout local integration Compose definition
         uses: actions/checkout@v4
         with:
-          repository: mcmike2223/hive-os-infra
+          repository: Techiveet/hive-os-infra
           ref: main
           path: hive-os-infra
 

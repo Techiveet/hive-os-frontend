@@ -37,6 +37,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
+import { notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -489,10 +490,14 @@ function EmployeeDialog({
         body: JSON.stringify(payload),
       });
     },
-    onSuccess: () => {
-      toast.success(
-        employee ? "Employee record updated." : "Employee record created.",
-      );
+    onSuccess: (data) => {
+      notifyMutationOutcome(data, {
+        savedMessage: employee
+          ? "Employee record updated."
+          : "Employee record created.",
+        submittedMessage: "Submitted for approval.",
+        queryClient,
+      });
       onOpenChange(false);
       void invalidateHrEmployeeQueries(queryClient, { scope });
     },
@@ -1023,8 +1028,12 @@ function UnitDialog({
           sort_order: 0,
         }),
       }),
-    onSuccess: () => {
-      toast.success("Organization unit created.");
+    onSuccess: (data) => {
+      notifyMutationOutcome(data, {
+        savedMessage: "Organization unit created.",
+        submittedMessage: "Submitted for approval.",
+        queryClient,
+      });
       onOpenChange(false);
       void invalidateHrOrganizationQueries(queryClient);
     },
@@ -1201,8 +1210,12 @@ function PositionDialog({
           job_grade_code: form.job_grade_code || null,
         }),
       }),
-    onSuccess: () => {
-      toast.success("Position created.");
+    onSuccess: (data) => {
+      notifyMutationOutcome(data, {
+        savedMessage: "Position created.",
+        submittedMessage: "Submitted for approval.",
+        queryClient,
+      });
       onOpenChange(false);
       void invalidateHrPositionQueries(queryClient);
     },
@@ -1407,6 +1420,11 @@ export function HumanResourcesClient({
     "manage_hr_settings",
   ]);
   const canManageHrSettings = hasPermission("manage_hr_settings");
+  const canViewExpenses = hasAnyPermission([
+    "view_hr_expenses",
+    "manage_hr_expenses",
+  ]);
+  const canManageExpenses = hasPermission("manage_hr_expenses");
   const canUseLeave = hasAnyPermission([
     "request_leave",
     "view_leave_requests",
@@ -1436,6 +1454,36 @@ export function HumanResourcesClient({
     queryKey: ["all-employees-list", scope],
     queryFn: () => hrFetch<Paginated<Employee>>("/employees?per_page=500"),
     enabled: isLoaded,
+  });
+  const assetsSummary = useQuery({
+    queryKey: ["hr-assets-summary", scope],
+    queryFn: () =>
+      hrFetch<{
+        data: {
+          issued?: number;
+          custodians?: number;
+          returned?: number;
+          damaged?: number;
+          lost?: number;
+        };
+      }>("/assets/summary"),
+    enabled: isLoaded && tab === "assets",
+  });
+  const expensesSummary = useQuery({
+    queryKey: ["hr-expenses-summary", scope],
+    queryFn: () =>
+      hrFetch<{
+        data: {
+          total?: number;
+          submitted?: number;
+          approved?: number;
+          rejected?: number;
+          reimbursed?: number;
+          pending_amount?: number;
+          reimbursed_amount?: number;
+        };
+      }>("/expenses/summary"),
+    enabled: isLoaded && canViewExpenses && (tab === "expenses" || defaultTab === "expenses"),
   });
   const referenceOptions = useQuery({
     queryKey: ["hr-form-reference-options", scope],
@@ -1509,7 +1557,7 @@ export function HumanResourcesClient({
     tab === "recruitment" ||
     tab === "appraisals" ||
     tab === "assets" ||
-    tab === "expenses" ||
+    (tab === "expenses" && canViewExpenses) ||
     (tab === "settings" && canViewHrSettings)
       ? tab
       : "dashboard";
@@ -1558,6 +1606,18 @@ export function HumanResourcesClient({
       0,
     );
     const vacantSeats = openPositions || Math.max(0, authorizedSeats - occupiedSeats);
+    const assetStats = assetsSummary.data?.data;
+    const issuedAssets = assetStats?.issued ?? 0;
+    const assetCustodians = assetStats?.custodians ?? 0;
+    const returnedAssets = assetStats?.returned ?? 0;
+    const exceptionAssets = (assetStats?.damaged ?? 0) + (assetStats?.lost ?? 0);
+    const assetsReady = Boolean(assetsSummary.data?.data);
+    const expenseStats = expensesSummary.data?.data;
+    const expensesReady = Boolean(expensesSummary.data?.data);
+    const pendingClaims = expenseStats?.submitted ?? 0;
+    const approvedClaims = expenseStats?.approved ?? 0;
+    const reimbursedClaims = expenseStats?.reimbursed ?? 0;
+    const pendingAmount = expenseStats?.pending_amount ?? 0;
 
     return {
       dashboard: {
@@ -2067,32 +2127,32 @@ export function HumanResourcesClient({
         title: "Equipment & Asset",
         highlight: "Custody",
         description:
-          "Track company equipment (Laptops, Vehicles, Mobile Devices, Fuel Cards, Badges) assigned to custodians.",
+          "Issue and resolve company equipment. Open issued items also block offboarding clearance until returned, damaged, or lost.",
         badge: "Asset Custody",
         cards: [
           {
-            label: "Total Custodians",
-            value: totalStaff,
-            note: "Eligible employee custodians",
+            label: "Open issued",
+            value: assetsReady ? issuedAssets : "—",
+            note: "Still with employees",
             icon: Laptop,
           },
           {
-            label: "Assigned Staff",
-            value: assignedStaff,
-            note: "Employees holding equipment",
+            label: "Custodians",
+            value: assetsReady ? assetCustodians : "—",
+            note: "Employees currently holding gear",
             icon: UserCheck,
           },
           {
-            label: "Organization Units",
-            value: totalUnits,
-            note: "Units holding assets",
+            label: "Returned",
+            value: assetsReady ? returnedAssets : "—",
+            note: "Closed in good condition",
             icon: Building2,
           },
           {
-            label: "Active Workforce",
-            value: activeStaff,
-            note: "Staff with asset accountability",
-            icon: UsersRound,
+            label: "Exceptions",
+            value: assetsReady ? exceptionAssets : "—",
+            note: "Damaged or lost outcomes",
+            icon: AlertTriangle,
           },
         ],
       },
@@ -2104,27 +2164,29 @@ export function HumanResourcesClient({
         badge: "Expense Claims",
         cards: [
           {
-            label: "Eligible Claimants",
-            value: totalStaff,
-            note: "Registered workforce staff",
+            label: "Pending Review",
+            value: expensesReady ? pendingClaims : "—",
+            note: expensesReady
+              ? `${Number(pendingAmount).toLocaleString()} ETB awaiting decision`
+              : "Loading claim metrics",
             icon: Receipt,
           },
           {
-            label: "Active Workforce",
-            value: activeStaff,
-            note: "Staff eligible for per diem",
+            label: "Approved",
+            value: expensesReady ? approvedClaims : "—",
+            note: "Ready for reimbursement payout",
             icon: UserRoundCheck,
           },
           {
-            label: "Cost Centers",
-            value: unitList.filter((u: any) => u.cost_center_code).length || totalUnits,
-            note: "Active cost allocation centers",
+            label: "Reimbursed",
+            value: expensesReady ? reimbursedClaims : "—",
+            note: "Paid claims (finance source eligible)",
             icon: Building2,
           },
           {
-            label: "Org Units",
-            value: totalUnits,
-            note: "Departments processing claims",
+            label: "Total Claims",
+            value: expensesReady ? (expenseStats?.total ?? 0) : "—",
+            note: "All statuses in this workspace",
             icon: Network,
           },
         ],
@@ -2167,6 +2229,8 @@ export function HumanResourcesClient({
     metrics,
     units.data?.data,
     positions.data?.data,
+    assetsSummary.data?.data,
+    expensesSummary.data?.data,
     canManageEmployees,
     canManageOrganization,
     canManagePositions,
@@ -2188,6 +2252,8 @@ export function HumanResourcesClient({
       "manage_leave_requests",
       "view_hr_settings",
       "manage_hr_settings",
+      "view_hr_expenses",
+      "manage_hr_expenses",
     ])
   )
     return (
@@ -2411,7 +2477,16 @@ export function HumanResourcesClient({
         </TabsContent>
 
         <TabsContent value="expenses">
-          <HrExpensesPanel employees={allEmployeesQuery.data?.data ?? []} />
+          {canViewExpenses ? (
+            <HrExpensesPanel
+              employees={allEmployeesQuery.data?.data ?? []}
+              canManage={canManageExpenses}
+            />
+          ) : (
+            <p className="rounded-xl border bg-white p-6 text-sm text-slate-600 dark:bg-slate-950 dark:text-slate-300">
+              You do not have permission to view expense claims.
+            </p>
+          )}
         </TabsContent>
 
         {canViewHrSettings && (

@@ -22,7 +22,8 @@ import { AudioPlayer } from "@/components/ui/audio-player";
 import { PdfViewer } from "@/components/ui/pdf-viewer";
 import { DocumentViewer } from "@/components/ui/document-viewer";
 import { Model3DViewer } from "@/components/ui/model-3d-viewer";
-import { getStreamUrl, getBackendStorageUrl, getBackendApiRoot } from "@/lib/runtime-context";
+import { getAuthHeaders, getStreamUrl, getBackendStorageUrl, getBackendApiRoot } from "@/lib/runtime-context";
+import { isProtectedTenantFileUrl } from "@/components/ui/secure-asset-image";
 import { projectApi } from "../api";
 import { ProjectComment, ProjectAttachment } from "../types";
 import { toast } from "sonner";
@@ -509,7 +510,12 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
     if (mime === 'application/pdf') {
       return (
         <div className="aspect-[3/4] w-full rounded-2xl overflow-hidden border border-border/50 shadow-inner">
-          <PdfViewer src={getStreamUrl(safeUrl)} title={mediaTitle} />
+          <PdfViewer
+            src={getStreamUrl(safeUrl)}
+            fetchUrl={isProtectedTenantFileUrl(safeUrl) ? getStreamUrl(safeUrl) : undefined}
+            fetchHeaders={isProtectedTenantFileUrl(safeUrl) ? getAuthHeaders() : undefined}
+            title={mediaTitle}
+          />
         </div>
       );
     }

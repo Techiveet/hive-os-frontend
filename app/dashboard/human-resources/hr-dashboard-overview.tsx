@@ -687,9 +687,13 @@ export function HrDashboardOverview() {
           value={formatNumber(
             data.metrics.pending_leave_requests +
             data.metrics.contracts_expiring_soon +
-            data.metrics.written_terms_missing,
+            data.metrics.written_terms_missing +
+            (data.metrics.pending_expense_claims ?? 0) +
+            (data.metrics.open_offboarding_cases ?? 0) +
+            (data.metrics.travel_awaiting_approval ?? 0) +
+            (data.metrics.succession_roles_at_risk ?? 0),
           )}
-          detail={`${formatNumber(data.metrics.pending_leave_requests)} leave · ${formatNumber(data.metrics.contracts_expiring_soon)} contracts · ${formatNumber(data.metrics.written_terms_missing)} terms`}
+          detail={`${formatNumber(data.metrics.pending_leave_requests)} leave · ${formatNumber(data.metrics.pending_expense_claims ?? 0)} expenses · ${formatNumber(data.metrics.open_offboarding_cases ?? 0)} exits · ${formatNumber(data.metrics.travel_awaiting_approval ?? 0)} travel`}
           icon={<CircleAlert />}
           tone="red"
         />
@@ -978,6 +982,10 @@ export function HrDashboardOverview() {
               ["Attendance exceptions", data.metrics.attendance_today.exceptions],
               ["Late arrivals", data.metrics.attendance_today.late],
               ["Pending leave requests", data.metrics.pending_leave_requests],
+              ["Pending expense claims", data.metrics.pending_expense_claims ?? 0],
+              ["Open offboarding exits", data.metrics.open_offboarding_cases ?? 0],
+              ["Travel awaiting approval", data.metrics.travel_awaiting_approval ?? 0],
+              ["Succession roles at risk", data.metrics.succession_roles_at_risk ?? 0],
               ["Employees on probation", data.metrics.on_probation],
             ].map(([label, value]) => (
               <div key={String(label)} className="flex justify-between gap-4 border-b border-slate-200 pb-3 last:border-0 dark:border-slate-800">
@@ -1006,6 +1014,8 @@ export function HrDashboardOverview() {
             { href: "/dashboard/human-resources/organization", label: "Organization", icon: Building2 },
             { href: "/dashboard/payroll", label: "Payroll", icon: WalletCards },
             { href: "/dashboard/human-resources/expenses", label: "Expenses", icon: ReceiptText },
+            { href: "/dashboard/human-resources/talent", label: "Talent", icon: UsersRound },
+            { href: "/dashboard/human-resources/talent/offboarding", label: "Offboarding", icon: CircleAlert },
           ].map((item) => (
             <Button key={item.href} asChild variant="outline" className="h-auto justify-between px-4 py-4">
               <Link href={item.href}>

@@ -1,5 +1,6 @@
 "use client";
 
+import { sanitizeRichText } from "@/lib/security/sanitize-rich-text";
 import { SignaturePad } from "@/components/ui/signature-pad";
 import { fetchApprovalRoles } from "@/modules/workflow/api";
 import { RichTextEditor, type RichTextEditorRef } from "@/components/ui/rich-text-editor";
@@ -46,6 +47,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
+import { notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PanelTableSkeleton } from "@/components/ui/loading-states";
@@ -563,8 +565,12 @@ export function EmployeeTransferDialog({
         }),
       });
     },
-    onSuccess: () => {
-      toast.success(`Transfer recorded for ${employee?.primary_name}.`);
+    onSuccess: (data) => {
+      notifyMutationOutcome(data, {
+        savedMessage: `Transfer recorded for ${employee?.primary_name}.`,
+        submittedMessage: "Submitted for approval.",
+        queryClient,
+      });
       onOpenChange(false);
       void invalidateHrTransferQueries(queryClient, scope);
     },
@@ -2263,7 +2269,7 @@ export function HrFormsPanel() {
               </div>
               <div
                 className="letter-rendered-body mt-5 font-serif text-[12.5px] leading-7 text-slate-950"
-                dangerouslySetInnerHTML={{ __html: editorContent }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(editorContent) }}
               />
 
               <section
@@ -2606,8 +2612,12 @@ export function EmployeeTransfersPanel() {
         }),
       });
     },
-    onSuccess: () => {
-      toast.success("Employee transfer recorded successfully!");
+    onSuccess: (data) => {
+      notifyMutationOutcome(data, {
+        savedMessage: "Employee transfer recorded successfully!",
+        submittedMessage: "Submitted for approval.",
+        queryClient,
+      });
       void invalidateHrTransferQueries(queryClient, scope);
       setFormData({
         employee_id: "",

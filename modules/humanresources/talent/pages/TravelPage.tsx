@@ -3,9 +3,11 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import Link from "next/link";
+import { ExternalLink, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/store/use-translation";
+import { usePermissions } from "@/hooks/use-permissions";
 
 import { DataTable, type DataTableQuery } from "@/components/datatable/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -18,14 +20,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { hrFetch } from "@/modules/humanresources/api";
 import { talentApi } from "@/modules/humanresources/talent/api";
 import type { TravelRequest, TravelStatus } from "@/modules/humanresources/talent/types";
 import { EmptyPanel, Panel, StatTile } from "@/modules/shared/charts/primitives";
 import { ColumnChart, RankedBarChart } from "@/modules/shared/charts/charts";
-
+import { getWorkspaceScopeKey } from "@/lib/runtime-context";
 const n = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -49,6 +58,13 @@ const TRANSITIONS: Record<string, TravelStatus[]> = {
   cancelled: [],
 };
 
+const APPROVER_DESTINATIONS = new Set<TravelStatus>([
+  "approved",
+  "rejected",
+  "in_progress",
+  "completed",
+]);
+
 const STATUS_TONE: Record<string, string> = {
   draft: "outline",
   submitted: "secondary",
@@ -59,6 +75,8 @@ const STATUS_TONE: Record<string, string> = {
   cancelled: "outline",
 };
 
+const TRANSPORT_MODES = ["road", "air", "rail", "company_vehicle", "other"] as const;
+
 const EXPENSE_CATEGORIES = [
   "transport",
   "accommodation",
@@ -67,6 +85,13 @@ const EXPENSE_CATEGORIES = [
   "visa",
   "other",
 ] as const;
+
+const EXPENSEABLE_STATUSES = new Set([
+  "submitted",
+  "approved",
+  "in_progress",
+  "completed",
+]);
 
 type TravelForm = {
   id?: number;
@@ -80,7 +105,10 @@ type TravelForm = {
   transport_mode: string;
   estimated_cost: string;
   advance_amount: string;
+  currency: string;
+  budget_code: string;
   itinerary: string;
+  notes: string;
 };
 
 const DEFAULT_TRAVEL: TravelForm = {
@@ -94,17 +122,42 @@ const DEFAULT_TRAVEL: TravelForm = {
   transport_mode: "",
   estimated_cost: "0",
   advance_amount: "0",
+  currency: "ETB",
+  budget_code: "",
   itinerary: "",
+  notes: "",
 };
 
 export default function TravelPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { hasAnyPermission } = usePermissions();
 
-  const [tableQuery, setTableQuery] = React.useState({ page: 1, pageSize: 10, search: "" });
+  const canRequest = hasAnyPermission(["request_travel", "manage_travel", "manage_talent"]);
+  const canApprove = hasAnyPermission(["approve_travel", "manage_travel", "manage_talent"]);
+  const scope = getWorkspaceScopeKey();
+
+  const [tableQuery, setTableQuery] = React.useState({
+    page: 1,
+    pageSize: 10,
+    search: "",
+    status: "",
+    trip_type: "",
+    employee_id: "",
+    open_only: false,
+  });
+  const [summaryRange, setSummaryRange] = React.useState({ from: "", to: "" });
   const [formOpen, setFormOpen] = React.useState(false);
   const [form, setForm] = React.useState<TravelForm>(DEFAULT_TRAVEL);
   const [detailId, setDetailId] = React.useState<number | null>(null);
+  const [decisionOpen, setDecisionOpen] = React.useState(false);
+  const [decision, setDecision] = React.useState<{
+    id: number;
+    status: TravelStatus;
+    notes: string;
+  } | null>(null);
+  const [lastReimbursedClaim, setLastReimbursedClaim] = React.useState<string | null>(null);
+  const [expenseMenuOpen, setExpenseMenuOpen] = React.useState<number | null>(null);
   const [expense, setExpense] = React.useState({
     category: "transport",
     amount: "",
@@ -112,6 +165,15 @@ export default function TravelPage() {
     receipt_reference: "",
   });
 
+  const employeesQuery = useQuery({
+    queryKey: ["hr-employees-lite", scope],
+    queryFn: () =>
+      hrFetch<{ data: Array<{ id: number; primary_name?: string; employee_number?: string }> }>(
+        "/employees?per_page=500",
+      ),
+    staleTime: 5 * 60 * 1000,
+  });
+  const employees = employeesQuery.data?.data ?? [];
   const listQuery = useQuery({
     queryKey: ["hr-talent", "travel", tableQuery],
     queryFn: () =>
@@ -120,13 +182,23 @@ export default function TravelPage() {
           page: tableQuery.page,
           limit: tableQuery.pageSize,
           search: tableQuery.search || undefined,
+          status: tableQuery.status || undefined,
+          trip_type: tableQuery.trip_type || undefined,
+          employee_id: tableQuery.employee_id ? Number(tableQuery.employee_id) : undefined,
+          open_only: tableQuery.open_only || undefined,
         })
         .then((res) => res.data),
   });
 
   const summaryQuery = useQuery({
-    queryKey: ["hr-talent", "travel", "summary"],
-    queryFn: () => talentApi.travelSummary().then((res) => res.data),
+    queryKey: ["hr-talent", "travel", "summary", summaryRange],
+    queryFn: () =>
+      talentApi
+        .travelSummary({
+          from: summaryRange.from || undefined,
+          to: summaryRange.to || undefined,
+        })
+        .then((res) => res.data),
   });
 
   const detailQuery = useQuery({
@@ -137,6 +209,8 @@ export default function TravelPage() {
 
   const invalidate = React.useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["hr-talent"] });
+    queryClient.invalidateQueries({ queryKey: ["hr-expenses"] });
+    queryClient.invalidateQueries({ queryKey: ["hr-expenses-summary"] });
   }, [queryClient]);
 
   const errorText = (error: any, fallback: string) => error?.response?.data?.message || fallback;
@@ -154,7 +228,10 @@ export default function TravelPage() {
         transport_mode: form.transport_mode || null,
         estimated_cost: Number(form.estimated_cost || 0),
         advance_amount: Number(form.advance_amount || 0),
+        currency: form.currency || "ETB",
+        budget_code: form.budget_code || null,
         itinerary: form.itinerary || null,
+        notes: form.notes || null,
       };
 
       return form.id ? talentApi.updateTravel(form.id, payload) : talentApi.createTravel(payload);
@@ -170,11 +247,20 @@ export default function TravelPage() {
   });
 
   const transition = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) =>
-      talentApi.transitionTravel(id, status),
+    mutationFn: ({
+      id,
+      status,
+      notes,
+    }: {
+      id: number;
+      status: string;
+      notes?: string;
+    }) => talentApi.transitionTravel(id, status, notes),
     onSuccess: () => {
       toast.success(t("hr_talent.travel.moved", "Travel request updated."));
       invalidate();
+      setDecisionOpen(false);
+      setDecision(null);
     },
     onError: (error: any) =>
       toast.error(errorText(error, t("hr_talent.travel.move_failed", "That transition was refused."))),
@@ -191,7 +277,12 @@ export default function TravelPage() {
     onSuccess: () => {
       toast.success(t("hr_talent.travel.expense_added", "Expense added."));
       invalidate();
-      setExpense({ ...expense, amount: "", receipt_reference: "" });
+      setExpense({
+        category: "transport",
+        amount: "",
+        incurred_on: new Date().toISOString().slice(0, 10),
+        receipt_reference: "",
+      });
     },
     onError: (error: any) =>
       toast.error(errorText(error, t("hr_talent.travel.expense_failed", "Could not add the expense."))),
@@ -200,8 +291,18 @@ export default function TravelPage() {
   const decideExpense = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
       talentApi.decideTravelExpense(id, { status }),
-    onSuccess: () => {
-      toast.success(t("hr_talent.travel.expense_decided", "Expense updated."));
+    onSuccess: (_data, variables) => {
+      if (variables.status === "reimbursed") {
+        setLastReimbursedClaim(`TRV-EXP-${variables.id}`);
+        toast.success(
+          t(
+            "hr_talent.travel.expense_reimbursed",
+            "Expense reimbursed and synced to HR expense claims.",
+          ),
+        );
+      } else {
+        toast.success(t("hr_talent.travel.expense_decided", "Expense updated."));
+      }
       invalidate();
     },
     onError: (error: any) =>
@@ -209,15 +310,51 @@ export default function TravelPage() {
   });
 
   const handleTableQueryChange = React.useCallback((query: DataTableQuery) => {
-    setTableQuery({
+    setTableQuery((prev) => ({
+      ...prev,
       page: Number(query.page || 1),
       pageSize: Number(query.pageSize || 10),
       search: String(query.search ?? ""),
-    });
+    }));
   }, []);
+
+  const canOfferTransition = (status: TravelStatus) =>
+    APPROVER_DESTINATIONS.has(status) ? canApprove : canRequest || canApprove;
+
+  const requestTransition = (id: number, status: TravelStatus) => {
+    if (status === "approved" || status === "rejected") {
+      setDecision({ id, status, notes: "" });
+      setDecisionOpen(true);
+      return;
+    }
+    transition.mutate({ id, status });
+  };
+
+  const openEdit = (row: TravelRequest) => {
+    setForm({
+      id: row.id,
+      employee_id: String(row.employee_id),
+      purpose: row.purpose ?? "",
+      destination: row.destination ?? "",
+      country: row.country ?? "",
+      trip_type: row.trip_type ?? "domestic",
+      departure_date: row.departure_date ? String(row.departure_date).slice(0, 10) : "",
+      return_date: row.return_date ? String(row.return_date).slice(0, 10) : "",
+      transport_mode: row.transport_mode ?? "",
+      estimated_cost: String(row.estimated_cost ?? 0),
+      advance_amount: String(row.advance_amount ?? 0),
+      currency: row.currency || "ETB",
+      budget_code: row.budget_code ?? "",
+      itinerary: row.itinerary ?? "",
+      notes: row.notes ?? "",
+    });
+    setFormOpen(true);
+  };
 
   const summary = summaryQuery.data?.data;
   const detail: TravelRequest | undefined = detailQuery.data?.data;
+  const canAddExpense =
+    canRequest && detail != null && EXPENSEABLE_STATUSES.has(detail.status);
 
   const columns = React.useMemo<ColumnDef<TravelRequest>[]>(
     () => [
@@ -298,12 +435,22 @@ export default function TravelPage() {
         id: "actions",
         header: "",
         cell: ({ row }) => {
-          const next = TRANSITIONS[row.original.status] ?? [];
+          const next = (TRANSITIONS[row.original.status] ?? []).filter((status) =>
+            canOfferTransition(status),
+          );
+          const editable =
+            canRequest &&
+            (row.original.status === "draft" || row.original.status === "rejected");
           return (
             <div className="flex flex-wrap justify-end gap-1">
               <Button variant="ghost" size="sm" onClick={() => setDetailId(row.original.id)}>
                 {t("hr_talent.common.open", "Open")}
               </Button>
+              {editable ? (
+                <Button variant="outline" size="sm" onClick={() => openEdit(row.original)}>
+                  {t("hr_talent.common.edit", "Edit")}
+                </Button>
+              ) : null}
               {next.slice(0, 2).map((status) => (
                 <Button
                   key={status}
@@ -311,7 +458,7 @@ export default function TravelPage() {
                   size="sm"
                   className="text-[11px] capitalize"
                   disabled={transition.isPending}
-                  onClick={() => transition.mutate({ id: row.original.id, status })}
+                  onClick={() => requestTransition(row.original.id, status)}
                 >
                   {status.replace(/_/g, " ")}
                 </Button>
@@ -321,8 +468,11 @@ export default function TravelPage() {
         },
       },
     ],
-    [t, transition],
+    [t, transition, canApprove, canRequest],
   );
+
+  const filterSelectClass =
+    "h-9 rounded-md border border-input bg-background px-3 text-sm capitalize";
 
   return (
     <div className="space-y-6">
@@ -338,16 +488,102 @@ export default function TravelPage() {
             )}
           </p>
         </div>
-        <Button
-          className="rounded-full px-5"
-          onClick={() => {
-            setForm(DEFAULT_TRAVEL);
-            setFormOpen(true);
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {t("hr_talent.travel.request", "New Request")}
-        </Button>
+        {canRequest ? (
+          <Button
+            className="rounded-full px-5"
+            onClick={() => {
+              setForm(DEFAULT_TRAVEL);
+              setFormOpen(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {t("hr_talent.travel.request", "New Request")}
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="travel-from">{t("hr_talent.common.from", "From")}</Label>
+          <Input
+            id="travel-from"
+            type="date"
+            className="h-9 w-40"
+            value={summaryRange.from}
+            onChange={(event) => setSummaryRange({ ...summaryRange, from: event.target.value })}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="travel-to">{t("hr_talent.common.to", "To")}</Label>
+          <Input
+            id="travel-to"
+            type="date"
+            className="h-9 w-40"
+            value={summaryRange.to}
+            onChange={(event) => setSummaryRange({ ...summaryRange, to: event.target.value })}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="travel-status-filter">{t("hr_talent.common.status", "Status")}</Label>
+          <select
+            id="travel-status-filter"
+            className={filterSelectClass}
+            value={tableQuery.status}
+            onChange={(event) =>
+              setTableQuery({ ...tableQuery, page: 1, status: event.target.value })
+            }
+          >
+            <option value="">{t("hr_talent.common.all", "All")}</option>
+            {Object.keys(TRANSITIONS).map((status) => (
+              <option key={status} value={status}>
+                {status.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="travel-type-filter">{t("hr_talent.travel.type", "Trip type")}</Label>
+          <select
+            id="travel-type-filter"
+            className={filterSelectClass}
+            value={tableQuery.trip_type}
+            onChange={(event) =>
+              setTableQuery({ ...tableQuery, page: 1, trip_type: event.target.value })
+            }
+          >
+            <option value="">{t("hr_talent.common.all", "All")}</option>
+            <option value="domestic">{t("hr_talent.travel.domestic", "Domestic")}</option>
+            <option value="international">{t("hr_talent.travel.international", "International")}</option>
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="travel-employee-filter">{t("hr_talent.common.employee", "Employee")}</Label>
+          <select
+            id="travel-employee-filter"
+            className={filterSelectClass}
+            value={tableQuery.employee_id}
+            onChange={(event) =>
+              setTableQuery({ ...tableQuery, page: 1, employee_id: event.target.value })
+            }
+          >
+            <option value="">{t("hr_talent.common.all", "All")}</option>
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.primary_name ?? `#${emp.id}`}
+              </option>
+            ))}
+          </select>
+        </div>
+        <label className="flex h-9 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={tableQuery.open_only}
+            onChange={(event) =>
+              setTableQuery({ ...tableQuery, page: 1, open_only: event.target.checked })
+            }
+          />
+          {t("hr_talent.travel.open_only", "Open only")}
+        </label>
       </div>
 
       {summary ? (
@@ -430,10 +666,9 @@ export default function TravelPage() {
         resourceName="hr-travel"
       />
 
-      {/* Request form */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-2xl rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl">
-          <div className="border-b border-border/40 px-6 py-5">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl flex flex-col">
+          <div className="border-b border-border/40 px-6 py-5 shrink-0">
             <DialogHeader>
               <DialogTitle className="text-xl font-black tracking-tight">
                 {form.id
@@ -449,15 +684,24 @@ export default function TravelPage() {
             </DialogHeader>
           </div>
 
-          <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
+          <div className="grid gap-4 px-6 py-5 sm:grid-cols-2 overflow-y-auto flex-1">
             <div className="space-y-1.5">
-              <Label htmlFor="travel-employee">{t("hr_talent.common.employee_id", "Employee ID")}</Label>
-              <Input
+              <Label htmlFor="travel-employee">{t("hr_talent.common.employee", "Employee")}</Label>
+              <select
                 id="travel-employee"
-                type="number"
                 value={form.employee_id}
+                disabled={Boolean(form.id)}
                 onChange={(event) => setForm({ ...form, employee_id: event.target.value })}
-              />
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">{t("hr_talent.common.select", "Select...")}</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.primary_name ?? `#${emp.id}`}
+                    {emp.employee_number ? ` (${emp.employee_number})` : ""}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="travel-type">{t("hr_talent.travel.type", "Trip type")}</Label>
@@ -515,6 +759,30 @@ export default function TravelPage() {
               />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="travel-transport">{t("hr_talent.travel.transport", "Transport")}</Label>
+              <select
+                id="travel-transport"
+                value={form.transport_mode}
+                onChange={(event) => setForm({ ...form, transport_mode: event.target.value })}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm capitalize"
+              >
+                <option value="">{t("hr_talent.common.select", "Select...")}</option>
+                {TRANSPORT_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="travel-budget">{t("hr_talent.travel.budget_code", "Budget code")}</Label>
+              <Input
+                id="travel-budget"
+                value={form.budget_code}
+                onChange={(event) => setForm({ ...form, budget_code: event.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="travel-estimate">{t("hr_talent.travel.estimated", "Estimated cost")}</Label>
               <Input
                 id="travel-estimate"
@@ -534,6 +802,17 @@ export default function TravelPage() {
                 onChange={(event) => setForm({ ...form, advance_amount: event.target.value })}
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="travel-currency">{t("hr_talent.travel.currency", "Currency")}</Label>
+              <Input
+                id="travel-currency"
+                maxLength={3}
+                value={form.currency}
+                onChange={(event) =>
+                  setForm({ ...form, currency: event.target.value.toUpperCase() })
+                }
+              />
+            </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="travel-itinerary">{t("hr_talent.travel.itinerary", "Itinerary")}</Label>
               <Textarea
@@ -543,9 +822,18 @@ export default function TravelPage() {
                 onChange={(event) => setForm({ ...form, itinerary: event.target.value })}
               />
             </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="travel-notes">{t("hr_talent.common.notes", "Notes")}</Label>
+              <Textarea
+                id="travel-notes"
+                rows={2}
+                value={form.notes}
+                onChange={(event) => setForm({ ...form, notes: event.target.value })}
+              />
+            </div>
           </div>
 
-          <DialogFooter className="border-t border-border/40 px-6 py-4">
+          <DialogFooter className="border-t border-border/40 px-6 py-4 shrink-0">
             <Button variant="ghost" onClick={() => setFormOpen(false)}>
               {t("hr_talent.common.cancel", "Cancel")}
             </Button>
@@ -565,10 +853,9 @@ export default function TravelPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Detail + expenses */}
       <Dialog open={detailId !== null} onOpenChange={(open) => !open && setDetailId(null)}>
-        <DialogContent className="sm:max-w-2xl rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl">
-          <div className="border-b border-border/40 px-6 py-5">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl flex flex-col">
+          <div className="border-b border-border/40 px-6 py-5 shrink-0">
             <DialogHeader>
               <DialogTitle className="text-xl font-black tracking-tight">
                 {detail ? detail.request_number : t("hr_talent.travel.trip", "Trip")}
@@ -581,7 +868,7 @@ export default function TravelPage() {
             </DialogHeader>
           </div>
 
-          <div className="max-h-[60vh] space-y-5 overflow-y-auto px-6 py-5">
+          <div className="max-h-[60vh] space-y-5 overflow-y-auto px-6 py-5 flex-1">
             {detail ? (
               <>
                 <div className="grid gap-3 sm:grid-cols-4">
@@ -603,6 +890,51 @@ export default function TravelPage() {
                     }
                     alert={n(detail.settlement_due) < 0}
                   />
+                </div>
+
+                <div className="grid gap-2 rounded-xl border border-border/50 bg-muted/20 p-3 text-xs sm:grid-cols-2">
+                  <p>
+                    <span className="text-muted-foreground">
+                      {t("hr_talent.travel.transport", "Transport")}:{" "}
+                    </span>
+                    {detail.transport_mode
+                      ? detail.transport_mode.replace(/_/g, " ")
+                      : "—"}
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">
+                      {t("hr_talent.travel.budget_code", "Budget code")}:{" "}
+                    </span>
+                    {detail.budget_code || "—"}
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">
+                      {t("hr_talent.travel.currency", "Currency")}:{" "}
+                    </span>
+                    {detail.currency || "ETB"}
+                  </p>
+                  <p className="capitalize">
+                    <span className="text-muted-foreground">
+                      {t("hr_talent.common.status", "Status")}:{" "}
+                    </span>
+                    {detail.status.replace(/_/g, " ")}
+                  </p>
+                  {detail.notes ? (
+                    <p className="sm:col-span-2">
+                      <span className="text-muted-foreground">
+                        {t("hr_talent.common.notes", "Notes")}:{" "}
+                      </span>
+                      {detail.notes}
+                    </p>
+                  ) : null}
+                  {detail.decision_notes ? (
+                    <p className="sm:col-span-2">
+                      <span className="text-muted-foreground">
+                        {t("hr_talent.travel.decision_notes", "Decision notes")}:{" "}
+                      </span>
+                      {detail.decision_notes}
+                    </p>
+                  ) : null}
                 </div>
 
                 <Panel title={t("hr_talent.travel.expenses", "Expenses")}>
@@ -632,27 +964,62 @@ export default function TravelPage() {
                                 <Badge variant="outline" className="text-[11px] capitalize">
                                   {row.status.replace(/_/g, " ")}
                                 </Badge>
+                                {row.status === "reimbursed" ? (
+                                  <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                                    TRV-EXP-{row.id}
+                                  </p>
+                                ) : null}
+                                {row.receipt_reference ? (
+                                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                                    {row.receipt_reference}
+                                  </p>
+                                ) : null}
                               </td>
                               <td className="py-2 text-right">
-                                {row.status === "submitted" ? (
-                                  <div className="flex justify-end gap-1">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="text-[11px]"
-                                      onClick={() => decideExpense.mutate({ id: row.id, status: "approved" })}
-                                    >
-                                      {t("hr_talent.common.approve", "Approve")}
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="text-[11px] text-destructive"
-                                      onClick={() => decideExpense.mutate({ id: row.id, status: "rejected" })}
-                                    >
-                                      {t("hr_talent.common.reject", "Reject")}
-                                    </Button>
-                                  </div>
+                                {canApprove && (row.status === "submitted" || row.status === "approved") ? (
+                                  <DropdownMenu open={expenseMenuOpen === row.id} onOpenChange={(open) => setExpenseMenuOpen(open ? row.id : null)}>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      {row.status === "submitted" && (
+                                        <>
+                                          <DropdownMenuItem
+                                            onClick={() => {
+                                              decideExpense.mutate({ id: row.id, status: "approved" });
+                                              setExpenseMenuOpen(null);
+                                            }}
+                                            disabled={decideExpense.isPending}
+                                          >
+                                            {t("hr_talent.common.approve", "Approve")}
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => {
+                                              decideExpense.mutate({ id: row.id, status: "rejected" });
+                                              setExpenseMenuOpen(null);
+                                            }}
+                                            disabled={decideExpense.isPending}
+                                            className="text-destructive"
+                                          >
+                                            {t("hr_talent.common.reject", "Reject")}
+                                          </DropdownMenuItem>
+                                        </>
+                                      )}
+                                      {row.status === "approved" && (
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            decideExpense.mutate({ id: row.id, status: "reimbursed" });
+                                            setExpenseMenuOpen(null);
+                                          }}
+                                          disabled={decideExpense.isPending}
+                                        >
+                                          {t("hr_talent.travel.reimburse", "Reimburse")}
+                                        </DropdownMenuItem>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 ) : null}
                               </td>
                             </tr>
@@ -662,60 +1029,168 @@ export default function TravelPage() {
                     </div>
                   )}
 
-                  <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-border/40 pt-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="expense-category">{t("hr_talent.common.category", "Category")}</Label>
-                      <select
-                        id="expense-category"
-                        value={expense.category}
-                        onChange={(event) => setExpense({ ...expense, category: event.target.value })}
-                        className="h-9 w-40 rounded-md border border-input bg-background px-3 text-sm capitalize"
+                  {lastReimbursedClaim ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                      <span>
+                        {t(
+                          "hr_talent.travel.claim_synced",
+                          "Synced claim {claim} is on Expense Claims.",
+                        ).replace("{claim}", lastReimbursedClaim)}
+                      </span>
+                      <Button asChild size="sm" variant="outline" className="h-7 text-[11px]">
+                        <Link href="/dashboard/human-resources/expenses">
+                          <ExternalLink className="mr-1 h-3 w-3" />
+                          {t("hr_talent.travel.open_expenses", "Open expenses")}
+                        </Link>
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {canAddExpense ? (
+                    <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-border/40 pt-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="expense-category">{t("hr_talent.common.category", "Category")}</Label>
+                        <select
+                          id="expense-category"
+                          value={expense.category}
+                          onChange={(event) => setExpense({ ...expense, category: event.target.value })}
+                          className="h-9 w-40 rounded-md border border-input bg-background px-3 text-sm capitalize"
+                        >
+                          {EXPENSE_CATEGORIES.map((category) => (
+                            <option key={category} value={category}>
+                              {category.replace(/_/g, " ")}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="expense-amount">{t("hr_talent.travel.amount", "Amount")}</Label>
+                        <Input
+                          id="expense-amount"
+                          type="number"
+                          min={0}
+                          value={expense.amount}
+                          onChange={(event) => setExpense({ ...expense, amount: event.target.value })}
+                          className="h-9 w-32"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="expense-date">{t("hr_talent.travel.incurred", "Incurred")}</Label>
+                        <Input
+                          id="expense-date"
+                          type="date"
+                          value={expense.incurred_on}
+                          onChange={(event) => setExpense({ ...expense, incurred_on: event.target.value })}
+                          className="h-9 w-40"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="expense-receipt">
+                          {t("hr_talent.travel.receipt_ref", "Receipt ref")}
+                        </Label>
+                        <Input
+                          id="expense-receipt"
+                          value={expense.receipt_reference}
+                          onChange={(event) =>
+                            setExpense({ ...expense, receipt_reference: event.target.value })
+                          }
+                          className="h-9 w-40"
+                          placeholder="RCP-…"
+                        />
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="h-9"
+                        disabled={addExpense.isPending || !expense.amount}
+                        onClick={() => addExpense.mutate()}
                       >
-                        {EXPENSE_CATEGORIES.map((category) => (
-                          <option key={category} value={category}>
-                            {category.replace(/_/g, " ")}
-                          </option>
-                        ))}
-                      </select>
+                        {t("hr_talent.travel.add_expense", "Add")}
+                      </Button>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="expense-amount">{t("hr_talent.travel.amount", "Amount")}</Label>
-                      <Input
-                        id="expense-amount"
-                        type="number"
-                        min={0}
-                        value={expense.amount}
-                        onChange={(event) => setExpense({ ...expense, amount: event.target.value })}
-                        className="h-9 w-32"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="expense-date">{t("hr_talent.travel.incurred", "Incurred")}</Label>
-                      <Input
-                        id="expense-date"
-                        type="date"
-                        value={expense.incurred_on}
-                        onChange={(event) => setExpense({ ...expense, incurred_on: event.target.value })}
-                        className="h-9 w-40"
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      className="h-9"
-                      disabled={addExpense.isPending || !expense.amount}
-                      onClick={() => addExpense.mutate()}
-                    >
-                      {t("hr_talent.travel.add_expense", "Add")}
-                    </Button>
-                  </div>
+                  ) : canRequest && detail && !EXPENSEABLE_STATUSES.has(detail.status) ? (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {t(
+                        "hr_talent.travel.expenses_locked",
+                        "Expenses can be claimed once the trip is submitted or approved.",
+                      )}
+                    </p>
+                  ) : null}
                 </Panel>
               </>
             ) : null}
           </div>
 
-          <DialogFooter className="border-t border-border/40 px-6 py-4">
+          <DialogFooter className="border-t border-border/40 px-6 py-4 shrink-0">
+            {detail &&
+            canRequest &&
+            (detail.status === "draft" || detail.status === "rejected") ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  openEdit(detail);
+                  setDetailId(null);
+                }}
+              >
+                {t("hr_talent.common.edit", "Edit")}
+              </Button>
+            ) : null}
             <Button variant="ghost" onClick={() => setDetailId(null)}>
               {t("hr_talent.common.close", "Close")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={decisionOpen}
+        onOpenChange={(open) => {
+          setDecisionOpen(open);
+          if (!open) setDecision(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md max-h-[90vh] rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl flex flex-col">
+          <div className="border-b border-border/40 px-6 py-5 shrink-0">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black tracking-tight capitalize">
+                {decision?.status === "approved"
+                  ? t("hr_talent.common.approve", "Approve")
+                  : t("hr_talent.common.reject", "Reject")}
+              </DialogTitle>
+              <DialogDescription>
+                {t(
+                  "hr_talent.travel.decision_notes_desc",
+                  "Optional notes are stored with the approval decision.",
+                )}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="space-y-3 px-6 py-5 overflow-y-auto flex-1">
+            <Label htmlFor="decision-notes">{t("hr_talent.travel.decision_notes", "Decision notes")}</Label>
+            <Textarea
+              id="decision-notes"
+              rows={3}
+              value={decision?.notes ?? ""}
+              onChange={(event) =>
+                setDecision((prev) => (prev ? { ...prev, notes: event.target.value } : prev))
+              }
+            />
+          </div>
+          <DialogFooter className="border-t border-border/40 px-6 py-4 shrink-0">
+            <Button variant="ghost" onClick={() => setDecisionOpen(false)}>
+              {t("hr_talent.common.cancel", "Cancel")}
+            </Button>
+            <Button
+              disabled={!decision || transition.isPending}
+              onClick={() =>
+                decision &&
+                transition.mutate({
+                  id: decision.id,
+                  status: decision.status,
+                  notes: decision.notes || undefined,
+                })
+              }
+            >
+              {t("hr_talent.common.confirm", "Confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

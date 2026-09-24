@@ -17,6 +17,17 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -141,6 +152,8 @@ export function HrPoliciesPanel({ canManage }: { canManage: boolean }) {
   const [error, setError] = useState("");
   const errorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [policyToDelete, setPolicyToDelete] = useState<HrPolicy | null>(null);
 
   const clearSelectedUpload = () => {
     setFile(null);
@@ -546,20 +559,43 @@ export function HrPoliciesPanel({ canManage }: { canManage: boolean }) {
                           <Pencil aria-hidden="true" className="mr-2 h-4 w-4" />
                           Edit
                         </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm(`Delete policy "${policy.title}"?`)) {
-                              deleteMutation.mutate(policy.id);
-                            }
-                          }}
-                          className="min-h-11 border-red-600 text-red-700 hover:bg-red-50 hover:text-red-800 dark:border-red-400 dark:text-red-300 dark:hover:bg-red-950"
-                        >
-                          <Trash2 aria-hidden="true" className="mr-2 h-4 w-4" />
-                          Delete
-                        </Button>
+                        <AlertDialog open={deleteConfirmOpen && policyToDelete === policy} onOpenChange={(open) => setDeleteConfirmOpen(open)}>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="rounded-full"
+                              onClick={() => setPolicyToDelete(policy)}
+                            >
+                              <Trash2 aria-hidden="true" className="mr-2 h-4 w-4" />
+                              Delete
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Policy?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the policy "{policy.title}".
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="rounded-xl" onClick={() => setPolicyToDelete(null)}>
+                                Cancel
+                              </AlertDialogCancel>
+                              <AlertDialogAction
+                                className="rounded-xl bg-destructive hover:bg-destructive/90"
+                                onClick={() => {
+                                  deleteMutation.mutate(policy.id);
+                                  setPolicyToDelete(null);
+                                  setDeleteConfirmOpen(false);
+                                }}
+                              >
+                                Confirm Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </td>
                   )}

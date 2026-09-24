@@ -14,11 +14,14 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import api from '@/lib/api';
+import { authenticatedDownload } from '@/lib/authenticated-download';
+import { getAuthHeaders } from '@/lib/runtime-context';
+import { SecureAttachmentImage } from '@/components/chat/chat-detail';
 import { toast } from 'sonner';
 
 type SharedImage = {
   url?: string;
-  thumbnail?: string;
+  thumbnail?: string | null;
 };
 
 type SharedFile = {
@@ -196,7 +199,8 @@ export default function ChatInfoSidebar() {
                 <div className="grid grid-cols-3 gap-3">
                   {sharedItems.images.map((img, i) => (
                     <div key={i} className="aspect-square rounded-2xl bg-muted/40 relative group cursor-pointer overflow-hidden ring-1 ring-black/5 hover:ring-primary/40 transition-all">
-                      <img src={img.url} alt="Shared" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                      {/* Attachment URLs need the session headers; a plain <img> cannot send them. */}
+                      <SecureAttachmentImage src={img.thumbnail || img.url || ""} alt="Shared" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                       <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <ExternalLink className="h-5 w-5 text-white" />
                       </div>
@@ -341,7 +345,19 @@ function FileCard({ file }: { file: SharedFile }) {
           <span className="text-[11px] text-muted-foreground font-black uppercase tracking-tight">{((file.size ?? 0) / 1024 / 1024).toFixed(2)} MB · {file.type || 'FILE'}</span>
         </div>
       </div>
-      <Button variant="ghost" size="icon" className="shrink-0 h-10 w-10 rounded-xl hover:bg-slate-100">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="shrink-0 h-10 w-10 rounded-xl hover:bg-slate-100"
+        disabled={!file.url}
+        onClick={() => {
+          if (!file.url) return;
+          void authenticatedDownload(`${file.url}${file.url.includes('?') ? '&' : '?'}download=1`, {
+            filename: file.name || 'attachment',
+            headers: getAuthHeaders(),
+          }).catch(() => toast.error('Failed to download file'));
+        }}
+      >
         <Download className="h-5 w-5" />
       </Button>
     </div>
@@ -350,7 +366,12 @@ function FileCard({ file }: { file: SharedFile }) {
 
 function LinkCard({ link }: { link: SharedLink }) {
   return (
-    <div className="flex items-center gap-4 p-4 rounded-2xl bg-white dark:bg-muted/10 border border-border/30 hover:border-primary/30 transition-all group cursor-pointer">
+    <a
+      href={link.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-4 p-4 rounded-2xl bg-white dark:bg-muted/10 border border-border/30 hover:border-primary/30 transition-all group cursor-pointer"
+    >
        <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center shrink-0">
           <LinkIcon className="h-6 w-6" />
        </div>
@@ -359,7 +380,7 @@ function LinkCard({ link }: { link: SharedLink }) {
           <p className="text-[11px] font-bold text-primary truncate leading-tight">{link.url}</p>
        </div>
        <ExternalLink className="h-4 w-4 text-muted-foreground/30" />
-    </div>
+    </a>
   );
 }
 

@@ -1600,7 +1600,23 @@ export function ScheduleWorkspace() {
       attendanceFetch<Paginated<Employee>>("/employees?per_page=200"),
     enabled: isLoaded && canFetchEmployees,
   });
+  const presets = useQuery({
+    queryKey: ["hr-scheduling", scope, "setup-presets"],
+    queryFn: () =>
+      attendanceFetch<{
+        data: Array<{
+          value: string;
+          label: string;
+          description: string;
+          creates: string[];
+        }>;
+      }>("/attendance/setup/presets"),
+    enabled: isLoaded && canOpen,
+  });
   const data = workspace.data?.data;
+  const waterBottlingPreset =
+    presets.data?.data.find((item) => item.value === "water_bottling_24x7") ??
+    null;
   const selectedRoster = useMemo(() => {
     const rosters = data?.rosters ?? [];
     if (!rosters.length) return null;
@@ -1740,9 +1756,12 @@ export function ScheduleWorkspace() {
           existing_shift_count: number;
           created_rotation: boolean;
         };
-      }>("/attendance/setup/presets/water_bottling_24x7/apply", {
-        method: "POST",
-      }),
+      }>(
+        `/attendance/setup/presets/${encodeURIComponent(waterBottlingPreset?.value ?? "water_bottling_24x7")}/apply`,
+        {
+          method: "POST",
+        },
+      ),
     onSuccess: async (response) => {
       toast.success(
         response.data.created_shift_count
@@ -1876,6 +1895,7 @@ export function ScheduleWorkspace() {
                     type="button"
                     variant="outline"
                     className="min-h-11 border-amber-200 bg-amber-100 text-slate-950 hover:bg-amber-50"
+                    title={waterBottlingPreset?.description}
                     onClick={() => applyWaterBottlingPreset.mutate()}
                     disabled={
                       applyWaterBottlingPreset.isPending ||
@@ -1886,8 +1906,10 @@ export function ScheduleWorkspace() {
                     {hasWaterBottlingPreset
                       ? "Water-bottling starter installed"
                       : applyWaterBottlingPreset.isPending
-                        ? "Adding starter shift{�u���f"
-                        : "Add water-bottling starter shifts"}
+                        ? "Adding starter shifts…"
+                        : waterBottlingPreset?.label
+                          ? `Add ${waterBottlingPreset.label}`
+                          : "Add water-bottling starter shifts"}
                   </Button>
                 )}
                 {hasActions && (
