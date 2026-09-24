@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -161,11 +162,11 @@ function RequestLeaveDialog({
         }),
       }),
     onSuccess: (result) => {
-      toast.success(
-        result.workflow?.status === "pending"
-          ? "Leave request submitted to the approval workflow."
-          : "Leave request submitted.",
-      );
+      notifyMutationOutcome(result, {
+        savedMessage: "Leave request submitted.",
+        submittedMessage: "Submitted for approval.",
+        queryClient,
+      });
       onOpenChange(false);
       void invalidateHrLeaveQueries(queryClient);
     },

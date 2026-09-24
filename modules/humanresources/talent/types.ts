@@ -48,6 +48,7 @@ export type EmployeeCompetency = {
   evidence: string | null;
   notes: string | null;
   competency?: Competency;
+  employee?: { id: number; primary_name: string | null; employee_number?: string | null };
 };
 
 export type PositionCompetency = {
@@ -57,6 +58,7 @@ export type PositionCompetency = {
   required_level: number;
   is_critical: boolean;
   competency?: Competency;
+  position?: { id: number; title: string | null; code?: string | null };
 };
 
 // ---------------------------------------------------------------- succession
@@ -157,6 +159,9 @@ export type TrainingCourse = {
   duration_hours: Numeric;
   cost_per_seat: Numeric;
   provider: string | null;
+  default_capacity: number | null;
+  objectives: string | null;
+  prerequisites: string | null;
   competency_id: number | null;
   target_level: number | null;
   is_active: boolean;
@@ -174,6 +179,7 @@ export type TrainingSession = {
   budget_amount: Numeric;
   actual_cost: Numeric;
   status: string;
+  notes: string | null;
   seats_remaining?: number | null;
   course?: TrainingCourse;
   enrollments?: TrainingEnrollment[];
@@ -198,14 +204,21 @@ export type DevelopmentPlan = {
   id: number;
   employee_id: number;
   competency_id: number | null;
+  target_position_id: number | null;
+  mentor_employee_id: number | null;
+  title: string;
   objective: string | null;
   target_level: number | null;
   current_level: number | null;
   progress_percent: number;
   status: string;
+  starts_on: string | null;
   due_on: string | null;
+  notes: string | null;
   employee?: { id: number; primary_name: string | null };
   competency?: Competency;
+  target_position?: { id: number; title: string | null; code?: string | null };
+  mentor?: { id: number; primary_name: string | null };
 };
 
 export type TrainingSummary = {
@@ -235,7 +248,6 @@ export type TravelStatus =
   | "rejected"
   | "in_progress"
   | "completed"
-  | "settled"
   | "cancelled";
 
 export type TravelExpense = {
@@ -268,6 +280,7 @@ export type TravelRequest = {
   status: TravelStatus;
   itinerary: string | null;
   notes: string | null;
+  decision_notes?: string | null;
   /** Appended: actual − estimated. */
   variance_amount?: Numeric;
   /** Appended: actual − advance. Negative means unspent advance to return. */
@@ -311,6 +324,15 @@ export type OffboardingCase = {
   /** Appended aggregates. */
   completion_percent?: Numeric;
   blocking_tasks_outstanding?: number;
+  issued_assets_outstanding?: number;
+  issued_assets?: Array<{
+    id: number;
+    asset_name: string;
+    asset_category: string;
+    serial_number?: string | null;
+    issued_date?: string | null;
+    status: string;
+  }>;
   employee?: { id: number; primary_name: string | null };
   tasks?: OffboardingTask[];
 };
@@ -321,6 +343,7 @@ export type OffboardingSummary = {
   blocked_cases: number;
   overdue_tasks: number;
   average_completion_percent: Numeric;
+  payroll_available?: boolean;
   by_exit_type: Array<{ exit_type: string; count: number }>;
   outstanding_by_department: Array<{
     department: string;

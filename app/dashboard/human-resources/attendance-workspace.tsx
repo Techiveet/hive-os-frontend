@@ -75,7 +75,7 @@ const controlClass =
 const selectClass =
   "h-11 w-full rounded-md border border-slate-500 bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-blue-700 dark:border-slate-400 dark:focus-visible:ring-cyan-300";
 const tabTriggerClass =
-  "min-h-11 whitespace-normal px-3 text-left text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-background data-[state=active]:text-foreground";
+  "h-auto min-h-10 whitespace-normal px-3 py-2 text-left text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-background data-[state=active]:text-foreground";
 const today = () => new Date().toISOString().slice(0, 10);
 const eventLabels: Record<AttendanceEventType, string> = {
   clock_in: "Clock in",
@@ -448,6 +448,14 @@ export function AttendanceWorkspace({
     "record_team_attendance",
     "manage_attendance",
   ]);
+  const canViewIssues = hasAnyPermission([
+    "view_own_attendance",
+    "request_attendance_correction",
+    "view_team_attendance",
+    "view_attendance",
+    "manage_attendance",
+    "review_attendance_exceptions",
+  ]);
   const canViewReconciliation = hasAnyPermission([
     "view_own_attendance",
     "record_own_attendance",
@@ -473,6 +481,12 @@ export function AttendanceWorkspace({
     "record_attendance",
     "record_own_attendance",
     "manage_attendance",
+  ]);
+  const canFilterEventsByEmployee = hasAnyPermission([
+    "view_attendance",
+    "view_team_attendance",
+    "manage_attendance",
+    "record_team_attendance",
   ]);
   const canSchedules = hasPermission("manage_work_schedules");
   const canViewSchedules = hasAnyPermission([
@@ -571,8 +585,14 @@ export function AttendanceWorkspace({
   const employees = useQuery({
     queryKey: ["hr-attendance", scope, "employees"],
     queryFn: () =>
-      attendanceFetch<Paginated<Employee>>("/employees?per_page=100"),
-    enabled: isLoaded && (canManage || canReconcile || canViewCapture),
+      attendanceFetch<Paginated<Employee>>("/employees?per_page=200"),
+    enabled:
+      isLoaded &&
+      (canManage ||
+        canReconcile ||
+        canViewCapture ||
+        canFilterEventsByEmployee ||
+        canView),
   });
 
   useEffect(() => {
@@ -655,25 +675,6 @@ export function AttendanceWorkspace({
       ),
   });
 
-  const punchMutation = useMutation({
-    mutationFn: (payload: { event_type: AttendanceEventType }) =>
-      attendanceFetch<{ event: AttendanceEvent }>("/attendance/punch", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      }),
-    onSuccess: () => {
-      toast.success("Attendance event recorded.");
-      void queryClient.invalidateQueries({
-        queryKey: ["hr-attendance", scope],
-      });
-      void selfStatus.refetch();
-    },
-    onError: (failure) =>
-      toast.error(
-        errorMessage(failure, "The attendance event could not be recorded."),
-      ),
-  });
-
   const linkAccountMutation = useMutation({
     mutationFn: async () => {
       try {
@@ -744,7 +745,8 @@ export function AttendanceWorkspace({
   ];
   const availableViews: AttendanceView[] = [
     ...(canView || canPunch ? (["today"] as const) : []),
-    ...(canViewReconciliation ? (["issues", "reconcile"] as const) : []),
+    ...(canViewIssues ? (["issues"] as const) : []),
+    ...(canViewReconciliation ? (["reconcile"] as const) : []),
     ...(canViewSchedules ? (["schedules"] as const) : []),
     ...(canView || canPunch ? (["events"] as const) : []),
   ];
@@ -756,6 +758,7 @@ export function AttendanceWorkspace({
     isLoaded &&
     !canView &&
     !canPunch &&
+    !canViewIssues &&
     !canViewReconciliation &&
     !canViewCapture &&
     canViewSchedules
@@ -767,6 +770,7 @@ export function AttendanceWorkspace({
     isLoaded &&
     !canView &&
     !canPunch &&
+    !canViewIssues &&
     !canViewReconciliation &&
     !canViewSchedules &&
     canViewCapture
@@ -794,8 +798,10 @@ export function AttendanceWorkspace({
     isLoaded &&
     !canView &&
     !canPunch &&
+    !canViewIssues &&
     !canViewReconciliation &&
-    !canViewCapture
+    !canViewCapture &&
+    !canViewSchedules
   ) {
     return (
       <Card className="border-slate-500 dark:border-slate-400">
@@ -896,7 +902,7 @@ export function AttendanceWorkspace({
           <CardContent className="p-3 sm:p-4">
             <TabsList
               aria-label="Attendance workspace views"
-              className="grid h-auto w-full grid-cols-2 gap-1 rounded-xl border border-border/70 bg-muted/60 p-1.5 sm:grid-cols-3 xl:grid-cols-5"
+              className="grid h-auto w-full grid-cols-2 gap-1 rounded-xl border border-border/70 bg-muted/60 p-1 group-data-[orientation=horizontal]/tabs:h-auto sm:grid-cols-3 xl:grid-cols-5"
             >
               {(canView || canPunch) && (
                 <TabsTrigger value="today" className={tabTriggerClass}>
@@ -904,7 +910,7 @@ export function AttendanceWorkspace({
                   Today
                 </TabsTrigger>
               )}
-              {canViewReconciliation && (
+              {canViewIssues && (
                 <TabsTrigger value="issues" className={tabTriggerClass}>
                   <Activity aria-hidden="true" />
                   Fix issues
@@ -1156,7 +1162,7 @@ export function AttendanceWorkspace({
           </Card>
         </TabsContent>
 
-        {canViewReconciliation && (
+        {canViewIssues && (
           <TabsContent value="issues">
             <AttendanceCorrections date={date} />
           </TabsContent>

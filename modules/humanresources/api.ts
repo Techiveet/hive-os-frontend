@@ -206,6 +206,14 @@ export type HrDashboardData = {
       late: number;
     };
     pending_leave_requests: number;
+    pending_expense_claims: number;
+    approved_expense_claims: number;
+    reimbursed_expense_claims: number;
+    expense_pending_amount: number;
+    open_offboarding_cases: number;
+    travel_awaiting_approval: number;
+    succession_roles_at_risk: number;
+    training_sessions: number;
   };
   charts: {
     payroll_trend: HrDashboardPayrollPoint[];
@@ -216,6 +224,7 @@ export type HrDashboardData = {
     contract_types: HrDashboardCategory[];
     attendance_outcomes: HrDashboardAttendancePoint[];
     leave_statuses: HrDashboardCategory[];
+    expense_statuses: HrDashboardCategory[];
   };
   sources: {
     employees: number;
@@ -225,6 +234,9 @@ export type HrDashboardData = {
     applicants: number;
     attendance_records_last_7_days: number;
     leave_requests: number;
+    expense_claims: number;
+    open_offboarding_cases: number;
+    travel_requests: number;
   };
 };
 
@@ -1057,6 +1069,10 @@ export type AttendanceDevice = {
   timezone: string;
   status: string;
   health_status: "unknown" | "healthy" | "degraded" | "unhealthy";
+  organization_unit_id?: number | null;
+  kiosk_station_id?: number | null;
+  organization_unit?: { id: number; code: string; name: string } | null;
+  kiosk_station?: { id: number; station_code: string; name: string } | null;
   last_seen_at: string | null;
   last_health_at: string | null;
   configuration: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -44,6 +44,7 @@ import {
 import { usePermissions } from "@/hooks/use-permissions";
 import { getWorkspaceScopeKey } from "@/lib/runtime-context";
 import {
+  attendanceFetch,
   enrolAllEmployees,
   executeUserLinking,
   fetchUserLinkingRecords,
@@ -52,11 +53,11 @@ import {
   previewUserLinking,
   resolveUserLinking,
   unlinkUserAccount,
+  UserLinkingCandidate,
   UserLinkingPreview,
   UserLinkingRecord,
 } from "@/modules/attendance/api";
 import { Employee, Paginated } from "@/modules/humanresources/api";
-import { attendanceFetch } from "@/modules/attendance/api";
 
 const selectClass =
   "h-11 w-full rounded-md border border-slate-500 bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-blue-700 dark:border-slate-400 dark:focus-visible:ring-cyan-300";
@@ -120,6 +121,8 @@ function enrolmentBadge(status: UserLinkingRecord["enrolment_status"]) {
   }
 }
 
+type ConfirmAction = "bulk-link" | "enrol" | null;
+
 export function AttendanceUserLinkingWorkspace() {
   const scope = getWorkspaceScopeKey();
   const queryClient = useQueryClient();
@@ -134,6 +137,7 @@ export function AttendanceUserLinkingWorkspace() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterEnrolment, setFilterEnrolment] = useState("all");
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<UserLinkingPreview | null>(null);
@@ -141,9 +145,12 @@ export function AttendanceUserLinkingWorkspace() {
   const [manualOpen, setManualOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<{ id: number; name: string; email: string } | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [rowCandidates, setRowCandidates] = useState<UserLinkingCandidate[]>([]);
 
   const [unlinkOpen, setUnlinkOpen] = useState(false);
   const [unlinkEmployee, setUnlinkEmployee] = useState<{ id: number; name: string; number: string } | null>(null);
+
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
 
   const summary = useQuery({
     queryKey: ["user-linking-summary", scope],
@@ -152,16 +159,50 @@ export function AttendanceUserLinkingWorkspace() {
   });
 
   const records = useQuery({
-    queryKey: ["user-linking-records", scope, page, search, filterStatus],
-    queryFn: () => fetchUserLinkingRecords(page, 25, search, filterStatus),
+    queryKey: ["user-linking-records", scope, page, search, filterStatus, filterEnrolment],
+    queryFn: () => fetchUserLinkingRecords(page, 25, search, filterStatus, filterEnrolment),
     enabled: isLoaded && canManage,
   });
 
   const employeesList = useQuery({
     queryKey: ["hr-employees-unlinked-candidates", scope],
-    queryFn: () => attendanceFetch<Paginated<Employee>>("/employees?per_page=100"),
+    queryFn: () => attendanceFetch<Paginated<Employee>>("/employees?per_page=200"),
     enabled: manualOpen && canManage,
   });
+
+  const unlinkedEmployees = useMemo(() => {
+    const rows = employeesList.data?.data ?? [];
+    return rows.filter((emp) => !emp.user_id);
+  }, [employeesList.data]);
+
+  const candidateIds = useMemo(
+    () => new Set(rowCandidates.map((c) => Number(c.employee_id))),
+    [rowCandidates],
+  );
+
+  const pickerEmployees = useMemo(() => {
+    const fromApi = unlinkedEmployees.map((emp) => ({
+      id: Number(emp.id),
+      name: emp.primary_name,
+      number: emp.employee_number,
+      email: emp.work_email || "",
+      suggested: candidateIds.has(Number(emp.id)),
+    }));
+
+    // Ensure suggested candidates appear even if not in the first page of /employees
+    for (const candidate of rowCandidates) {
+      if (fromApi.some((row) => row.id === Number(candidate.employee_id))) continue;
+      fromApi.unshift({
+        id: Number(candidate.employee_id),
+        name: candidate.employee_name || "Employee",
+        number: candidate.employee_number || "",
+        email: "",
+        suggested: true,
+      });
+    }
+
+    return fromApi.sort((a, b) => Number(b.suggested) - Number(a.suggested) || a.name.localeCompare(b.name));
+  }, [unlinkedEmployees, rowCandidates, candidateIds]);
 
   const previewMutation = useMutation({
     mutationFn: () => previewUserLinking(),
@@ -180,6 +221,7 @@ export function AttendanceUserLinkingWorkspace() {
     onSuccess: (res) => {
       toast.success(res.message);
       setPreviewOpen(false);
+      setConfirmAction(null);
       void queryClient.invalidateQueries({ queryKey: ["user-linking-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["user-linking-records"] });
     },
@@ -190,6 +232,7 @@ export function AttendanceUserLinkingWorkspace() {
     mutationFn: () => enrolAllEmployees(),
     onSuccess: (res) => {
       toast.success(res.message);
+      setConfirmAction(null);
       void queryClient.invalidateQueries({ queryKey: ["user-linking-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["user-linking-records"] });
     },
@@ -208,6 +251,7 @@ export function AttendanceUserLinkingWorkspace() {
       setManualOpen(false);
       setSelectedUser(null);
       setSelectedEmployeeId("");
+      setRowCandidates([]);
       void queryClient.invalidateQueries({ queryKey: ["user-linking-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["user-linking-records"] });
     },
@@ -229,6 +273,24 @@ export function AttendanceUserLinkingWorkspace() {
     onError: (err: Error) => toast.error(err.message || "Unlink failed."),
   });
 
+  const openManualLink = (row: UserLinkingRecord) => {
+    if (!row.user_id) return;
+    setSelectedUser({
+      id: row.user_id,
+      name: row.user_name || "User",
+      email: row.user_email || "",
+    });
+    setRowCandidates(row.candidates ?? []);
+    const preferred =
+      row.employee_id
+        ? String(row.employee_id)
+        : row.candidates?.length === 1
+          ? String(row.candidates[0].employee_id)
+          : "";
+    setSelectedEmployeeId(preferred);
+    setManualOpen(true);
+  };
+
   const summaryData = summary.data ?? {
     total_users: 0,
     total_employees: 0,
@@ -247,6 +309,7 @@ export function AttendanceUserLinkingWorkspace() {
     { label: "Linked Accounts", value: summaryData.already_linked, icon: CheckCircle2, color: "text-emerald-600" },
     { label: "Eligible To Link", value: summaryData.will_link, icon: UserPlus, color: "text-sky-600" },
     { label: "Unlinked Users", value: summaryData.unlinked_users, icon: UserX, color: "text-amber-600" },
+    { label: "Unlinked Employees", value: summaryData.unlinked_employees, icon: Users, color: "text-indigo-600" },
     { label: "Ambiguous / Conflicts", value: summaryData.ambiguous + summaryData.conflicts, icon: AlertTriangle, color: "text-purple-600" },
     { label: "Missing Enrolment", value: summaryData.employees_missing_enrolment, icon: ShieldCheck, color: "text-rose-600" },
   ];
@@ -328,29 +391,28 @@ export function AttendanceUserLinkingWorkspace() {
             </Button>
             <Button
               type="button"
-              onClick={() => executeMutation.mutate()}
+              onClick={() => setConfirmAction("bulk-link")}
               disabled={executeMutation.isPending}
               className="min-h-11"
             >
               <LinkIcon aria-hidden="true" className="mr-1.5 h-4 w-4" />
-              {executeMutation.isPending ? "Linking Users…" : "Link All Eligible Users"}
+              Link All Eligible Users
             </Button>
             <Button
               type="button"
               variant="secondary"
-              onClick={() => enrolMutation.mutate()}
+              onClick={() => setConfirmAction("enrol")}
               disabled={enrolMutation.isPending}
               className="min-h-11"
             >
               <ShieldCheck aria-hidden="true" className="mr-1.5 h-4 w-4" />
-              {enrolMutation.isPending ? "Enrolling…" : "Enrol All Eligible Employees"}
+              Enrol All Eligible Employees
             </Button>
           </div>
         </div>
       </header>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         {metricCards.map((card) => {
           const Icon = card.icon;
           return (
@@ -367,7 +429,6 @@ export function AttendanceUserLinkingWorkspace() {
         })}
       </div>
 
-      {/* Search & Filter Bar */}
       <Card className="border-slate-300 dark:border-slate-700">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg font-bold">Tenant Account Linking Records</CardTitle>
@@ -398,7 +459,7 @@ export function AttendanceUserLinkingWorkspace() {
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-0 flex-1 basis-64">
               <Label htmlFor="user-linking-search" className="mb-2 block">
                 Search accounts
@@ -421,7 +482,7 @@ export function AttendanceUserLinkingWorkspace() {
                 />
               </div>
             </div>
-            <div className="w-full space-y-2 sm:w-56">
+            <div className="w-full space-y-2 sm:w-52">
               <Label htmlFor="user-linking-status">Link status</Label>
               <select
                 id="user-linking-status"
@@ -439,6 +500,23 @@ export function AttendanceUserLinkingWorkspace() {
                 <option value="employee_only">Unmatched Employees</option>
               </select>
             </div>
+            <div className="w-full space-y-2 sm:w-52">
+              <Label htmlFor="user-linking-enrolment">Enrolment</Label>
+              <select
+                id="user-linking-enrolment"
+                value={filterEnrolment}
+                onChange={(e) => {
+                  setFilterEnrolment(e.target.value);
+                  setPage(1);
+                }}
+                className={selectClass}
+              >
+                <option value="all">All Enrolment</option>
+                <option value="enrolled">Enrolled</option>
+                <option value="pending_enrolment">Pending Enrolment</option>
+                <option value="unlinked">Not Enrolled</option>
+              </select>
+            </div>
           </div>
 
           <div className="rounded-md border border-slate-300 dark:border-slate-700 overflow-x-auto">
@@ -451,7 +529,7 @@ export function AttendanceUserLinkingWorkspace() {
                 <TableRow>
                   <TableHead scope="col">User Account</TableHead>
                   <TableHead scope="col">Employee Record</TableHead>
-                  <TableHead scope="col">Match Method</TableHead>
+                  <TableHead scope="col">Match / Reason</TableHead>
                   <TableHead scope="col">Link Status</TableHead>
                   <TableHead scope="col">Attendance Enrolment</TableHead>
                   <TableHead scope="col" className="text-right">Actions</TableHead>
@@ -509,37 +587,47 @@ export function AttendanceUserLinkingWorkspace() {
                               {formatEmployeeNumber(row.employee_number)}
                             </p>
                           </div>
+                        ) : row.candidates && row.candidates.length > 0 ? (
+                          <div className="space-y-0.5">
+                            <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+                              {row.candidates.length} candidate{row.candidates.length === 1 ? "" : "s"}
+                            </span>
+                            {row.candidates.slice(0, 2).map((c) => (
+                              <p key={c.employee_id} className="text-xs text-slate-600 dark:text-slate-300">
+                                {c.employee_name} · {formatEmployeeNumber(c.employee_number)}
+                              </p>
+                            ))}
+                          </div>
                         ) : (
                           <span className="text-xs italic text-slate-600 dark:text-slate-300">No employee record</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <span className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                          {row.match_method}
-                        </span>
+                        <div className="space-y-1">
+                          <span className="inline-block rounded bg-slate-100 px-2 py-0.5 font-mono text-xs dark:bg-slate-800">
+                            {row.match_method}
+                          </span>
+                          {row.conflict_reason ? (
+                            <p className="max-w-[16rem] text-xs leading-5 text-amber-800 dark:text-amber-200">
+                              {row.conflict_reason}
+                            </p>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell>{statusBadge(row.link_status)}</TableCell>
                       <TableCell>{enrolmentBadge(row.enrolment_status)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {row.link_status === "unlinked" && row.user_id && (
+                          {(row.link_status === "unlinked" || row.link_status === "ambiguous") && row.user_id && (
                             <Button
                               type="button"
                               size="sm"
                               variant="outline"
                               className="min-h-11"
-                              onClick={() => {
-                                setSelectedUser({
-                                  id: row.user_id!,
-                                  name: row.user_name!,
-                                  email: row.user_email!,
-                                });
-                                setSelectedEmployeeId(row.employee_id ? String(row.employee_id) : "");
-                                setManualOpen(true);
-                              }}
+                              onClick={() => openManualLink(row)}
                             >
                               <LinkIcon aria-hidden="true" className="mr-1 h-3.5 w-3.5" />
-                              Link
+                              {row.link_status === "ambiguous" ? "Resolve" : "Link"}
                             </Button>
                           )}
                           {row.link_status === "linked" && row.employee_id && (
@@ -570,7 +658,6 @@ export function AttendanceUserLinkingWorkspace() {
             </Table>
           </div>
 
-          {/* Pagination */}
           {(records.data?.meta.last_page ?? 1) > 1 && (
             <div className="flex items-center justify-between pt-2">
               <p className="text-xs text-slate-700 dark:text-slate-200">
@@ -603,10 +690,9 @@ export function AttendanceUserLinkingWorkspace() {
         </CardContent>
       </Card>
 
-      {/* Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent
-          className="max-h-[85vh] overflow-y-auto sm:max-w-2xl"
+          className="max-h-[85vh] overflow-y-auto sm:max-w-3xl"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             previewTriggerRef.current?.focus();
@@ -620,52 +706,127 @@ export function AttendanceUserLinkingWorkspace() {
           </DialogHeader>
 
           {previewData && (
-            <div className="space-y-4 my-4">
+            <div className="my-4 space-y-4">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="p-3 bg-emerald-50 rounded-lg dark:bg-emerald-950">
+                <div className="rounded-lg bg-emerald-50 p-3 dark:bg-emerald-950">
                   <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">Will Link</p>
                   <p className="text-xl font-bold text-emerald-900 dark:text-emerald-100">
                     {previewData.summary.will_link}
                   </p>
                 </div>
-                <div className="p-3 bg-blue-50 rounded-lg dark:bg-blue-950">
+                <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950">
                   <p className="text-xs font-semibold text-blue-800 dark:text-blue-200">Already Linked</p>
                   <p className="text-xl font-bold text-blue-900 dark:text-blue-100">
                     {previewData.summary.already_linked}
                   </p>
                 </div>
-                <div className="p-3 bg-purple-50 rounded-lg dark:bg-purple-950">
+                <div className="rounded-lg bg-purple-50 p-3 dark:bg-purple-950">
                   <p className="text-xs font-semibold text-purple-800 dark:text-purple-200">Ambiguous</p>
                   <p className="text-xl font-bold text-purple-900 dark:text-purple-100">
                     {previewData.summary.ambiguous}
                   </p>
                 </div>
-                <div className="p-3 bg-amber-50 rounded-lg dark:bg-amber-950">
+                <div className="rounded-lg bg-rose-50 p-3 dark:bg-rose-950">
+                  <p className="text-xs font-semibold text-rose-800 dark:text-rose-200">Conflicts</p>
+                  <p className="text-xl font-bold text-rose-900 dark:text-rose-100">
+                    {previewData.summary.conflicts}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-950">
                   <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">Unlinked Users</p>
                   <p className="text-xl font-bold text-amber-900 dark:text-amber-100">
                     {previewData.summary.unlinked_users}
                   </p>
                 </div>
+                <div className="rounded-lg bg-indigo-50 p-3 dark:bg-indigo-950">
+                  <p className="text-xs font-semibold text-indigo-800 dark:text-indigo-200">Unlinked Employees</p>
+                  <p className="text-xl font-bold text-indigo-900 dark:text-indigo-100">
+                    {previewData.summary.unlinked_employees}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-slate-100 p-3 dark:bg-slate-900">
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Missing Enrolment</p>
+                  <p className="text-xl font-bold">
+                    {previewData.summary.employees_missing_enrolment}
+                  </p>
+                </div>
               </div>
 
               {previewData.will_link.length > 0 && (
-                <div>
-                  <h3 className="mb-2 text-sm font-bold text-emerald-700 dark:text-emerald-300">
-                    Safe 1-to-1 Deterministic Matches Ready To Link:
-                  </h3>
-                  <div className="max-h-48 overflow-y-auto rounded border border-slate-200 dark:border-slate-800 p-2 text-xs space-y-1">
-                    {previewData.will_link.map((item: any, idx) => (
-                      <div key={idx} className="flex items-center justify-between py-1 border-b last:border-b-0">
-                        <span>
-                          <strong>{item.user_name}</strong> ({item.user_email})
-                        </span>
-                        <span className="font-mono text-emerald-600">
-                          ➜ {item.employee_name} ({formatEmployeeNumber(item.employee_number)})
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <PreviewSection title="Safe 1-to-1 matches ready to link" tone="emerald">
+                  {previewData.will_link.map((item, idx) => (
+                    <div key={`will-${item.user_id ?? idx}`} className="flex items-center justify-between gap-2 border-b py-1 last:border-b-0">
+                      <span>
+                        <strong>{item.user_name}</strong> ({item.user_email})
+                      </span>
+                      <span className="font-mono text-emerald-700 dark:text-emerald-300">
+                        → {item.employee_name} ({formatEmployeeNumber(item.employee_number)})
+                      </span>
+                    </div>
+                  ))}
+                </PreviewSection>
+              )}
+
+              {previewData.ambiguous.length > 0 && (
+                <PreviewSection title="Ambiguous matches (manual resolve required)" tone="purple">
+                  {previewData.ambiguous.map((item, idx) => (
+                    <div key={`amb-${item.user_id ?? idx}`} className="border-b py-1 last:border-b-0">
+                      <p>
+                        <strong>{item.user_name}</strong> ({item.user_email}) — {item.reason}
+                      </p>
+                      {(item.candidates ?? []).length > 0 && (
+                        <p className="mt-0.5 text-slate-600 dark:text-slate-300">
+                          Candidates:{" "}
+                          {(item.candidates ?? [])
+                            .map((c) => `${c.employee_name} (${formatEmployeeNumber(c.employee_number)})`)
+                            .join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </PreviewSection>
+              )}
+
+              {previewData.conflicts.length > 0 && (
+                <PreviewSection title="Conflicts (skipped)" tone="rose">
+                  {previewData.conflicts.map((item, idx) => (
+                    <div key={`conf-${item.user_id ?? idx}`} className="border-b py-1 last:border-b-0">
+                      <strong>{item.user_name}</strong> ({item.user_email}) → {item.employee_name}{" "}
+                      ({formatEmployeeNumber(item.employee_number)}) — {item.reason}
+                    </div>
+                  ))}
+                </PreviewSection>
+              )}
+
+              {previewData.unlinked_employees.length > 0 && (
+                <PreviewSection title="Unlinked employees (no matching user)" tone="indigo">
+                  {previewData.unlinked_employees.slice(0, 40).map((item, idx) => (
+                    <div key={`ue-${item.employee_id ?? idx}`} className="border-b py-1 last:border-b-0">
+                      {item.employee_name} · {formatEmployeeNumber(item.employee_number)}
+                      {item.work_email ? ` · ${item.work_email}` : ""}
+                    </div>
+                  ))}
+                  {previewData.unlinked_employees.length > 40 && (
+                    <p className="pt-1 text-slate-600 dark:text-slate-300">
+                      +{previewData.unlinked_employees.length - 40} more
+                    </p>
+                  )}
+                </PreviewSection>
+              )}
+
+              {previewData.missing_enrolment.length > 0 && (
+                <PreviewSection title="Employees missing attendance enrolment" tone="slate">
+                  {previewData.missing_enrolment.slice(0, 40).map((item, idx) => (
+                    <div key={`me-${item.employee_id ?? idx}`} className="border-b py-1 last:border-b-0">
+                      {item.employee_name} · {formatEmployeeNumber(item.employee_number)}
+                    </div>
+                  ))}
+                  {previewData.missing_enrolment.length > 40 && (
+                    <p className="pt-1 text-slate-600 dark:text-slate-300">
+                      +{previewData.missing_enrolment.length - 40} more
+                    </p>
+                  )}
+                </PreviewSection>
               )}
             </div>
           )}
@@ -682,26 +843,39 @@ export function AttendanceUserLinkingWorkspace() {
             <Button
               type="button"
               className="min-h-11"
-              onClick={() => executeMutation.mutate()}
+              onClick={() => setConfirmAction("bulk-link")}
               disabled={executeMutation.isPending || (previewData?.summary.will_link ?? 0) === 0}
             >
-              {executeMutation.isPending ? "Executing…" : "Execute Safe Bulk Linking"}
+              Execute Safe Bulk Linking
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Manual Link Dialog */}
-      <Dialog open={manualOpen} onOpenChange={setManualOpen}>
+      <Dialog
+        open={manualOpen}
+        onOpenChange={(open) => {
+          setManualOpen(open);
+          if (!open) {
+            setRowCandidates([]);
+            setSelectedEmployeeId("");
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Link User Account Manually</DialogTitle>
+            <DialogTitle>
+              {rowCandidates.length > 1 ? "Resolve Ambiguous Match" : "Link User Account Manually"}
+            </DialogTitle>
             <DialogDescription>
-              Select an employee record from the active tenant to pair with user {selectedUser?.name}.
+              Select an unlinked employee record to pair with user {selectedUser?.name}.
+              {rowCandidates.length > 0
+                ? " Suggested candidates from the email match are listed first."
+                : ""}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 my-4">
+          <div className="my-4 space-y-4">
             <div className="space-y-1">
               <p className="text-xs font-medium text-slate-700 dark:text-slate-200">Selected User</p>
               <p className="font-bold">{selectedUser?.name}</p>
@@ -723,14 +897,21 @@ export function AttendanceUserLinkingWorkspace() {
                 disabled={employeesList.isLoading}
               >
                 <option value="">
-                  {employeesList.isLoading ? "Loading employees…" : "Choose an employee"}
+                  {employeesList.isLoading ? "Loading employees…" : "Choose an unlinked employee"}
                 </option>
-                {employeesList.data?.data.map((emp) => (
+                {pickerEmployees.map((emp) => (
                   <option key={emp.id} value={emp.id}>
-                    {emp.primary_name} · {formatEmployeeNumber(emp.employee_number)} ({emp.work_email || "no email"})
+                    {emp.suggested ? "★ " : ""}
+                    {emp.name} · {formatEmployeeNumber(emp.number)}
+                    {emp.email ? ` (${emp.email})` : ""}
                   </option>
                 ))}
               </select>
+              {!employeesList.isLoading && pickerEmployees.length === 0 && (
+                <p className="text-xs text-amber-800 dark:text-amber-200">
+                  No unlinked employee records are available to link.
+                </p>
+              )}
               {employeesList.isError && (
                 <div role="alert" className="rounded-md border border-red-700 bg-red-50 p-3 text-sm text-red-950 dark:border-red-300 dark:bg-red-950 dark:text-red-100">
                   <p>Employee records could not be loaded.</p>
@@ -769,7 +950,6 @@ export function AttendanceUserLinkingWorkspace() {
         </DialogContent>
       </Dialog>
 
-      {/* Unlink Confirmation Dialog */}
       <Dialog open={unlinkOpen} onOpenChange={setUnlinkOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -801,6 +981,82 @@ export function AttendanceUserLinkingWorkspace() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={confirmAction !== null} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction === "enrol" ? "Enrol all eligible employees?" : "Link all eligible users?"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction === "enrol"
+                ? `This will create attendance schedules for up to ${summaryData.employees_missing_enrolment} active employees who are not yet enrolled. Existing schedules are left unchanged.`
+                : `This will link ${summaryData.will_link} deterministic email matches and enrol those employees in attendance. Ambiguous matches and conflicts are skipped.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11"
+              onClick={() => setConfirmAction(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="min-h-11"
+              disabled={
+                confirmAction === "enrol"
+                  ? enrolMutation.isPending
+                  : executeMutation.isPending
+              }
+              onClick={() => {
+                if (confirmAction === "enrol") {
+                  enrolMutation.mutate();
+                } else {
+                  executeMutation.mutate();
+                }
+              }}
+            >
+              {confirmAction === "enrol"
+                ? enrolMutation.isPending
+                  ? "Enrolling…"
+                  : "Confirm Enrolment"
+                : executeMutation.isPending
+                  ? "Linking…"
+                  : "Confirm Bulk Link"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
+  );
+}
+
+function PreviewSection({
+  title,
+  tone,
+  children,
+}: {
+  title: string;
+  tone: "emerald" | "purple" | "rose" | "indigo" | "slate";
+  children: ReactNode;
+}) {
+  const titleClass = {
+    emerald: "text-emerald-700 dark:text-emerald-300",
+    purple: "text-purple-700 dark:text-purple-300",
+    rose: "text-rose-700 dark:text-rose-300",
+    indigo: "text-indigo-700 dark:text-indigo-300",
+    slate: "text-slate-700 dark:text-slate-200",
+  }[tone];
+
+  return (
+    <div>
+      <h3 className={`mb-2 text-sm font-bold ${titleClass}`}>{title}</h3>
+      <div className="max-h-40 space-y-1 overflow-y-auto rounded border border-slate-200 p-2 text-xs dark:border-slate-800">
+        {children}
+      </div>
+    </div>
   );
 }
