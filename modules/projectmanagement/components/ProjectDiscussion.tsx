@@ -465,12 +465,13 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
     input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
-  // Converts stored HTML content into editable plain text
+  // Converts stored HTML content into editable plain text. DOMParser builds an
+  // inert document: unlike innerHTML on a live element, it never loads images
+  // or runs handlers such as <img onerror>.
   const htmlToPlainText = (html: string): string => {
-    if (typeof document === 'undefined') return html;
-    const el = document.createElement('div');
-    el.innerHTML = html;
-    return (el.textContent || el.innerText || '').trim();
+    if (typeof DOMParser === 'undefined') return html;
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    return (parsed.body.textContent || '').trim();
   };
 
   const formatCommentDate = (dateString: string) => {
