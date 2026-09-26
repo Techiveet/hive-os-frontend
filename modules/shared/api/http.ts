@@ -12,7 +12,6 @@ const CENTRAL_ONLY_SEGMENTS = new Set([
   "tenants",
   "check-tenant",
   "realtime",
-  "test-export-logo",
 ]);
 
 const isCentralOnlyEndpoint = (url?: string): boolean => {
