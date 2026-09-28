@@ -47,6 +47,11 @@ function CountLineRow({
   const [counted, setCounted] = React.useState<string>(line.counted_quantity ?? "");
   const [serials, setSerials] = React.useState<string>((line.observed_serials ?? []).join("\n"));
 
+  React.useEffect(() => {
+    setCounted(line.counted_quantity ?? "");
+    setSerials((line.observed_serials ?? []).join("\n"));
+  }, [line.id, line.counted_quantity, line.observed_serials]);
+
   const saveMutation = useMutation({
     mutationFn: () => {
       const observed = line.is_serial
@@ -275,7 +280,19 @@ export default function StocktakeDetailPage() {
         </Card>
       ) : lines.length === 0 ? (
         <Card className="rounded-3xl border-border/60 p-8 text-center">
-          <p className="text-sm text-muted-foreground">{t("inventory.stocktake.no_lines", "No count lines.")}</p>
+          <Layers className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "inventory.stocktake.no_lines",
+              "No count lines. There may be no warehouse stock in scope — receive stock or widen the location filter, then regenerate."
+            )}
+          </p>
+          {status === "counting" && canManage ? (
+            <Button className="mt-4 rounded-full" variant="outline" disabled={anyBusy} onClick={() => generateM.mutate()}>
+              {generateM.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}
+              {t("inventory.stocktake.regenerate_btn", "Regenerate Snapshot")}
+            </Button>
+          ) : null}
         </Card>
       ) : (
         <Card className="rounded-3xl border-border/60 p-0">
