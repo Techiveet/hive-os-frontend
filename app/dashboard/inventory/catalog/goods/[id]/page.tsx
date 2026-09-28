@@ -1,4 +1,4 @@
-import InventoryGoodDetailPage from "@/modules/inventory/pages/goods-detail-page";
+import GoodDetailPage from "@/modules/inventory/pages/good-detail-page";
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -8,5 +8,5 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     return null;
   }
 
-  return <InventoryGoodDetailPage goodId={goodId} />;
+  return <GoodDetailPage goodId={goodId} />;
 }

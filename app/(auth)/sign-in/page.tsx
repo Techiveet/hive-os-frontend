@@ -1,5 +1,7 @@
-// app/(auth)/sign-in/page.tsx
 "use client";
+
+// app/(auth)/sign-in/page.tsx
+
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -17,22 +19,31 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { useTheme } from "next-themes";
 import { logFrontendAction } from "@/lib/api"; 
 import { clearHiveSession } from "@/lib/auth-sync";
+import { safeLocalStorageSetItem, safeLocalStorageRemoveItem, safeSessionStorageSetItem, safeSessionStorageRemoveItem, purgeNonEssentialStorage } from "@/lib/safe-storage";
 import { getBackendApiRoot, getPublicServeUrl, getTenantHeaders, getTenantId, getWorkspaceScopeKey, isTenantHost, persistHiveContext } from "@/lib/runtime-context";
 import { initializeSessionActivity } from "@/lib/session-activity";
+import { resolveHomePath } from "@/lib/home-path";
 
 const POST_LOGIN_REDIRECT_STORAGE_KEY = "hive_post_login_redirect";
 const AUTH_SERVER_UNAVAILABLE_MESSAGE =
   "Unable to connect to the authentication server. Please confirm the Hive backend is running and try again.";
 
-const resolveSafePostLoginRedirect = () => {
+/**
+ * An explicit ?redirect= wins (it is how the app returns someone to the page
+ * they were ejected from); otherwise the user's own home surface is used, which
+ * is /learn for everyone on an LMS tenant except its Super Admin.
+ */
+const resolveSafePostLoginRedirect = (user?: unknown) => {
+  const fallback = resolveHomePath(user as Parameters<typeof resolveHomePath>[0]);
+
   if (typeof window === "undefined") {
-    return "/dashboard";
+    return fallback;
   }
 
   const redirect = new URLSearchParams(window.location.search).get("redirect")?.trim();
 
   if (!redirect || !redirect.startsWith("/") || redirect.startsWith("//") || redirect.includes("\\")) {
-    return "/dashboard";
+    return fallback;
   }
 
   return redirect;
@@ -136,17 +147,25 @@ export default function LoginPage() {
       // 🚀 2FA GLOBAL INTERCEPT LOGIC
       // If the user manually enabled 2FA OR the system globally enforces it
       if (data.requires_2fa || data.global_2fa_enforced) {
-        sessionStorage.setItem("hive_pending_email", email);
-        sessionStorage.setItem(POST_LOGIN_REDIRECT_STORAGE_KEY, resolveSafePostLoginRedirect());
-        if (data.two_factor_token) sessionStorage.setItem("hive_2fa_token", data.two_factor_token);
+        safeSessionStorageSetItem("hive_pending_email", email);
+        // Only an explicit ?redirect= is worth carrying across the 2FA step.
+        // The user is not known yet, so their home surface cannot be resolved
+        // here — the 2FA screen does that once it has the authenticated user.
+        const explicitRedirect = new URLSearchParams(window.location.search).get("redirect")?.trim();
+        if (explicitRedirect?.startsWith("/") && !explicitRedirect.startsWith("//") && !explicitRedirect.includes("\\")) {
+          safeSessionStorageSetItem(POST_LOGIN_REDIRECT_STORAGE_KEY, explicitRedirect);
+        } else {
+          safeSessionStorageRemoveItem(POST_LOGIN_REDIRECT_STORAGE_KEY);
+        }
+        if (data.two_factor_token) safeSessionStorageSetItem("hive_2fa_token", data.two_factor_token);
         
         // 🚀 FORCED SETUP: If they haven't configured it yet but the system demands it
         if (data.requires_2fa_setup && data.qr_code_url) {
-            sessionStorage.setItem("hive_2fa_setup_qr", data.qr_code_url);
-            sessionStorage.setItem("hive_2fa_setup_secret", data.secret);
+            safeSessionStorageSetItem("hive_2fa_setup_qr", data.qr_code_url);
+            safeSessionStorageSetItem("hive_2fa_setup_secret", data.secret);
         } else {
-            sessionStorage.removeItem("hive_2fa_setup_qr");
-            sessionStorage.removeItem("hive_2fa_setup_secret");
+            safeSessionStorageRemoveItem("hive_2fa_setup_qr");
+            safeSessionStorageRemoveItem("hive_2fa_setup_secret");
         }
         
         logFrontendAction({ module: 'Auth', action: '2fa_required', description: `Identity ${email} requires strict 2FA clearance. Redirecting.` }).catch(()=>{});
@@ -160,21 +179,22 @@ export default function LoginPage() {
 
       // Standard Login (If no 2FA is required globally or personally)
       clearHiveSession();
-      localStorage.removeItem("hive_original_token");
-      localStorage.setItem("hive_token", data.data.token);
-      localStorage.setItem("hive_user", JSON.stringify(data.data.user));
+      purgeNonEssentialStorage();
+      safeLocalStorageRemoveItem("hive_original_token");
+      safeLocalStorageSetItem("hive_token", data.data.token);
+      safeLocalStorageSetItem("hive_user", JSON.stringify(data.data.user));
       persistHiveContext(data.data.context, data.data.context_signature ?? null);
       initializeSessionActivity();
-      sessionStorage.removeItem("hive_eject_reason");
+      safeSessionStorageRemoveItem("hive_eject_reason");
 
-      const redirectPath = resolveSafePostLoginRedirect();
+      const redirectPath = resolveSafePostLoginRedirect(data.data.user);
       if (data.data.user?.must_change_password) {
-        sessionStorage.setItem("hive_password_change_intended", redirectPath);
+        safeSessionStorageSetItem("hive_password_change_intended", redirectPath);
         window.location.href = "/change-password";
         return;
       }
 
-      sessionStorage.removeItem("hive_password_change_intended");
+      safeSessionStorageRemoveItem("hive_password_change_intended");
       await logFrontendAction({ module: 'UI Telemetry', action: 'session_initialized', description: `Operator ${email} authenticated.` }).catch(()=>{});
       window.location.href = redirectPath;
       

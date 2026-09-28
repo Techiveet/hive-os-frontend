@@ -9,7 +9,8 @@ import {
   onlineManager,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { enqueueFileUpload } from "@/lib/offline/file-upload-queue";
+import { isProtectedTenantFileUrl, openSecureAssetInNewTab } from "@/components/ui/secure-asset-image";
+import { enqueueFileUpload, UploadQueueFullError } from "@/lib/offline/file-upload-queue";
 import { getErrorMessage } from "@/lib/errors";
 import {
   Folder,
@@ -1287,14 +1288,25 @@ export function FileManagerClient({
       if (uploadBaseName) offlineFields.base_name = uploadBaseName;
 
       const queueForLater = async () => {
-        await enqueueFileUpload({
-          file: uploadFile,
-          fileName: uploadFile.name,
-          fileType: uploadFile.type,
-          fields: offlineFields,
-          thumbnail: customThumbnail,
-          label: `upload ${uploadFile.name}`,
-        });
+        try {
+          await enqueueFileUpload({
+            file: uploadFile,
+            fileName: uploadFile.name,
+            fileType: uploadFile.type,
+            fields: offlineFields,
+            thumbnail: customThumbnail,
+            label: `upload ${uploadFile.name}`,
+          });
+        } catch (queueError) {
+          // Browser storage could not hold the file. Report that plainly —
+          // letting the QuotaExceededError escape crashed the file manager.
+          setUploadProgress(0);
+          throw new Error(
+            queueError instanceof UploadQueueFullError
+              ? queueError.message
+              : `${uploadFile.name} could not be saved for retry. Check your connection and upload it again.`,
+          );
+        }
         return { queued: true };
       };
 
@@ -1936,7 +1948,12 @@ export function FileManagerClient({
     if (mime === "application/pdf")
       return (
         <div className="h-full w-full min-h-[60vh] rounded-2xl overflow-hidden border border-border/50">
-          <PdfViewer src={getStreamUrl(safeUrl)} title={mediaTitle} />
+          <PdfViewer
+            src={getStreamUrl(safeUrl)}
+            fetchUrl={isProtectedTenantFileUrl(safeUrl) ? getStreamUrl(safeUrl) : undefined}
+            fetchHeaders={isProtectedTenantFileUrl(safeUrl) ? getAuthHeaders() : undefined}
+            title={mediaTitle}
+          />
         </div>
       );
 
@@ -1959,7 +1976,12 @@ export function FileManagerClient({
     )
       return (
         <div className="h-full w-full min-h-[50vh] rounded-2xl overflow-hidden border border-border/50">
-          <DocumentViewer url={getStreamUrl(safeUrl)} type="office" />
+          <DocumentViewer
+            url={getStreamUrl(safeUrl)}
+            fetchUrl={isProtectedTenantFileUrl(safeUrl) ? getStreamUrl(safeUrl) : undefined}
+            fetchHeaders={isProtectedTenantFileUrl(safeUrl) ? getAuthHeaders() : undefined}
+            type="office"
+          />
         </div>
       );
     return (
@@ -1969,7 +1991,7 @@ export function FileManagerClient({
           Preview Unavailable
         </p>
         <Button
-          onClick={() => window.open(getStreamUrl(safeUrl), "_blank")}
+          onClick={() => void openSecureAssetInNewTab(getStreamUrl(safeUrl)).catch(() => toast.error("Failed to open the file."))}
           className="mt-6 rounded-xl shadow-md px-8"
         >
           <Download className="h-4 w-4 mr-2" /> Download to View

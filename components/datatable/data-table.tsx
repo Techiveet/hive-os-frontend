@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useTranslation } from "@/store/use-translation";
 import {
   ArrowDown,
   ArrowUp,
@@ -63,7 +62,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import api from "@/lib/api";
-import { getBackendStorageUrl, getPublicServeUrl } from "@/lib/runtime-context";
+import { getBackendStorageUrl } from "@/lib/runtime-context";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -132,6 +131,9 @@ interface DataTableProps<TData, TValue> {
   exportEndpoint?: string;
   resourceName?: string;
   syncWithUrl?: boolean;
+  defaultSearch?: string;
+  defaultSortCol?: string;
+  defaultSortDir?: "asc" | "desc";
   onCopy?: () => void;
   onPrint?: () => void;
   onExport?: (format: string) => void;
@@ -270,10 +272,10 @@ function buildExportBranding(
     backendLogoUrl ||
     merged.logo_url ||
     (typeof merged.pdf_logo === "string"
-      ? getPublicServeUrl(merged.pdf_logo) || getBackendStorageUrl(merged.pdf_logo)
+      ? getBackendStorageUrl(merged.pdf_logo)
       : null) ||
     (typeof merged.logo === "string"
-      ? getPublicServeUrl(merged.logo) || getBackendStorageUrl(merged.logo)
+      ? getBackendStorageUrl(merged.logo)
       : null);
 
   return {
@@ -492,7 +494,6 @@ export function DataTableColumnHeader<TData, TValue>({
   title: string;
   className?: string;
 }) {
-  const { t } = useTranslation();
   if (!column.getCanSort()) return <div className={className}>{title}</div>;
   return (
     <div className={cn("flex items-center space-x-2", className)}>
@@ -516,16 +517,16 @@ export function DataTableColumnHeader<TData, TValue>({
         <DropdownMenuContent align="start">
           <DropdownMenuItem onClick={() => column.toggleSorting(false)}>
             <ArrowUp className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />{" "}
-            {t("global.ascending", "Ascending")}
+            Ascending
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => column.toggleSorting(true)}>
             <ArrowDown className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />{" "}
-            {t("global.descending", "Descending")}
+            Descending
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => column.toggleVisibility(false)}>
             <EyeOff className="mr-2 h-3.5 w-3.5 text-muted-foreground/70" />{" "}
-            {t("global.hide", "Hide")}
+            Hide
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -547,8 +548,7 @@ function DataTableInner<TData, TValue>({
   description,
   caption,
   emptyMessage,
-  searchPlaceholder,
-
+  searchPlaceholder = "Search...",
   serverSearchDebounceMs = 400,
   className,
   enableRowSelection = false,
@@ -561,6 +561,9 @@ function DataTableInner<TData, TValue>({
   exportEndpoint,
   resourceName = "records",
   syncWithUrl = true,
+  defaultSearch = "",
+  defaultSortCol,
+  defaultSortDir = "desc",
   onCopy,
   onPrint,
   onExport,
@@ -572,8 +575,6 @@ function DataTableInner<TData, TValue>({
   canRefresh,
   renderSubComponent,
 }: DataTableProps<TData, TValue>) {
-  const { t, locale } = useTranslation();
-  const effectiveSearchPlaceholder = searchPlaceholder || t("global.search", "Search...");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -591,17 +592,16 @@ function DataTableInner<TData, TValue>({
     : Number(pageSize) || 10;
 
   const [busy, setBusy] = React.useState(false);
-  const [searchValue, setSearchValue] = React.useState(getParam("search", ""));
-  const [sorting, setSorting] = React.useState<SortingState>(
-    getParam("sortCol", null)
-      ? [
-          {
-            id: getParam("sortCol", ""),
-            desc: getParam("sortDir", "") === "desc",
-          },
-        ]
-      : [],
+  const [searchValue, setSearchValue] = React.useState(
+    syncWithUrl ? String(getParam("search", "")) : defaultSearch,
   );
+  const [sorting, setSorting] = React.useState<SortingState>(() => {
+    const sortCol = syncWithUrl ? getParam("sortCol", null) : defaultSortCol;
+    const sortDir = syncWithUrl ? getParam("sortDir", "") : defaultSortDir;
+    return sortCol
+      ? [{ id: String(sortCol), desc: sortDir === "desc" }]
+      : [];
+  });
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
@@ -926,7 +926,7 @@ function DataTableInner<TData, TValue>({
             />
             <Input
               id={searchInputId}
-              placeholder={effectiveSearchPlaceholder}
+              placeholder={searchPlaceholder}
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
               className="h-11 pl-9 pr-12 bg-background/50 rounded-lg"
@@ -991,21 +991,21 @@ function DataTableInner<TData, TValue>({
                         onClick={() => handleExportAPI("csv")}
                       >
                         <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />{" "}
-                        {t("global.export_csv", "Export to CSV")}
+                        Export to CSV
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="cursor-pointer font-medium"
                         onClick={() => handleExportAPI("xlsx")}
                       >
                         <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" />{" "}
-                        {t("global.export_excel", "Export to Excel")}
+                        Export to Excel
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="cursor-pointer font-medium"
                         onClick={() => handleExportAPI("pdf")}
                       >
                         <FileText className="mr-2 h-4 w-4 text-red-600" />{" "}
-                        {t("global.export_pdf", "Export to PDF")}
+                        Export to PDF
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -1209,7 +1209,7 @@ function DataTableInner<TData, TValue>({
                     colSpan={mergedColumns.length}
                     className="h-40 text-center text-muted-foreground font-medium"
                   >
-                    {emptyMessage ?? t("global.no_records_found", "No records found matching your filters.")}
+                    {emptyMessage ?? "No records found matching your filters."}
                   </TableCell>
                 </TableRow>
               )}
@@ -1220,11 +1220,19 @@ function DataTableInner<TData, TValue>({
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-border/50 bg-muted/10">
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">
-              {t("global.showing_entries", "Showing :from to :to of :total entries", {
-                from: String(totalEntries > 0 ? (effectivePageIndex - 1) * effectivePageSize + 1 : 0),
-                to: String(Math.min(effectivePageIndex * effectivePageSize, totalEntries)),
-                total: String(totalEntries),
-              })}
+              Showing{" "}
+              <span className="font-bold text-foreground">
+                {totalEntries > 0
+                  ? (effectivePageIndex - 1) * effectivePageSize + 1
+                  : 0}
+              </span>{" "}
+              to{" "}
+              <span className="font-bold text-foreground">
+                {Math.min(effectivePageIndex * effectivePageSize, totalEntries)}
+              </span>{" "}
+              of{" "}
+              <span className="font-bold text-foreground">{totalEntries}</span>{" "}
+              entries
             </span>
             <label htmlFor={pageSizeInputId} className="sr-only">
               Rows per page
@@ -1245,7 +1253,7 @@ function DataTableInner<TData, TValue>({
             >
               {pageSizeOptions.map((n) => (
                 <option key={n} value={n}>
-                  {n} {t("global.rows", "Rows")}
+                  {n} Rows
                 </option>
               ))}
             </select>
@@ -1272,7 +1280,7 @@ function DataTableInner<TData, TValue>({
               }
               disabled={effectivePageIndex <= 1 || loading || busy}
             >
-              {t("global.previous", "Previous")}
+              Previous
             </Button>
 
             <div className="flex items-center gap-1 hidden sm:flex">
@@ -1342,7 +1350,7 @@ function DataTableInner<TData, TValue>({
               }
               disabled={effectivePageIndex >= pageCount || loading || busy}
             >
-              {t("global.next", "Next")}
+              Next
             </Button>
           </div>
         </div>
@@ -1355,7 +1363,7 @@ function DataTableInner<TData, TValue>({
               {selectedCount}
             </span>
             <span className="text-sm font-medium text-foreground hidden sm:inline-block">
-              {t("global.selected", "Selected")}
+              Selected
             </span>
             {(showSelectionCopy ||
               showSelectionExport ||

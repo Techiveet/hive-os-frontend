@@ -1,0 +1,38 @@
+"use client";
+
+import Link from "next/link";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, CheckCircle2, CopyPlus } from "lucide-react";
+import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { usePermissions } from "@/hooks/use-permissions";
+import { logisticsApi } from "@/modules/logistics/api";
+import type { RateSheet } from "@/modules/logistics/types";
+import { useTranslation } from "@/store/use-translation";
+
+export default function LogisticsRateSheetDetailPage({ rateSheetId }: { rateSheetId: string }) {
+  const { t } = useTranslation(); const cache = useQueryClient(); const id = Number(rateSheetId);
+  const { hasAnyPermission } = usePermissions();
+  const canRevise = hasAnyPermission(["update_logistics_rates", "manage_logistics"]);
+  const canActivate = hasAnyPermission(["approve_logistics_rates", "manage_logistics"]);
+  const query = useQuery({ queryKey: ["logistics", "rate", id], queryFn: () => logisticsApi.rateSheet(id).then((response) => response.data.data as RateSheet), enabled: Number.isInteger(id) });
+  const refresh = async () => cache.invalidateQueries({ queryKey: ["logistics", "rate", id] });
+  const activate = useMutation({ mutationFn: () => logisticsApi.activateRateSheet(id), onSuccess: async () => { await refresh(); toast.success(t("logistics.rates.activated")); } });
+  const revise = useMutation({ mutationFn: (version: Record<string, unknown>) => logisticsApi.reviseRateSheet(id, version), onSuccess: async () => { await refresh(); toast.success(t("logistics.rates.revised")); } });
+  if (query.isLoading) return <div role="status" className="flex items-center gap-2"><Spinner />{t("logistics.loading")}</div>;
+  if (query.isError || !query.data) return <Alert variant="destructive"><AlertTitle>{t("logistics.errors.load_title")}</AlertTitle><AlertDescription>{t("logistics.errors.rate")}</AlertDescription></Alert>;
+  const rate = query.data; const latest = rate.versions?.[0];
+  const submitRevision = (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!latest) return; const data = new FormData(event.currentTarget); revise.mutate({ effective_date: data.get("effective_date"), expiry_date: data.get("expiry_date") || null, revision_notes: data.get("revision_notes"), lines: latest.lines.map((line, index) => ({ charge_code_id: line.charge_code_id, description_snapshot: line.description, basis: line.basis, default_quantity: line.default_quantity ?? null, buy_rate: line.buy_rate ?? "0", sell_rate: line.sell_rate, minimum_buy_amount: line.minimum_buy_amount ?? null, minimum_sell_amount: line.minimum_sell_amount ?? null, calculation_order: index })) }); };
+  return <main className="flex flex-col gap-6"><header className="flex flex-wrap items-end justify-between gap-4"><div className="flex flex-col gap-2"><Button variant="link" asChild className="h-auto justify-start p-0"><Link href="/dashboard/logistics/rates"><ArrowLeft data-icon="inline-start" aria-hidden="true" />{t("logistics.actions.back_rates")}</Link></Button><div className="flex flex-wrap items-center gap-3"><h1 className="font-mono text-3xl font-black tracking-tight">{rate.rate_sheet_number}</h1><Badge variant={rate.status === "active" ? "default" : "secondary"}>{t(`logistics.status.${rate.status}`)}</Badge></div><p className="text-sm text-muted-foreground">{rate.name}</p></div>{canActivate && rate.status !== "active" ? <Button onClick={() => activate.mutate()} disabled={activate.isPending}>{activate.isPending ? <Spinner data-icon="inline-start" /> : <CheckCircle2 data-icon="inline-start" aria-hidden="true" />}{t("logistics.actions.activate_rate")}</Button> : null}</header>
+    <Card><CardHeader><CardTitle>{t("logistics.rates.scope")}</CardTitle><CardDescription>{rate.service_type ?? t("logistics.rates.all_services")}</CardDescription></CardHeader><CardContent><dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-xs uppercase text-muted-foreground">{t("logistics.fields.provider")}</dt><dd className="font-semibold">{rate.supplier?.name ?? "—"}</dd></div><div><dt className="text-xs uppercase text-muted-foreground">{t("logistics.fields.route")}</dt><dd className="font-semibold">{rate.origin_node?.name ?? "*"} → {rate.destination_node?.name ?? "*"}</dd></div><div><dt className="text-xs uppercase text-muted-foreground">{t("logistics.fields.mode")}</dt><dd className="font-semibold">{rate.transport_mode?.name ?? t("logistics.rates.all_modes")}</dd></div><div><dt className="text-xs uppercase text-muted-foreground">{t("logistics.fields.currency")}</dt><dd className="font-semibold">{rate.currency}</dd></div></dl></CardContent></Card>
+    {rate.versions?.map((version) => <Card key={version.id}><CardHeader><CardTitle>{t("logistics.fields.version")} {version.version}</CardTitle><CardDescription>{version.effective_date} → {version.expiry_date ?? t("logistics.rates.open_ended")}</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><Table><caption className="sr-only">{t("logistics.rates.lines_caption", undefined, { version: version.version })}</caption><TableHeader><TableRow><TableHead scope="col">{t("logistics.fields.charge_code")}</TableHead><TableHead scope="col">{t("logistics.fields.description")}</TableHead><TableHead scope="col">{t("logistics.fields.basis")}</TableHead>{version.lines.some((line) => line.buy_rate !== undefined) ? <TableHead scope="col">{t("logistics.fields.buy_rate")}</TableHead> : null}<TableHead scope="col">{t("logistics.fields.sell_rate")}</TableHead></TableRow></TableHeader><TableBody>{version.lines.map((line) => <TableRow key={line.id}><TableCell>{line.charge_code?.code ?? line.charge_code_id}</TableCell><TableCell>{line.description}</TableCell><TableCell>{t(`logistics.rate_basis.${line.basis}`)}</TableCell>{line.buy_rate !== undefined ? <TableCell>{line.buy_rate}</TableCell> : null}<TableCell>{line.sell_rate}</TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card>)}
+    {canRevise && latest ? <Card><CardHeader><CardTitle>{t("logistics.rates.new_revision")}</CardTitle><CardDescription>{t("logistics.rates.new_revision_description")}</CardDescription></CardHeader><CardContent><form onSubmit={submitRevision} className="flex flex-col gap-5"><FieldGroup className="grid md:grid-cols-3"><Field><FieldLabel htmlFor="revision-effective">{t("logistics.fields.effective_date")}</FieldLabel><Input id="revision-effective" name="effective_date" type="date" required /></Field><Field><FieldLabel htmlFor="revision-expiry">{t("logistics.fields.expiry_date")}</FieldLabel><Input id="revision-expiry" name="expiry_date" type="date" /></Field><Field><FieldLabel htmlFor="revision-notes">{t("logistics.fields.revision_notes")}</FieldLabel><Input id="revision-notes" name="revision_notes" required /></Field></FieldGroup><div className="flex justify-end"><Button type="submit" disabled={revise.isPending}>{revise.isPending ? <Spinner data-icon="inline-start" /> : <CopyPlus data-icon="inline-start" aria-hidden="true" />}{t("logistics.actions.create_revision")}</Button></div></form></CardContent></Card> : null}
+  </main>;
+}

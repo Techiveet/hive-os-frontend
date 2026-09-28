@@ -33,7 +33,7 @@ import { fetchSubscriptionCatalog } from "@/modules/subscription/api";
 import { ModuleSubscriptionSummary } from "@/modules/subscription/components/module-subscription-summary";
 import type { TenantCustomModuleInput, TenantSelectedModule } from "@/modules/subscription/types";
 import { type VirtualFile } from "@/components/ui/code-editor";
-import { fetchTenants } from "@/modules/tenancy/api";
+import { api, fetchTenants } from "@/modules/tenancy/api";
 import { TenantDomainManager } from "@/modules/tenancy/components/tenant-domain-manager";
 import { TenantLandingTemplateEditor } from "@/modules/tenancy/components/tenant-landing-template-editor";
 import { TemplatePickerDialog } from "@/modules/landing-templates/components/template-picker-dialog";
@@ -158,6 +158,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
     const canEdit = hasAnyPermission(["manage_tenants", "edit_tenants"]);
     const canDelete = hasAnyPermission(["manage_tenants", "delete_tenants"]);
     const canSuspend = hasAnyPermission(["manage_tenants", "suspend_tenants"]);
+    const canExport = hasAnyPermission(["manage_tenants", "export_tenants"]);
 
     const [page, setPage] = React.useState(1);
     const [pageSize, setPageSize] = useLocalStorage<number>("tenants_table_page_size", 10);
@@ -220,9 +221,12 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
     const { data: settingsBusinessTypes } = useQuery({
         queryKey: ["settings", "landing-templates", workspaceScope],
         queryFn: async () => {
-            const res = await fetch(`${getBackendApiRoot()}/settings/landing-templates`);
-            const json = await res.json();
-            return json?.data?.business_types ?? [];
+            // Use the shared API client so the request carries the auth and
+            // tenant headers. A bare fetch() was unauthenticated, always got a
+            // 302 to sign-in, and silently fell back — so custom business types
+            // configured in settings never reached the create/edit dropdown.
+            const res = await api.get("/settings/landing-templates");
+            return res?.data?.data?.business_types ?? [];
         },
         enabled: canCreate || canEdit,
         staleTime: 60_000, // 1 minute cache
@@ -464,7 +468,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
         });
         writeLandingTemplate(hydrated, matchingBusinessType.default_template);
         setShowLandingPreview(true);
-        toast.success(t('tenants.template_selected', `Applied template: ${tpl.name}`));
+        toast.success(t('tenants.template_selected', `Applied template: ${tpl.name}`, { name: tpl.name }));
     }, [activeBusinessTypeDefinition, businessTypes, formBusinessType, t, writeLandingTemplate]);
 
     const handleResetTemplate = React.useCallback(() => {
@@ -738,7 +742,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
         {
             id: "business_type",
             accessorFn: (row) => row.business_type_meta?.label || row.business_type || "General Business",
-            header: "Business Type",
+            header: t('tenants.business_type', "Business Type"),
             cell: ({ row }) => (
                 <Badge variant="outline" className="border-primary/20 bg-primary/5 text-[11px] uppercase tracking-wider text-primary">
                     {row.original.business_type_meta?.label || row.original.business_type || "General Business"}
@@ -905,20 +909,11 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                         <Server className="h-5 w-5" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-space font-black tracking-tight">{t('tenants.title', 'Tenant Accounts')}</h1>
+                        <h2 className="text-xl font-space font-black tracking-tight">{t('tenants.title', 'Tenant Accounts')}</h2>
                         <p className="text-xs text-muted-foreground">{t('tenants.subtitle', 'Provision, monitor, and manage isolated tenant database instances.')}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button
-                        id="tour-tenants-tour-btn"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleStartTour}
-                        className="h-10 rounded-xl shadow-sm text-muted-foreground hover:text-foreground border-border/50 bg-background/50 backdrop-blur-md flex items-center gap-1.5 font-bold"
-                    >
-                        <HelpCircle className="w-4 h-4" /> {t('tenants.tour_btn', 'Node Tour')}
-                    </Button>
                     {canCreate && (
                         <div id="tour-tenant-provision">
                             <Button onClick={openCreate} className="rounded-xl shadow-lg shadow-primary/20 h-10 px-6 font-bold tracking-wide"><PlusCircle className="mr-2 h-4 w-4" /> {t('tenants.provision_btn', 'Create Tenant Account')}</Button>
@@ -930,7 +925,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
             <div id="tour-tenant-table">
                 <DataTable
                     key={tableKey} columns={columns} data={tenantsData?.rows || []} totalEntries={tenantsData?.total || 0}
-                    loading={isLoading || isFetching} exportEndpoint={exportUrl} resourceName="tenants" enableRowSelection={true}
+                    loading={isLoading || isFetching} exportEndpoint={canExport ? exportUrl : undefined} canExport={canExport} resourceName="tenants" enableRowSelection={true}
                     pageIndex={page} pageSize={pageSize} onQueryChange={handleQueryChange} onRefresh={handleRefresh}
                     onResetFilters={resetFilters} onDeleteRows={canDelete ? handleDeleteRows : undefined}
                     searchPlaceholder={t('tenants.search_placeholder', "Filter nodes by ID or name...")} syncWithUrl={true}
@@ -972,9 +967,9 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                                     </div>
                                 </div>
                                 <div className="col-span-2 space-y-4">
-                                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5 border-b border-border/40 pb-2"><LayoutTemplate className="h-3.5 w-3.5" /> Business Landing</h4>
+                                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5 border-b border-border/40 pb-2"><LayoutTemplate className="h-3.5 w-3.5" /> {t('tenants.business_landing', "Business Landing")}</h4>
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs uppercase tracking-widest text-muted-foreground">Business Type</Label>
+                                        <Label className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.business_type', 'Business Type')}</Label>
                                         <Select value={formBusinessType} onValueChange={handleBusinessTypeChange}>
                                             <SelectTrigger className="h-11 bg-muted/30">
                                                 <SelectValue />
@@ -1120,18 +1115,18 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                                 {viewTenant?.plan && getPlanBadge(viewTenant.plan)}
                             </div>
                             <div>
-                                <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Business Type</p>
+                                <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">{t('tenants.business_type', 'Business Type')}</p>
                                 <Badge variant="outline" className="border-primary/20 bg-primary/5 text-[11px] uppercase tracking-wider text-primary">
                                     {viewTenant?.business_type_meta?.label || viewTenant?.business_type || "General Business"}
                                 </Badge>
                             </div>
                             <div>
-                                <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">Subscription</p>
+                                <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">{t('tenants.subscription', 'Subscription')}</p>
                                 <Badge variant="outline" className={cn("uppercase text-[11px]", viewTenant?.subscription?.status === "expired" ? "text-destructive bg-destructive/10" : viewTenant?.subscription?.needs_renewal ? "text-amber-600 bg-amber-500/10" : "text-emerald-500 bg-emerald-500/10")}>
                                     {String(viewTenant?.subscription?.status || "active").replaceAll("_", " ")}
                                 </Badge>
                                 <p className="mt-2 text-xs text-muted-foreground">
-                                    {viewTenant?.subscription?.expires_at ? `Expires ${new Date(viewTenant.subscription.expires_at).toLocaleDateString()}` : "No expiry date available"}
+                                    {viewTenant?.subscription?.expires_at ? `Expires ${new Date(viewTenant.subscription.expires_at).toLocaleDateString()}` : t('tenants.no_expiry', "No expiry date available")}
                                 </p>
                             </div>
                             <div className="col-span-2">
@@ -1143,7 +1138,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                                 <div className="space-y-3 rounded-xl border border-border/50 bg-muted/30 p-3">
                                     <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
                                         <Layers className="h-4 w-4 text-primary" />
-                                        {viewTenant?.subscribed_modules_count || 0} active modules
+                                        {viewTenant?.subscribed_modules_count || 0} {t('tenants.modules_subscribed', "active modules")}
                                     </div>
                                     <ModuleSubscriptionSummary
                                         modules={viewTenant?.subscribed_modules}

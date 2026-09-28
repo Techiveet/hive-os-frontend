@@ -1,4 +1,4 @@
-// components/dashboard/mobile-sidebar.tsx
+﻿// components/dashboard/mobile-sidebar.tsx
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -37,11 +37,13 @@ import {
   HandCoins,
   Factory,
   Compass,
+  FileText,
   Sprout,
   LifeBuoy,
   ShieldCheck,
   Telescope,
   Truck,
+  Building2,
   Handshake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,7 +65,7 @@ import {
 } from "./nav";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTranslation } from "@/store/use-translation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { useBusinessType } from "@/hooks/use-business-type";
 import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
@@ -76,7 +78,7 @@ import {
   getWorkspaceScopeKey,
   isTenantSession,
 } from "@/lib/runtime-context";
-import { clearHiveSession, handleAuthFailureResponse } from "@/lib/auth-sync";
+import { handleAuthFailureResponse, logoutHiveSession } from "@/lib/auth-sync";
 
 type SidebarIcon = React.ComponentType<{
   className?: string;
@@ -191,6 +193,7 @@ const SecureMobileLogo = ({
 export function MobileSidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
   const { hasAnyPermission } = usePermissions();
   const { hasModule } = useTenantModuleAccess();
@@ -223,12 +226,15 @@ export function MobileSidebar() {
   const [isPerformanceOpen, setIsPerformanceOpen] = useState(false);
   const [isProcurementOpen, setIsProcurementOpen] = useState(false);
   const [isSupplyChainOpen, setIsSupplyChainOpen] = useState(false);
+  const [isLogisticsOpen, setIsLogisticsOpen] = useState(false);
   const [isSalesOpen, setIsSalesOpen] = useState(false);
   const [isCrmOpen, setIsCrmOpen] = useState(false);
   const [isFleetOpen, setIsFleetOpen] = useState(false);
+  const [isPropertyOpen, setIsPropertyOpen] = useState(false);
   const [isServiceOpen, setIsServiceOpen] = useState(false);
   const [isInternalAuditOpen, setIsInternalAuditOpen] = useState(false);
   const [isStrategyOpen, setIsStrategyOpen] = useState(false);
+  const [isDailyReportsOpen, setIsDailyReportsOpen] = useState(false);
   const [isVantageOpen, setIsVantageOpen] = useState(false);
   const [isAgricultureOpen, setIsAgricultureOpen] = useState(false);
   const [isProductionOpen, setIsProductionOpen] = useState(false);
@@ -274,8 +280,11 @@ export function MobileSidebar() {
       ? brandSettings?.logo_dark || brandSettings?.logo_light
       : brandSettings?.logo_light || brandSettings?.logo_dark;
 
-  const handleLogout = () => {
-    clearHiveSession();
+  const handleLogout = async () => {
+    // Revoke the token server-side before dropping local state; clearing
+    // storage alone leaves the bearer token usable outside the browser.
+    await logoutHiveSession();
+    queryClient.clear();
     setOpen(false);
     router.push("/sign-in");
   };
@@ -437,6 +446,9 @@ export function MobileSidebar() {
   const supplyChainModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "supplychain",
   );
+  const logisticsModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "logistics",
+  );
   const salesModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "sales",
   );
@@ -446,11 +458,17 @@ export function MobileSidebar() {
   const fleetModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "fleet",
   );
+  const propertyModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "property",
+  );
   const serviceModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "service",
   );
   const internalAuditModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "internal-audit",
+  );
+  const dailyReportsModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "daily-reports",
   );
   const strategyModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "strategy",
@@ -547,6 +565,10 @@ export function MobileSidebar() {
       setIsModulesOpen(true);
       setIsSupplyChainOpen(true);
     }
+    if (pathname.startsWith("/dashboard/logistics")) {
+      setIsModulesOpen(true);
+      setIsLogisticsOpen(true);
+    }
     if (pathname.startsWith("/dashboard/sales")) {
       setIsModulesOpen(true);
       setIsSalesOpen(true);
@@ -559,6 +581,10 @@ export function MobileSidebar() {
       setIsModulesOpen(true);
       setIsFleetOpen(true);
     }
+    if (pathname.startsWith("/dashboard/property")) {
+      setIsModulesOpen(true);
+      setIsPropertyOpen(true);
+    }
     if (pathname.startsWith("/dashboard/service")) {
       setIsModulesOpen(true);
       setIsServiceOpen(true);
@@ -566,6 +592,10 @@ export function MobileSidebar() {
     if (pathname.startsWith("/dashboard/internal-audit")) {
       setIsModulesOpen(true);
       setIsInternalAuditOpen(true);
+    }
+    if (pathname.startsWith("/dashboard/daily-reports")) {
+      setIsModulesOpen(true);
+      setIsDailyReportsOpen(true);
     }
     if (pathname.startsWith("/dashboard/strategy")) {
       setIsModulesOpen(true);
@@ -774,23 +804,32 @@ export function MobileSidebar() {
             </Link>
           </SheetClose>
           <button
+            type="button"
             onClick={(event) => {
               event.preventDefault();
               setIsProjectManagementOpen((value) => !value);
             }}
-            className="rounded-md p-1 transition-colors hover:bg-muted"
-            aria-label="Toggle project management menu"
+            className="rounded-md p-1 text-primary transition-colors hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary-readable))]"
+            aria-expanded={isProjectManagementOpen}
+            aria-controls="mobile-project-management-links"
+            aria-label={t(
+              "nav.toggle_project_management",
+              "Toggle project management menu",
+            )}
           >
             {isProjectManagementOpen ? (
-              <ChevronDown className="h-4 w-4 opacity-50" />
+              <ChevronDown aria-hidden="true" className="h-4 w-4" />
             ) : (
-              <ChevronRight className="h-4 w-4 opacity-50" />
+              <ChevronRight aria-hidden="true" className="h-4 w-4" />
             )}
           </button>
         </div>
 
         {isProjectManagementOpen && (
-          <div className="mb-2 flex flex-col gap-1 pl-4 animate-in slide-in-from-top-1 duration-200">
+          <div
+            id="mobile-project-management-links"
+            className="mb-2 flex flex-col gap-1 pl-4 animate-in slide-in-from-top-1 duration-200"
+          >
             <SheetClose asChild>
               <Link
                 href="/dashboard/project-management"
@@ -1077,6 +1116,18 @@ export function MobileSidebar() {
                         })}
 
                         {renderModuleSection({
+                          items: logisticsModuleItems,
+                          label: t(
+                            "nav.logistics",
+                            "Logistics & Freight Forwarding",
+                          ),
+                          icon: Truck,
+                          openState: isLogisticsOpen,
+                          onToggle: () =>
+                            setIsLogisticsOpen((value) => !value),
+                        })}
+
+                        {renderModuleSection({
                           items: salesModuleItems,
                           label: t("nav.sales", "Sales Management"),
                           icon: BadgeDollarSign,
@@ -1098,6 +1149,14 @@ export function MobileSidebar() {
                           icon: Truck,
                           openState: isFleetOpen,
                           onToggle: () => setIsFleetOpen((value) => !value),
+                        })}
+
+                        {renderModuleSection({
+                          items: propertyModuleItems,
+                          label: t("nav.property", "Property Management"),
+                          icon: Building2,
+                          openState: isPropertyOpen,
+                          onToggle: () => setIsPropertyOpen((value) => !value),
                         })}
 
                         {renderModuleSection({
@@ -1123,6 +1182,14 @@ export function MobileSidebar() {
                           openState: isStrategyOpen,
                           onToggle: () => setIsStrategyOpen((value) => !value),
                         })}
+
+                          {renderModuleSection({
+                            items: dailyReportsModuleItems,
+                            label: t("nav.daily_reports", "Daily Reports"),
+                            icon: FileText,
+                            openState: isDailyReportsOpen,
+                            onToggle: () => setIsDailyReportsOpen((value) => !value),
+                          })}
 
                         {renderModuleSection({
                           items: vantageModuleItems,
@@ -1209,25 +1276,31 @@ export function MobileSidebar() {
                   (canAccessConverter || canAccessMail || hasChatWorkspace) && (
                     <div className="mt-2 flex flex-col gap-1">
                       <button
+                        type="button"
                         id="tour-nav-apps"
                         onClick={() => setIsAppsOpen((value) => !value)}
+                        aria-expanded={isAppsOpen}
+                        aria-controls="mobile-apps-tools-links"
                         className={dropdownTriggerClass(isAppsOpen)}
                       >
                         <div className="flex items-center gap-3">
-                          <Layers className="h-4 w-4 shrink-0" />
+                          <Layers aria-hidden="true" className="h-4 w-4 shrink-0" />
                           <span className="truncate">
                             {t("nav.apps_tools", "Apps & Tools")}
                           </span>
                         </div>
                         {isAppsOpen ? (
-                          <ChevronDown className="h-4 w-4 opacity-50" />
+                          <ChevronDown aria-hidden="true" className="h-4 w-4 opacity-50" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 opacity-50" />
+                          <ChevronRight aria-hidden="true" className="h-4 w-4 opacity-50" />
                         )}
                       </button>
 
                       {isAppsOpen && (
-                        <div className="mt-1 flex flex-col gap-1 pl-4 animate-in slide-in-from-top-2 duration-200">
+                        <div
+                          id="mobile-apps-tools-links"
+                          className="mt-1 flex flex-col gap-1 pl-4 animate-in slide-in-from-top-2 duration-200"
+                        >
                           {canAccessConverter &&
                             renderAppLink(
                               "/dashboard/tools/converters",
@@ -1295,10 +1368,11 @@ export function MobileSidebar() {
 
                     <SheetClose asChild>
                       <button
+                        type="button"
                         onClick={handleLogout}
                         className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] font-bold text-destructive transition-colors hover:bg-destructive/15"
                       >
-                        <LogOut className="h-4 w-4 shrink-0" />
+                        <LogOut aria-hidden="true" className="h-4 w-4 shrink-0" />
                         <span className="truncate">
                           {t("nav.disconnect", "Disconnect Node")}
                         </span>

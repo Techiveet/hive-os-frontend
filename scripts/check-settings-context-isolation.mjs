@@ -23,6 +23,20 @@ const sandbox = {
   },
   URL,
   URLSearchParams,
+  require: (specifier) => {
+    if (specifier !== "@/lib/safe-storage") {
+      throw new Error(`Unexpected runtime-context dependency: ${specifier}`);
+    }
+
+    return {
+      safeLocalStorageGetItem: (key) =>
+        sandbox.window?.localStorage.getItem(key) ?? null,
+      safeLocalStorageSetItem: (key, value) =>
+        sandbox.window?.localStorage.setItem(key, value),
+      safeLocalStorageRemoveItem: (key) =>
+        sandbox.window?.localStorage.removeItem(key),
+    };
+  },
 };
 
 vm.runInNewContext(transpiled, sandbox, { filename: "runtime-context.cjs" });

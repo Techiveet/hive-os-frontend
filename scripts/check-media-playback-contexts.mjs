@@ -1,15 +1,65 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import path from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
 
-const source = fs.readFileSync("lib/runtime-context.ts", "utf8");
-const transpiled = ts.transpileModule(source, {
-  compilerOptions: {
-    module: ts.ModuleKind.CommonJS,
-    target: ts.ScriptTarget.ES2022,
-  },
-}).outputText;
+const COMPILER_OPTIONS = {
+  module: ts.ModuleKind.CommonJS,
+  target: ts.ScriptTarget.ES2022,
+};
+
+const compile = (file) =>
+  ts.transpileModule(fs.readFileSync(file, "utf8"), {
+    compilerOptions: COMPILER_OPTIONS,
+  }).outputText;
+
+/*
+ * runtime-context.ts imports its sibling modules by the "@/..." alias. The
+ * sandbox had no `require`, so the moment the file grew its first import
+ * (@/lib/safe-storage) this whole check died with "require is not defined"
+ * before asserting anything - a green `npm run verify:media` that verified
+ * nothing. This resolves the alias against the repo root and runs the real
+ * dependency in the same sandbox, so the check keeps exercising real code.
+ */
+const moduleCache = new Map();
+
+const sandboxRequire = (specifier) => {
+  if (!specifier.startsWith("@/")) {
+    throw new Error(`Unexpected import "${specifier}" in the runtime-context sandbox.`);
+  }
+
+  const resolved = path.resolve(specifier.slice(2) + ".ts");
+
+  if (moduleCache.has(resolved)) {
+    return moduleCache.get(resolved).exports;
+  }
+
+  const dependency = { exports: {} };
+  moduleCache.set(resolved, dependency);
+
+  // Run in the one shared context, temporarily pointing module/exports at this
+  // dependency. Every module must see the same live `window`, because the
+  // assertions below swap it between cases via setWindow().
+  const outerModule = sandbox.module;
+  const outerExports = sandbox.exports;
+
+  sandbox.module = dependency;
+  sandbox.exports = dependency.exports;
+
+  try {
+    vm.runInContext(compile(resolved), context, {
+      filename: path.basename(resolved).replace(/\.ts$/, ".js"),
+    });
+  } finally {
+    sandbox.module = outerModule;
+    sandbox.exports = outerExports;
+  }
+
+  return dependency.exports;
+};
+
+const transpiled = compile("lib/runtime-context.ts");
 
 const module = { exports: {} };
 const requests = [];
@@ -54,9 +104,15 @@ const sandbox = {
   },
   window: undefined,
   localStorage: undefined,
+  console,
 };
 
-vm.runInNewContext(transpiled, sandbox, { filename: "runtime-context.js" });
+sandbox.require = sandboxRequire;
+sandbox.globalThis = sandbox;
+
+const context = vm.createContext(sandbox);
+
+vm.runInContext(transpiled, context, { filename: "runtime-context.js" });
 const runtime = module.exports;
 
 const setWindow = (hostname, values) => {

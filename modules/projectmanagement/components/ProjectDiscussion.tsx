@@ -22,7 +22,8 @@ import { AudioPlayer } from "@/components/ui/audio-player";
 import { PdfViewer } from "@/components/ui/pdf-viewer";
 import { DocumentViewer } from "@/components/ui/document-viewer";
 import { Model3DViewer } from "@/components/ui/model-3d-viewer";
-import { getStreamUrl, getBackendStorageUrl, getBackendApiRoot } from "@/lib/runtime-context";
+import { getAuthHeaders, getStreamUrl, getBackendStorageUrl, getBackendApiRoot } from "@/lib/runtime-context";
+import { isProtectedTenantFileUrl } from "@/components/ui/secure-asset-image";
 import { projectApi } from "../api";
 import { ProjectComment, ProjectAttachment } from "../types";
 import { toast } from "sonner";
@@ -464,12 +465,13 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
     input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
-  // Converts stored HTML content into editable plain text
+  // Converts stored HTML content into editable plain text. DOMParser builds an
+  // inert document: unlike innerHTML on a live element, it never loads images
+  // or runs handlers such as <img onerror>.
   const htmlToPlainText = (html: string): string => {
-    if (typeof document === 'undefined') return html;
-    const el = document.createElement('div');
-    el.innerHTML = html;
-    return (el.textContent || el.innerText || '').trim();
+    if (typeof DOMParser === 'undefined') return html;
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    return (parsed.body.textContent || '').trim();
   };
 
   const formatCommentDate = (dateString: string) => {
@@ -509,7 +511,12 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
     if (mime === 'application/pdf') {
       return (
         <div className="aspect-[3/4] w-full rounded-2xl overflow-hidden border border-border/50 shadow-inner">
-          <PdfViewer src={getStreamUrl(safeUrl)} title={mediaTitle} />
+          <PdfViewer
+            src={getStreamUrl(safeUrl)}
+            fetchUrl={isProtectedTenantFileUrl(safeUrl) ? getStreamUrl(safeUrl) : undefined}
+            fetchHeaders={isProtectedTenantFileUrl(safeUrl) ? getAuthHeaders() : undefined}
+            title={mediaTitle}
+          />
         </div>
       );
     }

@@ -82,12 +82,34 @@ const openDb = (): Promise<IDBDatabase> =>
 const tx = async <T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> => {
   const db = await openDb();
   return new Promise<T>((resolve, reject) => {
+    // Closed on every outcome, not just `oncomplete`. A quota-aborted write
+    // left the connection open, and the leaked handles eventually block an
+    // `onupgradeneeded` version change indefinitely.
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      try {
+        db.close();
+      } catch {}
+    };
+
     const transaction = db.transaction(STORE, mode);
     const store = transaction.objectStore(STORE);
     const request = run(store);
+
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
-    transaction.oncomplete = () => db.close();
+
+    transaction.oncomplete = close;
+    transaction.onabort = () => {
+      close();
+      reject(transaction.error);
+    };
+    transaction.onerror = () => {
+      close();
+      reject(transaction.error);
+    };
   });
 };
 
@@ -126,6 +148,30 @@ export const subscribeUploadQueue = (listener: () => void): (() => void) => {
   };
 };
 
+/**
+ * Thrown when the browser will not store the file for later. The caller is
+ * expected to tell the user their upload was not kept, rather than let an
+ * unhandled QuotaExceededError surface as a runtime crash.
+ */
+export class UploadQueueFullError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UploadQueueFullError";
+  }
+}
+
+const isQuotaError = (error: unknown): boolean =>
+  Boolean(error) &&
+  typeof error === "object" &&
+  ((error as { name?: string }).name === "QuotaExceededError" ||
+    // Firefox's spelling of the same condition.
+    (error as { name?: string }).name === "NS_ERROR_DOM_QUOTA_REACHED");
+
+const humanSize = (bytes: number): string =>
+  bytes >= 1024 * 1024 * 1024
+    ? `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+    : `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MB`;
+
 export const enqueueFileUpload = async (input: PendingUploadInput): Promise<string> => {
   const id = generateId();
   const record: PendingUploadRecord = {
@@ -144,7 +190,32 @@ export const enqueueFileUpload = async (input: PendingUploadInput): Promise<stri
     record.thumbName = (input.thumbnail as File).name || "thumbnail";
   }
 
-  await tx("readwrite", (store) => store.put(record));
+  /*
+   * Storing the whole file can exceed the origin's IndexedDB quota — a big file,
+   * or a queue still holding earlier ones. That used to throw straight out of
+   * here as an unhandled QuotaExceededError ("The current transaction exceeded
+   * its quota limitations"), which Next.js showed as a runtime error overlay in
+   * the middle of the file manager.
+   *
+   * Existing queued uploads are durable user work. They are never evicted to
+   * make room for a new file; if this file does not fit, the caller receives a
+   * typed error and every earlier upload remains available for replay.
+   */
+  try {
+    await tx("readwrite", (store) => store.put(record));
+  } catch (error) {
+    if (!isQuotaError(error)) {
+      throw error;
+    }
+
+    notify();
+    throw new UploadQueueFullError(
+      `There is not enough offline storage left to hold ${input.fileName} (${humanSize(
+        (input.file as File).size ?? 0,
+      )}). Existing queued uploads were preserved. Reconnect and upload this file again.`,
+    );
+  }
+
   cachedCount += 1;
   notify();
   emitResult({ type: "queued", id, label: input.label, url: record.url });

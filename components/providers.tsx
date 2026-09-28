@@ -103,9 +103,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
    */
   const showQueueInspector = pathname.startsWith("/dashboard");
 
-  if (!isRestored) {
-    return <div className="h-screen w-screen bg-background" />;
-  }
+  // Cache restoration is non-blocking to allow immediate SSR and hydration
+
 
   return (
     <QueryClientProvider client={queryClient}>

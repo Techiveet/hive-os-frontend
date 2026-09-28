@@ -114,7 +114,7 @@ const isProtectedFileUrl = (url?: string | null) => Boolean(
 
 const getDownloadUrl = (url: string) => (url.includes('?') ? `${url}&download=1` : `${url}?download=1`);
 
-const SecureAttachmentImage = ({
+export const SecureAttachmentImage = ({
   src,
   alt,
   className,

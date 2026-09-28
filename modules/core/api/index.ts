@@ -1,10 +1,16 @@
 import api from "@/modules/shared/api/http";
+import { getAccessToken } from "@/lib/runtime-context";
 
 export { api };
 
 export const fetchLogs = async (params: any = {}) => (await api.get("/logs", { params })).data;
-export const logFrontendAction = async (payload: { module: string; action: string; description: string }) =>
-  (await api.post("/logs/client-action", payload)).data;
+export const logFrontendAction = async (payload: { module: string; action: string; description: string }) => {
+  if (!getAccessToken()) {
+    return null;
+  }
+
+  return (await api.post("/logs/client-action", payload)).data;
+};
 
 // 🗑️ GLOBAL TRASH BIN API
 export const fetchTrashItems = async (params: any = {}) => (await api.get("/trash", { params })).data;

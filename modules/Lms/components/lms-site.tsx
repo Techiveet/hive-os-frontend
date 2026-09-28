@@ -2,10 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import * as React from "react";
 import { GraduationCap, Star } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { useTranslation } from "@/store/use-translation";
 import { Button } from "@/components/ui/button";
 import {
   getBackendApiRoot,
@@ -14,24 +18,60 @@ import {
   getWorkspaceScopeKey,
 } from "@/lib/runtime-context";
 import { cn } from "@/lib/utils";
+import { LmsAnnouncementBar } from "@/modules/Lms/components/lms-announcement-bar";
 
 /* ============================================================================
  * Shared design tokens lifted from the lms2 (Educrat) template.
  * Kept in one place so the landing, course list, and course detail pages match.
  * ==========================================================================*/
+/*
+ * Every value points at a CSS custom property defined in app/globals.css, with
+ * the template's own dark palette under `.dark`.
+ *
+ * These are consumed almost entirely through inline `style`, which CSS cannot
+ * override — so hard-coded hex meant the whole LMS stayed white when the rest
+ * of the app went dark. Indirecting through variables makes all of it follow
+ * the theme without touching the call sites.
+ *
+ * The literal hex remains as the fallback, so anything rendered outside the
+ * document (or before globals.css loads) still gets the light palette rather
+ * than an empty colour. Use LMS_HEX where a raw colour is required — an SVG
+ * presentation attribute such as `fill` will not accept var().
+ */
 export const LMS_TOKENS = {
-  navy: "#140342",
-  navy2: "#1A064F",
-  navyCard: "#2B1C63",
+  navy: "var(--lms-navy, #140342)",
+  navy2: "var(--lms-navy-2, #1A064F)",
+  navyCard: "var(--lms-navy-card, #2B1C63)",
+  /** --color-dark-5: the quiz template's dark question header. */
+  dark5: "var(--lms-dark-5, #282664)",
+  /** --color-light-3: the quiz navigation button ground. */
+  light3: "var(--lms-light-3, #EEF2F6)",
+  purple: "var(--lms-purple, #6440FB)",
+  lavender: "var(--lms-lavender, #EBEAFE)",
+  green: "var(--lms-green, #00FF84)",
+  greenDark: "var(--lms-green-dark, #04D697)",
+  beige: "var(--lms-beige, #FEFBF4)",
+  starYellow: "var(--lms-star-yellow, #E59819)",
+  muted: "var(--lms-muted, #4F547B)",
+  lightBg: "var(--lms-light-bg, #F7F8FB)",
+  border: "var(--lms-border, #EDEDED)",
+  /** Card/panel ground. White in light, deep navy in dark. */
+  surface: "var(--lms-surface, #FFFFFF)",
+  /**
+   * The brand navy as a *surface*, which does not flip with the theme.
+   *
+   * `navy` above is the primary text colour and inverts to white in dark mode.
+   * The template's navy header, footer and hero are navy in both themes with
+   * white text on top, so they need a colour that stays put — using `navy` for
+   * those made them white-on-white the moment the theme flipped.
+   */
+  navySolid: "#140342",
+} as const;
+
+/** Raw colours, for the few places var() is not allowed. */
+export const LMS_HEX = {
   purple: "#6440FB",
-  lavender: "#EBEAFE",
   green: "#00FF84",
-  greenDark: "#04D697",
-  beige: "#FEFBF4",
-  starYellow: "#E59819",
-  muted: "#4F547B",
-  lightBg: "#F7F8FB",
-  border: "#EDEDED",
 } as const;
 
 export const LMS_FONT_STACK =
@@ -39,7 +79,14 @@ export const LMS_FONT_STACK =
 export const LMS_FONT_HREF =
   "https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap";
 
-export const LMS_MY_LEARNING_PATH = "/dashboard/learning-management?tab=my-learning";
+/**
+ * Where a signed-in student lands from the LMS site.
+ *
+ * This used to point into the ERP dashboard, which meant a learner who signed
+ * in from the course site went straight past the LMS interface into the admin
+ * workspace — the exact surface they are not supposed to see.
+ */
+export const LMS_MY_LEARNING_PATH = "/learn/courses";
 export const LOGIN_HREF = `/lms-login?redirect=${encodeURIComponent(LMS_MY_LEARNING_PATH)}`;
 export const REGISTER_HREF = "/lms-register";
 export const COURSES_HREF = "/courses";
@@ -138,23 +185,62 @@ export function TemplateImage({
   );
 }
 
-export function Stars({ rating, className }: { rating?: string; className?: string }) {
-  return (
-    <span className={cn("inline-flex items-center gap-1", className)}>
-      {rating ? (
-        <span className="text-sm font-bold" style={{ color: LMS_TOKENS.starYellow }}>
-          {rating}
+/**
+ * Star rating for a course.
+ *
+ * Two things this deliberately does not do: it never draws five filled stars
+ * regardless of the score (it used to, so a 3.0 course looked like a 5.0), and
+ * it never invents a rating for a course nobody has reviewed — that shows
+ * "New" instead, which is the honest thing to tell a prospective learner.
+ */
+export function Stars({
+  rating,
+  count,
+  className,
+}: {
+  rating?: string | number | null;
+  count?: number | null;
+  className?: string;
+}) {
+  const value = rating === null || rating === undefined || rating === "" ? null : Number(rating);
+  const rated = value !== null && Number.isFinite(value) && value > 0;
+
+  if (!rated) {
+    return (
+      <span className={cn("inline-flex items-center gap-1", className)}>
+        <span className="text-sm font-medium" style={{ color: LMS_TOKENS.muted }}>
+          New
         </span>
-      ) : null}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn("inline-flex items-center gap-1", className)}
+      aria-label={`Rated ${value!.toFixed(1)} out of 5${count ? ` from ${count} reviews` : ""}`}
+    >
+      <span className="text-sm font-bold" style={{ color: LMS_TOKENS.starYellow }}>
+        {value!.toFixed(1)}
+      </span>
       <span className="inline-flex items-center gap-0.5" aria-hidden="true">
         {Array.from({ length: 5 }).map((_, index) => (
           <Star
             key={index}
             className="size-3"
-            style={{ color: LMS_TOKENS.starYellow, fill: LMS_TOKENS.starYellow }}
+            style={{
+              color: LMS_TOKENS.starYellow,
+              // Only as many stars as the score actually earned.
+              fill: index < Math.round(value!) ? "#E59819" : "transparent",
+            }}
           />
         ))}
       </span>
+      {count ? (
+        <span className="text-xs" style={{ color: LMS_TOKENS.muted }}>
+          ({count})
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -238,13 +324,38 @@ export function BrandMark({
   );
 }
 
+/**
+ * The public site's navigation, shared by every page in the LMS template so a
+ * learner sees the same bar on the landing page, the catalogue and a course.
+ *
+ * Every href is absolute, including the on-page anchors: written as "#faq" they
+ * resolved against whatever page you were already on, so from a course page the
+ * Categories and FAQ tabs went nowhere.
+ */
 const NAV_LINKS = [
-  { label: "Home", href: "/" },
-  { label: "Courses", href: COURSES_HREF },
-  { label: "Categories", href: "/#categories" },
-  { label: "Instructors", href: "/#instructors" },
-  { label: "FAQ", href: "/#faq" },
+  { key: "lms.site.nav.home", label: "Home", href: "/" },
+  { key: "lms.site.nav.courses", label: "Courses", href: COURSES_HREF },
+  { key: "lms.site.nav.categories", label: "Categories", href: "/#categories" },
+  { key: "lms.site.nav.instructors", label: "Instructors", href: "/#instructors" },
+  { key: "lms.site.nav.faq", label: "FAQ", href: "/#faq" },
 ];
+
+/**
+ * Which tab reads as current. Anchor links only count on the landing page they
+ * point into, and /courses stays lit while you are inside a course.
+ */
+const isNavLinkActive = (href: string, pathname: string): boolean => {
+  const [path, hash] = href.split("#");
+
+  // In-page jumps never claim the active tab. Treating them as active lit up
+  // Categories, Instructors and FAQ all at once on the landing page, because
+  // every one of them points at "/".
+  if (hash) return false;
+
+  const target = path || "/";
+  if (target === "/") return pathname === "/";
+  return pathname === target || pathname.startsWith(`${target}/`);
+};
 
 export function LmsSiteHeader({
   brandSettings,
@@ -255,16 +366,17 @@ export function LmsSiteHeader({
   brandName: string;
   announcement?: string;
 }) {
+  const pathname = usePathname();
+  const { t } = useTranslation();
+
   return (
-    <header className="sticky top-0 z-40" style={{ backgroundColor: LMS_TOKENS.navy }}>
-      {announcement ? (
-        <div
-          className="px-4 py-2 text-center text-xs font-medium text-white/90"
-          style={{ backgroundColor: LMS_TOKENS.purple }}
-        >
-          {announcement}
-        </div>
-      ) : null}
+    <header className="sticky top-0 z-40" style={{ backgroundColor: LMS_TOKENS.navySolid }}>
+      {/*
+        Whatever the tenant has scheduled, rotating through one strip. The
+        template's own line is the fallback, so a tenant that has never written
+        an announcement still shows something rather than a gap.
+      */}
+      <LmsAnnouncementBar surface="public" fallback={announcement} />
       <nav
         className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8"
         aria-label="Main"
@@ -276,13 +388,37 @@ export function LmsSiteHeader({
           <BrandMark brandSettings={brandSettings} fallbackLabel={brandName} onDark />
         </Link>
         <div className="hidden items-center gap-8 text-[15px] font-medium text-white/85 lg:flex">
-          {NAV_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} className="transition hover:text-[#00FF84]">
-              {link.label}
-            </Link>
-          ))}
+          {NAV_LINKS.map((link) => {
+            const active = isNavLinkActive(link.href, pathname);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative py-1 transition hover:text-[#00FF84]",
+                  active && "text-white",
+                )}
+              >
+                {t(link.key, link.label)}
+                {active ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-0 -bottom-1 h-0.5 rounded-full"
+                    style={{ backgroundColor: LMS_TOKENS.green }}
+                  />
+                ) : null}
+              </Link>
+            );
+          })}
         </div>
         <div className="flex items-center gap-2.5">
+          {/* The header sits on navy in both themes, so these are forced to the
+              light-on-dark treatment rather than the app's default chrome. */}
+          <div className="flex items-center gap-1 text-white [&_button]:text-white/85 [&_button:hover]:bg-white/10 [&_button:hover]:text-white">
+            <LanguageSwitcher />
+            <ThemeToggle />
+          </div>
           <Button
             asChild
             variant="ghost"
@@ -309,8 +445,10 @@ export function LmsSiteFooter({
   brandSettings?: LmsBrandSettings | null;
   brandName: string;
 }) {
+  const { t } = useTranslation();
+
   return (
-    <footer style={{ backgroundColor: LMS_TOKENS.navy }} className="text-white">
+    <footer style={{ backgroundColor: LMS_TOKENS.navySolid }} className="text-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center justify-between gap-6 border-b border-white/10 py-10 md:flex-row">
           <BrandMark brandSettings={brandSettings} fallbackLabel={brandName} onDark />
@@ -318,11 +456,16 @@ export function LmsSiteFooter({
             className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-white/70"
             aria-label="Footer"
           >
-            <Link href={COURSES_HREF} className="transition hover:text-white">Courses</Link>
-            <Link href="/#categories" className="transition hover:text-white">Categories</Link>
-            <Link href="/#instructors" className="transition hover:text-white">Instructors</Link>
-            <Link href="/#faq" className="transition hover:text-white">FAQ</Link>
-            <Link href={LOGIN_HREF} className="transition hover:text-white">Log in</Link>
+            {/* Driven by the same NAV_LINKS as the header, so the two can no
+                longer drift apart. */}
+            {NAV_LINKS.filter((link) => link.href !== "/").map((link) => (
+              <Link key={link.href} href={link.href} className="transition hover:text-white">
+                {t(link.key, link.label)}
+              </Link>
+            ))}
+            <Link href={LOGIN_HREF} className="transition hover:text-white">
+              {t("lms.site.nav.login", "Log in")}
+            </Link>
           </nav>
         </div>
         <div className="flex flex-col items-center justify-between gap-3 py-6 text-sm text-white/50 md:flex-row">

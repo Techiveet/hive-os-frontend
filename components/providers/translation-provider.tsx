@@ -5,11 +5,15 @@ import { useTranslation } from "@/store/use-translation";
 import { FullScreenPlaceholder } from "@/components/ui/loading-states";
 
 export function TranslationProvider({ children }: { children: React.ReactNode }) {
-  const { initLocale, isReady } = useTranslation();
+  const { initLocale, isReady, locale } = useTranslation();
 
   useEffect(() => {
     initLocale();
   }, [initLocale]);
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   // Prevent UI flashing by showing a subtle loader while the dictionary fetches
   if (!isReady) {

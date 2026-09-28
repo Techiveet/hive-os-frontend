@@ -14,12 +14,21 @@ import { toast } from "sonner";
 
 import { authenticatedDownload } from "@/lib/authenticated-download";
 import {
+  safeLocalStorageGetItem,
+  safeLocalStorageRemoveItem,
+  safeLocalStorageSetItem,
+} from "@/lib/safe-storage";
+import {
   getAccessToken,
   getAuthHeaders,
   getBackendApiRoot,
   getSignedMediaStreamUrl,
   getWorkspaceScopeKey,
+  isTenantSession,
 } from "@/lib/runtime-context";
+import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
+
+const PLAYLIST_MODULE_SLUGS = ["file_manager", "media_library", "video_player", "audio_player"];
 
 export type Track = {
   id: string | number;
@@ -126,7 +135,7 @@ const readJson = <T,>(key: string, fallback: T): T => {
   }
 
   try {
-    const raw = window.localStorage.getItem(key);
+    const raw = safeLocalStorageGetItem(key);
     if (!raw) {
       return fallback;
     }
@@ -195,6 +204,9 @@ const playlistResponseToModel = (playlistValue: unknown): Playlist => {
 
 export function GlobalAudioProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
+  const { moduleAccess, hasModule } = useTenantModuleAccess();
+  const canUsePlaylists = !isTenantSession()
+    || (moduleAccess !== null && PLAYLIST_MODULE_SLUGS.some((slug) => hasModule(slug)));
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingSeekRef = useRef<number | null>(null);
   const restoredSessionRef = useRef(false);
@@ -289,7 +301,7 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
 
     const storageKeys = storageKeysRef.current;
     if (storageKeys) {
-      window.localStorage.setItem(storageKeys.settings, JSON.stringify(payload));
+      safeLocalStorageSetItem(storageKeys.settings, JSON.stringify(payload));
     }
   }, [volume, isMuted, isShuffle, repeatMode, playbackRate]);
 
@@ -301,7 +313,7 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
     if (!currentTrack && playlist.length === 0 && queue.length === 0 && history.length === 0) {
       const storageKeys = storageKeysRef.current;
       if (storageKeys) {
-        window.localStorage.removeItem(storageKeys.session);
+        safeLocalStorageRemoveItem(storageKeys.session);
       }
       return;
     }
@@ -316,11 +328,18 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
 
     const storageKeys = storageKeysRef.current;
     if (storageKeys) {
-      window.localStorage.setItem(storageKeys.session, JSON.stringify(payload));
+      safeLocalStorageSetItem(storageKeys.session, JSON.stringify(payload));
     }
   }, [currentTrack, playlist, queue, history, currentTime]);
 
   const fetchPlaylists = useCallback(async () => {
+    if (!canUsePlaylists) {
+      if (playlists.length > 0) {
+        setPlaylists([]);
+      }
+      return;
+    }
+
     const token = getAccessToken();
 
     if (!token) {
@@ -349,7 +368,7 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
     } catch (error) {
       console.error("Failed to load playlists", error);
     }
-  }, [playlists.length]);
+  }, [canUsePlaylists, playlists.length]);
 
   useEffect(() => {
     void fetchPlaylists();
@@ -377,7 +396,7 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
 
     const storageKeys = storageKeysRef.current;
     if (storageKeys) {
-      window.localStorage.setItem(storageKeys.session, JSON.stringify(payload));
+      safeLocalStorageSetItem(storageKeys.session, JSON.stringify(payload));
     }
   }, []);
 
@@ -631,7 +650,7 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
     if (typeof window !== "undefined") {
       const storageKeys = storageKeysRef.current;
       if (storageKeys) {
-        window.localStorage.removeItem(storageKeys.session);
+        safeLocalStorageRemoveItem(storageKeys.session);
       }
     }
   }, []);

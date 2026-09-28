@@ -23,14 +23,16 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { VideoPlayer } from "@/components/ui/video-player";
-import { getStreamUrl } from "@/lib/runtime-context";
+import { getAccessToken, getStreamUrl } from "@/lib/runtime-context";
 import { cn } from "@/lib/utils";
 import {
+  learningApi,
   publicLearningApi,
   type LmsLessonType,
   type LmsPublicLesson,
 } from "@/modules/Lms/api";
 import { CourseCard } from "../course-card";
+import { CourseReviews } from "@/modules/Lms/components/course-reviews";
 import {
   LMS_FONT_HREF,
   LMS_FONT_STACK,
@@ -90,7 +92,7 @@ function LessonRow({
       )}
       style={{
         borderColor: isActive ? LMS_TOKENS.purple : LMS_TOKENS.border,
-        backgroundColor: isActive ? "rgba(100,64,251,0.04)" : "#fff",
+        backgroundColor: isActive ? "rgba(100,64,251,0.08)" : LMS_TOKENS.surface,
       }}
     >
       <span
@@ -149,6 +151,28 @@ export default function CourseDetailPage() {
     retry: 1,
   });
 
+  /*
+   * This is a public page, but a signed-in learner reaches it too — from search,
+   * a shared link, or the catalogue. It used to offer "Enroll now" and "I
+   * already have an account" unconditionally, so someone already enrolled was
+   * invited to sign up again, and the second button sent them to /lms-login,
+   * which clears the session: clicking it logged them out.
+   */
+  const [signedIn, setSignedIn] = React.useState(false);
+  React.useEffect(() => setSignedIn(Boolean(getAccessToken())), []);
+
+  const { data: myLearning } = useQuery({
+    queryKey: ["lms", "my-learning"],
+    queryFn: learningApi.getMyLearning,
+    enabled: signedIn,
+    retry: false,
+  });
+
+  const isEnrolled = React.useMemo(
+    () => (myLearning ?? []).some((enrolment) => enrolment.course_id === courseId),
+    [myLearning, courseId],
+  );
+
   const previewLessons = React.useMemo(
     () => (course?.lessons ?? []).filter((lesson) => Boolean(lesson.preview_url)),
     [course]
@@ -166,7 +190,10 @@ export default function CourseDetailPage() {
   const styleVars = { fontFamily: LMS_FONT_STACK } as React.CSSProperties;
 
   const shell = (children: React.ReactNode) => (
-    <main className="min-h-screen bg-white text-[#140342] antialiased" style={styleVars}>
+    <main
+      className="min-h-screen antialiased"
+      style={{ ...styleVars, backgroundColor: LMS_TOKENS.surface, color: LMS_TOKENS.navy }}
+    >
       { }
       <link rel="stylesheet" href={LMS_FONT_HREF} precedence="default" />
       <LmsSiteHeader brandSettings={brandSettings} brandName={brandName} />
@@ -220,7 +247,7 @@ export default function CourseDetailPage() {
   return shell(
     <>
       {/* ===== Page header (dark) ===== */}
-      <section className="relative overflow-hidden" style={{ backgroundColor: LMS_TOKENS.navy }}>
+      <section className="relative overflow-hidden" style={{ backgroundColor: LMS_TOKENS.navySolid }}>
         <div
           className="pointer-events-none absolute inset-0"
           aria-hidden="true"
@@ -294,7 +321,7 @@ export default function CourseDetailPage() {
                   className="!rounded-3xl"
                 />
               ) : (
-                <div className="relative aspect-video w-full overflow-hidden rounded-3xl" style={{ backgroundColor: LMS_TOKENS.navy }}>
+                <div className="relative aspect-video w-full overflow-hidden rounded-3xl" style={{ backgroundColor: LMS_TOKENS.navySolid }}>
                   <TemplateImage src={course.image} alt={`${course.title} preview`} priority />
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#140342]/70 text-center">
                     <span
@@ -408,19 +435,42 @@ export default function CourseDetailPage() {
                     className="mt-5 h-13 w-full rounded-lg text-[15px] font-medium text-white shadow-lg"
                     style={{ backgroundColor: LMS_TOKENS.purple, boxShadow: "0 16px 32px rgba(100,64,251,0.3)" }}
                   >
-                    <Link href={`${REGISTER_HREF}?course_id=${encodeURIComponent(course.id)}`}>
-                      Enroll now
-                      <ArrowRight className="size-4" aria-hidden="true" />
-                    </Link>
+                    {isEnrolled ? (
+                      <Link href={`/learn/courses/${course.id}`}>
+                        Continue learning
+                        <ArrowRight className="size-4" aria-hidden="true" />
+                      </Link>
+                    ) : signedIn ? (
+                      <Link href="/learn/courses">
+                        Go to my courses
+                        <ArrowRight className="size-4" aria-hidden="true" />
+                      </Link>
+                    ) : (
+                      <Link href={`${REGISTER_HREF}?course_id=${encodeURIComponent(course.id)}`}>
+                        Enroll now
+                        <ArrowRight className="size-4" aria-hidden="true" />
+                      </Link>
+                    )}
                   </Button>
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="mt-3 h-13 w-full rounded-lg text-[15px] font-medium"
-                    style={{ borderColor: LMS_TOKENS.border, color: LMS_TOKENS.navy }}
-                  >
-                    <Link href={LOGIN_HREF}>I already have an account</Link>
-                  </Button>
+
+                  {/* Only offered to a visitor who is not signed in — for
+                      anyone else this link would end their session. */}
+                  {!signedIn ? (
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="mt-3 h-13 w-full rounded-lg text-[15px] font-medium"
+                      style={{ borderColor: LMS_TOKENS.border, color: LMS_TOKENS.navy }}
+                    >
+                      <Link href={LOGIN_HREF}>I already have an account</Link>
+                    </Button>
+                  ) : null}
+
+                  {signedIn && !isEnrolled ? (
+                    <p className="mt-3 text-center text-[13px]" style={{ color: LMS_TOKENS.muted }}>
+                      You are not enrolled in this course yet — your instructor assigns it.
+                    </p>
+                  ) : null}
 
                   <div className="mt-6 border-t pt-6" style={{ borderColor: LMS_TOKENS.border }}>
                     <p className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: LMS_TOKENS.navy }}>
@@ -465,6 +515,13 @@ export default function CourseDetailPage() {
               </div>
             </div>
           </aside>
+        </div>
+      </section>
+
+      {/* ===== Ratings & reviews ===== */}
+      <section className="py-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <CourseReviews courseId={course.id} />
         </div>
       </section>
 

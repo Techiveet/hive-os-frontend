@@ -321,3 +321,280 @@ export type QaBatchResultRecord = {
 };
 
 export type PaginatedQaBatchResults = PaginatedResponse<QaBatchResultRecord>;
+
+// ==========================================
+// Goods (Raw Materials & Inventory Inputs) Types
+// ==========================================
+
+export type GoodType =
+  | "raw_material"
+  | "component"
+  | "packaging"
+  | "consumable"
+  | "semi_finished";
+
+export type GoodStatus = "active" | "inactive" | "archived";
+export type GoodTaxType = "exclusive" | "inclusive";
+
+export type GoodSupplierRecord = {
+  id: number;
+  supplier_id: number;
+  name: string;
+  code?: string | null;
+  unit_cost?: number | string | null;
+  lead_time_days?: number | null;
+  supplier_sku?: string | null;
+  min_order_qty?: number | string | null;
+  is_preferred?: boolean;
+  pivot?: {
+    supplier_sku?: string | null;
+    unit_cost?: string | number | null;
+    lead_time_days?: number | null;
+    min_order_qty?: string | number | null;
+    is_preferred?: boolean;
+  };
+};
+
+export type GoodBatchRecord = {
+  id: number;
+  good_id: number;
+  batch_number: string;
+  supplier_batch_number?: string | null;
+  supplier_id?: number | null;
+  supplier?: {
+    id: number;
+    name: string;
+    code?: string | null;
+  } | null;
+  quantity_received: string | number;
+  quantity_on_hand: string | number;
+  quantity_reserved?: string | number;
+  received_date: string;
+  manufacture_date?: string | null;
+  expiry_date?: string | null;
+  status: "active" | "quarantine" | "expired" | "depleted";
+  warehouse_id?: number | null;
+  warehouse_location_id?: number | null;
+  warehouse?: {
+    id: number;
+    name: string;
+    code?: string | null;
+  } | null;
+  location?: {
+    id: number;
+    name: string;
+    code?: string | null;
+  } | null;
+  qa_status?: "pending" | "passed" | "failed" | "released" | string | null;
+};
+
+export type GoodStockLocationRecord = {
+  id: number;
+  warehouse_id?: number | null;
+  warehouse_name: string;
+  location_id: number;
+  location_code: string;
+  location_name: string;
+  location_type?: string;
+  batch_number?: string | null;
+  on_hand: number;
+  reserved: number;
+  available: number;
+  unit_cost: number;
+  expiry_date?: string | null;
+  received_at?: string | null;
+};
+
+export type GoodMovementRecord = {
+  id: number;
+  good_id?: number;
+  type: "receive" | "issue" | "transfer" | "adjustment" | string;
+  quantity: string | number;
+  unit_cost?: string | number | null;
+  batch_number?: string | null;
+  serial_number?: string | null;
+  expiry_date?: string | null;
+  reference_type?: string | null;
+  reference_id?: number | null;
+  notes?: string | null;
+  from_location?: {
+    id: number;
+    name: string;
+    code?: string | null;
+  } | null;
+  to_location?: {
+    id: number;
+    name: string;
+    code?: string | null;
+  } | null;
+  performed_by?: {
+    id: number;
+    name: string;
+  } | null;
+  created_at: string;
+};
+
+export type GoodBomUsageRecord = {
+  bom_id: number;
+  bom_name: string;
+  bom_code: string;
+  bom_status: string;
+  product_id?: number | null;
+  product_name: string;
+  product_sku: string;
+  quantity_per_unit: number;
+  uom: string;
+  scrap_percent: number;
+  gross_quantity: number;
+  is_critical: boolean;
+};
+
+export type GoodRecord = {
+  id: number;
+  tenant_id?: string;
+  name: string;
+  sku: string;
+  stock_code?: string | null;
+  barcode?: string | null;
+  barcode_path?: string | null;
+  qr_code_path?: string | null;
+  description?: string | null;
+  good_type: GoodType;
+  category_id?: number | null;
+  category?: {
+    id: number;
+    name: string;
+  } | null;
+  uom: string;
+  unit_of_measure?: string;
+  purchase_uom?: string | null;
+  consumption_uom?: string | null;
+  conversion_factor: string | number;
+  uom_conversion_factor?: string | number;
+  packaging_quantity: number;
+  weight?: string | number | null;
+  length?: string | number | null;
+  width?: string | number | null;
+  height?: string | number | null;
+  unit_cost: string | number;
+  tax_rate: string | number;
+  tax_type: GoodTaxType;
+  currency: string;
+  quantity_on_hand: string | number;
+  total_quantity?: string | number;
+  reserved_quantity: string | number;
+  available_stock?: number;
+  available_quantity?: number;
+  is_low_stock?: boolean;
+  reorder_level: string | number;
+  safety_stock: string | number;
+  min_order_quantity: string | number;
+  minimum_order_quantity?: string | number;
+  lead_time_days?: number | null;
+  max_stock_capacity?: string | number | null;
+  primary_warehouse_id?: number | null;
+  primary_warehouse?: {
+    id: number;
+    name: string;
+    code?: string | null;
+    address?: string | null;
+  } | null;
+  default_location_id?: number | null;
+  default_location?: {
+    id: number;
+    name: string;
+    code?: string | null;
+    warehouse_id?: number | null;
+  } | null;
+  preferred_supplier_id?: number | null;
+  preferred_supplier?: Supplier | null;
+  suppliers?: GoodSupplierRecord[];
+  track_batches: boolean;
+  track_expiry: boolean;
+  shelf_life_days?: number | null;
+  expiry_alert_days?: number | null;
+  msds_file_path?: string | null;
+  spec_sheet_path?: string | null;
+  msds_sheet_path?: string | null;
+  image?: string | null;
+  image_preview_url?: string | null;
+  model_3d_path?: string | null;
+  is_active: boolean;
+  status: GoodStatus;
+  metadata?: Record<string, unknown> | null;
+  batches?: GoodBatchRecord[];
+  stock_movements?: GoodMovementRecord[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type GoodDetailResponse = {
+  good: GoodRecord;
+  stocks_by_location: GoodStockLocationRecord[];
+  bom_usages: GoodBomUsageRecord[];
+};
+
+export type GoodSummaryResponse = {
+  totals: {
+    goods: number;
+    total_stock_value: number;
+    low_stock: number;
+    expiring_soon: number;
+    active: number;
+    raw_materials: number;
+    components: number;
+    packaging: number;
+    consumables: number;
+    semi_finished: number;
+  };
+  recent_goods: GoodRecord[];
+};
+
+export type GoodOptionsResponse = {
+  categories: Array<{ id: number; name: string; parent_id?: number | null }>;
+  suppliers: Array<{ id: number; name: string; code?: string | null; email?: string | null }>;
+  warehouses: Array<{ id: number; name: string; code?: string | null; type?: string | null }>;
+  locations: Array<{ id: number; name: string; code?: string | null; warehouse_id?: number | null; type?: string | null }>;
+  good_types: Array<{ value: GoodType; label: string }>;
+  uom_options: string[];
+  status_options: GoodStatus[];
+  tax_types: GoodTaxType[];
+  currency_options: Array<{
+    code: string;
+    symbol: string;
+    label: string;
+  }>;
+};
+
+export type SuggestedPurchaseOrderResponse = {
+  good_id: number;
+  good_name: string;
+  sku: string;
+  uom: string;
+  current_stock: number;
+  available_stock: number;
+  reorder_level: number;
+  min_order_quantity: number;
+  suggested_quantity: number;
+  unit_cost: number;
+  estimated_total: number;
+  preferred_supplier?: {
+    id: number;
+    name: string;
+    code?: string | null;
+    email?: string | null;
+  } | null;
+  purchase_order_draft: {
+    supplier_id?: number | null;
+    currency?: string;
+    items: Array<{
+      good_id: number;
+      name: string;
+      sku: string;
+      quantity: number;
+      unit_cost: number;
+      total_price: number;
+    }>;
+    notes?: string;
+  };
+};

@@ -528,7 +528,7 @@ export default function CRMPage() {
                     return (
                       <TableRow key={res.id}>
                         <TableCell>{new Date(res.reservation_time).toLocaleString()}</TableCell>
-                        <TableCell>{res.table?.name || "General Admission"}</TableCell>
+                        <TableCell>{res.location?.label || "General Admission"}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="capitalize">{res.status}</Badge>
                         </TableCell>

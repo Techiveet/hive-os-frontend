@@ -84,6 +84,12 @@ export const getSupportBotThreadChannelName = (streamToken: string) =>
 export const getSupportBotInboxChannelName = () =>
   `${getTenantChannelPrefix()}support-bot.inbox`;
 
+export const getLogisticsOperationsChannelName = () => {
+  const tenantId = getTenantId();
+
+  return tenantId ? `tenant.${tenantId}.logistics.operations` : null;
+};
+
 /**
  * A connection for anonymous visitors.
  *

@@ -125,7 +125,8 @@ export type LmsPublicCourse = {
   duration_minutes: number;
   lessons_count: number;
   enrollments_count: number;
-  rating: string;
+  rating: string | number | null;
+  rating_count?: number;
   image: string;
   instructor_name: string;
   badge: string;

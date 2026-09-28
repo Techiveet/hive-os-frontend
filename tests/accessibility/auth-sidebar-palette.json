@@ -1,0 +1,68 @@
+{
+  "checks": [
+    {
+      "id": "sidebar-disclosure-icon-light-page",
+      "foreground": "hsl(160, 84%, 29%)",
+      "background": "hsl(40, 20%, 99%)",
+      "type": "graphic",
+      "state": "default",
+      "notes": "Project Management disclosure chevron in the light theme"
+    },
+    {
+      "id": "sidebar-disclosure-icon-light-card",
+      "foreground": "hsl(160, 84%, 29%)",
+      "background": "#ffffff",
+      "type": "graphic",
+      "state": "default",
+      "notes": "Project Management disclosure chevron against the light glass-card endpoint"
+    },
+    {
+      "id": "sidebar-disclosure-focus-light-page",
+      "foreground": "hsl(160, 84%, 29%)",
+      "background": "hsl(40, 20%, 99%)",
+      "type": "ui",
+      "state": "focus",
+      "notes": "Keyboard focus ring in the light theme"
+    },
+    {
+      "id": "sidebar-disclosure-focus-light-card",
+      "foreground": "hsl(160, 84%, 29%)",
+      "background": "#ffffff",
+      "type": "ui",
+      "state": "focus",
+      "notes": "Keyboard focus ring against the light glass-card endpoint"
+    },
+    {
+      "id": "sidebar-disclosure-icon-dark-page",
+      "foreground": "hsl(160, 84%, 39%)",
+      "background": "hsl(240, 10%, 2%)",
+      "type": "graphic",
+      "state": "default",
+      "notes": "Project Management disclosure chevron in the dark theme"
+    },
+    {
+      "id": "sidebar-disclosure-icon-dark-card",
+      "foreground": "hsl(160, 84%, 39%)",
+      "background": "hsl(240, 10%, 3.9%)",
+      "type": "graphic",
+      "state": "default",
+      "notes": "Project Management disclosure chevron against the dark glass-card endpoint"
+    },
+    {
+      "id": "sidebar-disclosure-focus-dark-page",
+      "foreground": "hsl(160, 84%, 39%)",
+      "background": "hsl(240, 10%, 2%)",
+      "type": "ui",
+      "state": "focus",
+      "notes": "Keyboard focus ring in the dark theme"
+    },
+    {
+      "id": "sidebar-disclosure-focus-dark-card",
+      "foreground": "hsl(160, 84%, 39%)",
+      "background": "hsl(240, 10%, 3.9%)",
+      "type": "ui",
+      "state": "focus",
+      "notes": "Keyboard focus ring against the dark glass-card endpoint"
+    }
+  ]
+}

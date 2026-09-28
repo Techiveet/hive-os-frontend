@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
@@ -37,11 +37,13 @@ import {
   HandCoins,
   Factory,
   Compass,
+  FileText,
   Sprout,
   LifeBuoy,
   ShieldCheck,
   Telescope,
   Truck,
+  Building2,
   Handshake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,7 +57,7 @@ import {
 } from "./nav";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTranslation } from "@/store/use-translation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { useBusinessType } from "@/hooks/use-business-type";
 import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
@@ -68,7 +70,7 @@ import {
   getWorkspaceScopeKey,
   isTenantSession,
 } from "@/lib/runtime-context";
-import { clearHiveSession, handleAuthFailureResponse } from "@/lib/auth-sync";
+import { handleAuthFailureResponse, logoutHiveSession } from "@/lib/auth-sync";
 import { TOUR_EXPAND_NAV_EVENT } from "@/lib/tour-events";
 
 type SidebarIcon = React.ComponentType<{
@@ -76,7 +78,7 @@ type SidebarIcon = React.ComponentType<{
   "aria-hidden"?: boolean;
 }>;
 
-// 🚀 SECURE BRAND LOGO
+// ðŸš€ SECURE BRAND LOGO
 const SecureSidebarLogo = ({
   path,
   fallbackTitle,
@@ -203,6 +205,7 @@ function SidebarInner({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
   const { hasAnyPermission } = usePermissions();
   const { hasModule } = useTenantModuleAccess();
@@ -233,17 +236,20 @@ function SidebarInner({
   const [isPerformanceOpen, setIsPerformanceOpen] = useState(false);
   const [isProcurementOpen, setIsProcurementOpen] = useState(false);
   const [isSupplyChainOpen, setIsSupplyChainOpen] = useState(false);
+  const [isLogisticsOpen, setIsLogisticsOpen] = useState(false);
   const [isSalesOpen, setIsSalesOpen] = useState(false);
   const [isCrmOpen, setIsCrmOpen] = useState(false);
   const [isFleetOpen, setIsFleetOpen] = useState(false);
+  const [isPropertyOpen, setIsPropertyOpen] = useState(false);
   const [isServiceOpen, setIsServiceOpen] = useState(false);
   const [isInternalAuditOpen, setIsInternalAuditOpen] = useState(false);
   const [isStrategyOpen, setIsStrategyOpen] = useState(false);
+  const [isDailyReportsOpen, setIsDailyReportsOpen] = useState(false);
   const [isVantageOpen, setIsVantageOpen] = useState(false);
   const [isAgricultureOpen, setIsAgricultureOpen] = useState(false);
   const [isProductionOpen, setIsProductionOpen] = useState(false);
   const [isSupportBotOpen, setIsSupportBotOpen] = useState(false);
-  // 🚀 Apps dropdown state
+  // ðŸš€ Apps dropdown state
   const [isAppsOpen, setIsAppsOpen] = useState(false);
   const canAccessConverter =
     hasAnyPermission(["use_document_converter", "manage_storage"]) &&
@@ -279,12 +285,15 @@ function SidebarInner({
       setIsPerformanceOpen(true);
       setIsProcurementOpen(true);
       setIsSupplyChainOpen(true);
+      setIsLogisticsOpen(true);
       setIsSalesOpen(true);
       setIsCrmOpen(true);
       setIsFleetOpen(true);
+      setIsPropertyOpen(true);
       setIsServiceOpen(true);
       setIsInternalAuditOpen(true);
       setIsStrategyOpen(true);
+      setIsDailyReportsOpen(true);
       setIsVantageOpen(true);
       setIsAgricultureOpen(true);
       setIsProductionOpen(true);
@@ -315,8 +324,12 @@ function SidebarInner({
 
   const brandSettings = brandData?.data;
 
-  const handleLogout = () => {
-    clearHiveSession();
+  const handleLogout = async () => {
+    // Revoke the token server-side before dropping local state. Clearing
+    // storage alone left a live bearer token that kept working outside the
+    // browser until it expired on its own.
+    await logoutHiveSession();
+    queryClient.clear();
     router.push("/sign-in");
   };
 
@@ -432,6 +445,9 @@ function SidebarInner({
   const supplyChainModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "supplychain",
   );
+  const logisticsModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "logistics",
+  );
   const salesModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "sales",
   );
@@ -441,11 +457,17 @@ function SidebarInner({
   const fleetModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "fleet",
   );
+  const propertyModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "property",
+  );
   const serviceModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "service",
   );
   const internalAuditModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "internal-audit",
+  );
+  const dailyReportsModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "daily-reports",
   );
   const strategyModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "strategy",
@@ -536,6 +558,10 @@ function SidebarInner({
       setIsModulesOpen(true);
       setIsSupplyChainOpen(true);
     }
+    if (pathname.startsWith("/dashboard/logistics")) {
+      setIsModulesOpen(true);
+      setIsLogisticsOpen(true);
+    }
     if (pathname.startsWith("/dashboard/sales")) {
       setIsModulesOpen(true);
       setIsSalesOpen(true);
@@ -548,6 +574,10 @@ function SidebarInner({
       setIsModulesOpen(true);
       setIsFleetOpen(true);
     }
+    if (pathname.startsWith("/dashboard/property")) {
+      setIsModulesOpen(true);
+      setIsPropertyOpen(true);
+    }
     if (pathname.startsWith("/dashboard/service")) {
       setIsModulesOpen(true);
       setIsServiceOpen(true);
@@ -556,9 +586,14 @@ function SidebarInner({
       setIsModulesOpen(true);
       setIsInternalAuditOpen(true);
     }
+    if (pathname.startsWith("/dashboard/daily-reports")) {
+      setIsModulesOpen(true);
+      setIsDailyReportsOpen(true);
+    }
     if (pathname.startsWith("/dashboard/strategy")) {
       setIsModulesOpen(true);
       setIsStrategyOpen(true);
+      setIsDailyReportsOpen(true);
     }
     if (pathname.startsWith("/dashboard/vantage")) {
       setIsModulesOpen(true);
@@ -923,6 +958,9 @@ function SidebarInner({
                     {inventoryModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          type="button"
+                          aria-expanded={isInventoryOpen}
+                          aria-controls="desktop-inventory-links"
                           onClick={() => setIsInventoryOpen(!isInventoryOpen)}
                           className={cn(
                             "group flex min-h-11 items-center justify-between rounded-xl px-2.5 py-1.5 text-[13px] font-semibold transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary",
@@ -938,13 +976,16 @@ function SidebarInner({
                             </span>
                           </div>
                           {isInventoryOpen ? (
-                            <ChevronDown className="h-4 w-4 opacity-50" />
+                            <ChevronDown aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           ) : (
-                            <ChevronRight className="h-4 w-4 opacity-50" />
+                            <ChevronRight aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           )}
                         </button>
                         {isInventoryOpen && (
-                          <div className="flex flex-col gap-1 pl-4">
+                          <div id="desktop-inventory-links"
+                            className="flex flex-col gap-1 pl-4">
                             {inventoryModuleItems.map((item) => {
                               const active =
                                 item.href === "/dashboard"
@@ -982,6 +1023,9 @@ function SidebarInner({
                     {hospitalityModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          type="button"
+                          aria-expanded={isHospitalityOpen}
+                          aria-controls="desktop-hospitality-links"
                           onClick={() =>
                             setIsHospitalityOpen(!isHospitalityOpen)
                           }
@@ -999,13 +1043,16 @@ function SidebarInner({
                             </span>
                           </div>
                           {isHospitalityOpen ? (
-                            <ChevronDown className="h-4 w-4 opacity-50" />
+                            <ChevronDown aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           ) : (
-                            <ChevronRight className="h-4 w-4 opacity-50" />
+                            <ChevronRight aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           )}
                         </button>
                         {isHospitalityOpen && (
-                          <div className="flex flex-col gap-1 pl-4">
+                          <div id="desktop-hospitality-links"
+                            className="flex flex-col gap-1 pl-4">
                             {hospitalityModuleItems.map((item) => {
                               const active =
                                 item.href === "/dashboard"
@@ -1043,6 +1090,9 @@ function SidebarInner({
                     {warehouseModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          type="button"
+                          aria-expanded={isWarehouseOpen}
+                          aria-controls="desktop-warehouse-links"
                           onClick={() => setIsWarehouseOpen(!isWarehouseOpen)}
                           className={cn(
                             "group flex min-h-11 items-center justify-between rounded-xl px-2.5 py-1.5 text-[13px] font-semibold transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary",
@@ -1058,13 +1108,16 @@ function SidebarInner({
                             </span>
                           </div>
                           {isWarehouseOpen ? (
-                            <ChevronDown className="h-4 w-4 opacity-50" />
+                            <ChevronDown aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           ) : (
-                            <ChevronRight className="h-4 w-4 opacity-50" />
+                            <ChevronRight aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           )}
                         </button>
                         {isWarehouseOpen && (
-                          <div className="flex flex-col gap-1 pl-4">
+                          <div id="desktop-warehouse-links"
+                            className="flex flex-col gap-1 pl-4">
                             {warehouseModuleItems.map((item) => {
                               const active =
                                 item.href === "/dashboard"
@@ -1238,6 +1291,17 @@ function SidebarInner({
                     })}
 
                     {renderModuleSection({
+                      items: logisticsModuleItems,
+                      label: t(
+                        "nav.logistics",
+                        "Logistics & Freight Forwarding",
+                      ),
+                      icon: Truck,
+                      openState: isLogisticsOpen,
+                      onToggle: () => setIsLogisticsOpen((value) => !value),
+                    })}
+
+                    {renderModuleSection({
                       items: salesModuleItems,
                       label: t("nav.sales", "Sales Management"),
                       icon: BadgeDollarSign,
@@ -1262,6 +1326,14 @@ function SidebarInner({
                     })}
 
                     {renderModuleSection({
+                      items: propertyModuleItems,
+                      label: t("nav.property", "Property Management"),
+                      icon: Building2,
+                      openState: isPropertyOpen,
+                      onToggle: () => setIsPropertyOpen((value) => !value),
+                    })}
+
+                    {renderModuleSection({
                       items: serviceModuleItems,
                       label: t("nav.service", "Service and Maintenance"),
                       icon: LifeBuoy,
@@ -1283,6 +1355,14 @@ function SidebarInner({
                       icon: Compass,
                       openState: isStrategyOpen,
                       onToggle: () => setIsStrategyOpen((value) => !value),
+                    })}
+
+                    {renderModuleSection({
+                      items: dailyReportsModuleItems,
+                      label: t("nav.daily_reports", "Daily Reports"),
+                      icon: FileText,
+                      openState: isDailyReportsOpen,
+                      onToggle: () => setIsDailyReportsOpen((value) => !value),
                     })}
 
                     {renderModuleSection({
@@ -1338,24 +1418,41 @@ function SidebarInner({
                             </span>
                           </Link>
                           <button
+                            type="button"
+                            aria-expanded={isProjectManagementOpen}
+                            aria-controls="desktop-project-management-links"
+                            aria-label={
+                              isProjectManagementOpen
+                                ? t("nav.collapse_section", "Collapse {section}").replace(
+                                    "{section}",
+                                    t("nav.project_management", "Project Management"),
+                                  )
+                                : t("nav.expand_section", "Expand {section}").replace(
+                                    "{section}",
+                                    t("nav.project_management", "Project Management"),
+                                  )
+                            }
                             onClick={(e) => {
                               e.preventDefault();
                               setIsProjectManagementOpen(
                                 !isProjectManagementOpen,
                               );
                             }}
-                            className="p-1 hover:bg-muted rounded-md transition-colors"
+                            className="rounded-md p-1 text-primary transition-colors hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary-readable))]"
                           >
                             {isProjectManagementOpen ? (
-                              <ChevronDown className="h-4 w-4 opacity-50" />
+                              <ChevronDown aria-hidden="true" className="h-4 w-4" />
                             ) : (
-                              <ChevronRight className="h-4 w-4 opacity-50" />
+                              <ChevronRight aria-hidden="true" className="h-4 w-4" />
                             )}
                           </button>
                         </div>
 
                         {isProjectManagementOpen && (
-                          <div className="flex flex-col gap-1 pl-4 mb-2">
+                          <div
+                            id="desktop-project-management-links"
+                            className="flex flex-col gap-1 pl-4 mb-2"
+                          >
                             <Link
                               href="/dashboard/project-management"
                               className={cn(
@@ -1423,6 +1520,9 @@ function SidebarInner({
                     {workflowModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          type="button"
+                          aria-expanded={isWorkflowOpen}
+                          aria-controls="desktop-workflow-links"
                           onClick={() => setIsWorkflowOpen(!isWorkflowOpen)}
                           className={cn(
                             "group flex min-h-11 items-center justify-between rounded-xl px-2.5 py-1.5 text-[13px] font-semibold transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary",
@@ -1438,13 +1538,16 @@ function SidebarInner({
                             </span>
                           </div>
                           {isWorkflowOpen ? (
-                            <ChevronDown className="h-4 w-4 opacity-50" />
+                            <ChevronDown aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           ) : (
-                            <ChevronRight className="h-4 w-4 opacity-50" />
+                            <ChevronRight aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           )}
                         </button>
                         {isWorkflowOpen && (
-                          <div className="flex flex-col gap-1 pl-4">
+                          <div id="desktop-workflow-links"
+                            className="flex flex-col gap-1 pl-4">
                             {workflowModuleItems.map((item) => {
                               const active =
                                 item.href === "/dashboard"
@@ -1482,6 +1585,9 @@ function SidebarInner({
                     {lmsModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          type="button"
+                          aria-expanded={isLmsOpen}
+                          aria-controls="desktop-lms-links"
                           onClick={() => setIsLmsOpen(!isLmsOpen)}
                           className={cn(
                             "group flex min-h-11 items-center justify-between rounded-xl px-2.5 py-1.5 text-[13px] font-semibold transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary",
@@ -1497,13 +1603,16 @@ function SidebarInner({
                             </span>
                           </div>
                           {isLmsOpen ? (
-                            <ChevronDown className="h-4 w-4 opacity-50" />
+                            <ChevronDown aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           ) : (
-                            <ChevronRight className="h-4 w-4 opacity-50" />
+                            <ChevronRight aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           )}
                         </button>
                         {isLmsOpen && (
-                          <div className="flex flex-col gap-1 pl-4">
+                          <div id="desktop-lms-links"
+                            className="flex flex-col gap-1 pl-4">
                             {lmsModuleItems.map((item) => {
                               const active =
                                 item.href === "/dashboard"
@@ -1541,6 +1650,9 @@ function SidebarInner({
                     {b2bMarketplaceModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          type="button"
+                          aria-expanded={isB2BMarketplaceOpen}
+                          aria-controls="desktop-b2b-marketplace-links"
                           onClick={() =>
                             setIsB2BMarketplaceOpen(!isB2BMarketplaceOpen)
                           }
@@ -1558,13 +1670,16 @@ function SidebarInner({
                             </span>
                           </div>
                           {isB2BMarketplaceOpen ? (
-                            <ChevronDown className="h-4 w-4 opacity-50" />
+                            <ChevronDown aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           ) : (
-                            <ChevronRight className="h-4 w-4 opacity-50" />
+                            <ChevronRight aria-hidden="true"
+                            className="h-4 w-4 opacity-50" />
                           )}
                         </button>
                         {isB2BMarketplaceOpen && (
-                          <div className="flex flex-col gap-1 pl-4">
+                          <div id="desktop-b2b-marketplace-links"
+                            className="flex flex-col gap-1 pl-4">
                             {b2bMarketplaceModuleItems.map((item) => {
                               const active =
                                 item.href === "/dashboard"
@@ -1678,7 +1793,7 @@ function SidebarInner({
           </>
         )}
 
-        {/* 🚀 THE NEW APPS DROPDOWN */}
+        {/* ðŸš€ THE NEW APPS DROPDOWN */}
         {isMounted &&
           (canAccessConverter || canAccessMail || hasChatWorkspace) &&
           !searchQuery && (

@@ -5,29 +5,18 @@ import { useQuery } from "@tanstack/react-query";
 import { ShieldAlert } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { SystemOffline } from "@/components/auth/system-offline";
-import { clearHiveSession, handleAuthFailureResponse } from "@/lib/auth-sync";
+import { handleAuthFailureResponse, logoutHiveSession } from "@/lib/auth-sync";
 import { getAccessToken, getAuthHeaders, getBackendApiRoot, getWorkspaceScopeKey } from "@/lib/runtime-context";
 
 // 🚀 Interfaces
-export interface SystemSettings {
+export interface RuntimeSystemSettings {
     support_email: string;
-    support_phone: string;
-    system_email_name: string;
-    system_email_address: string;
-    default_timezone: string;
-    default_currency: string;
-    date_format: string;
-    time_format: string;
-    max_upload_size: number;
-    max_upload_unit: string;
     session_timeout_minutes: number;
     maintenance_mode: boolean;
-    enable_registration: boolean;
-    require_2fa: boolean;
 }
 
 interface SettingsContextType {
-    settings: SystemSettings | null;
+    settings: RuntimeSystemSettings | null;
     isLoading: boolean;
 }
 
@@ -73,7 +62,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
                 return { data: null };
             }
 
-            const res = await fetch(`${getBackendApiRoot()}/settings/general`, {
+            const res = await fetch(`${getBackendApiRoot()}/settings/general/runtime`, {
                 headers: getAuthHeaders(),
             });
 
@@ -81,20 +70,21 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
                 return { data: null };
             }
 
-            if (!res.ok) throw new Error("Failed to fetch settings");
+            if (!res.ok) return { data: null };
             return res.json();
         },
         staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+        retry: false,
     });
 
-    const settings = data?.data as SystemSettings | null;
+    const settings = data?.data as RuntimeSystemSettings | null;
 
-    const handleEmergencyLogout = () => {
-        clearHiveSession();
+    const handleEmergencyLogout = async () => {
+        await logoutHiveSession();
         router.push("/sign-in");
     };
 
-    if (!hasCheckedUser && !isLoading) {
+    if (!hasCheckedUser && !isLoading && pathname !== "/sign-in") {
         return <div className="h-screen w-screen bg-background" />;
     }
 

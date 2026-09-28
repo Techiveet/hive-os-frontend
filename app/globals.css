@@ -733,3 +733,56 @@ textarea,
   background-color: hsl(var(--background)) !important;
   border-color: hsl(var(--primary)) !important;
 }
+
+/* ============================================================================
+ * LMS (lms2 / Educrat) palette.
+ *
+ * The LMS surfaces style themselves with inline `style` from LMS_TOKENS, which
+ * CSS cannot theme. Exposing the palette as custom properties makes every one
+ * of those usages follow the app's light/dark setting for free.
+ *
+ * Dark values are the template's own dark mode: #140342 for the page and
+ * cards, #2B1C55 for raised surfaces, white text, and the light-* greys
+ * collapsing onto #2B1C55 (see html.-dark-mode in the template's main.css).
+ * ==========================================================================*/
+:root {
+  --lms-navy: #140342;
+  --lms-navy-2: #1a064f;
+  --lms-navy-card: #2b1c63;
+  --lms-dark-5: #282664;
+  --lms-purple: #6440fb;
+  --lms-lavender: #ebeafe;
+  --lms-green: #00ff84;
+  --lms-green-dark: #04d697;
+  --lms-beige: #fefbf4;
+  --lms-star-yellow: #e59819;
+  --lms-muted: #4f547b;
+  --lms-light-bg: #f7f8fb;
+  --lms-light-3: #eef2f6;
+  --lms-border: #ededed;
+  --lms-surface: #ffffff;
+}
+
+/*
+ * Dark values, tuned so stacked sections read as a rhythm rather than one flat
+ * slab: #140342 (deepest) for the page, #1d0d4d for raised surfaces and cards,
+ * #221059 for the alternating band. Purple lifts to #8f77ff because #6440FB is
+ * too dim against a dark ground, and muted lifts to a legible blue-grey.
+ */
+.dark {
+  --lms-navy: #ffffff;
+  --lms-navy-2: #f2f2f7;
+  --lms-navy-card: #2b1c55;
+  --lms-dark-5: #2b1c55;
+  --lms-purple: #8f77ff;
+  --lms-lavender: #2f2168;
+  --lms-green: #00ff84;
+  --lms-green-dark: #2ce0ab;
+  --lms-beige: #221059;
+  --lms-star-yellow: #f0ad4e;
+  --lms-muted: #a8afd0;
+  --lms-light-bg: #140342;
+  --lms-light-3: #2b1c55;
+  --lms-border: #362a63;
+  --lms-surface: #1d0d4d;
+}

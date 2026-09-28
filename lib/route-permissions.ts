@@ -91,6 +91,15 @@ export const INVENTORY_ROUTE_PERMISSIONS = [
   "view_inventory",
   "manage_inventory",
 ] as const;
+export const LOGISTICS_ROUTE_PERMISSIONS = [
+  "view_logistics_dashboard",
+  "view_logistics_jobs",
+  "manage_logistics",
+] as const;
+export const LOGISTICS_CREATE_ROUTE_PERMISSIONS = [
+  "create_logistics_jobs",
+  "manage_logistics",
+] as const;
 export const WORKFLOW_ROUTE_PERMISSIONS = [
   "view_workflow_automation",
   "manage_workflow_automation",
@@ -244,6 +253,17 @@ export const PROCUREMENT_ROUTE_PERMISSIONS = [
   "export_procurement_reports",
   "manage_procurement_settings",
 ] as const;
+export const PROPERTY_ROUTE_PERMISSIONS = [
+  "view_properties", "manage_properties", "view_units", "manage_units", "view_leases", "manage_leases",
+  "view_property_owners", "manage_property_owners", "view_property_tenants", "manage_property_tenants",
+  "view_utilities", "manage_utilities", "view_property_reports", "view_owner_statements", "view_viewings",
+  "manage_viewings", "view_reservations", "manage_reservations", "view_access_credentials",
+  "manage_access_credentials", "view_vehicles", "manage_vehicles", "view_parking", "manage_parking",
+  "view_visitors", "manage_visitors", "view_mall_sales", "verify_mall_sales", "view_mall_footfall",
+  "manage_mall_footfall", "view_mall_promotions", "manage_mall_promotions", "view_advertising_spaces",
+  "manage_advertising_spaces", "manage_mall_operations",
+] as const;
+
 export const FLEET_ROUTE_PERMISSIONS = [
   "view_fleet",
   "manage_fleet",
@@ -579,6 +599,21 @@ export function canAccessDashboardRoute(
     return hasSubscribedModule(access, "inventory_control");
   }
 
+  if (matchesPrefix(path, "/dashboard/logistics")) {
+    if (!hasSubscribedModule(access, "logistics_freight_forwarding")) {
+      return false;
+    }
+
+    if (matchesPrefix(path, "/dashboard/logistics/jobs/create")) {
+      return access.hasAnyPermission([
+        ...LOGISTICS_ROUTE_PERMISSIONS,
+        ...LOGISTICS_CREATE_ROUTE_PERMISSIONS,
+      ]);
+    }
+
+    return access.hasAnyPermission([...LOGISTICS_ROUTE_PERMISSIONS]);
+  }
+
   if (matchesPrefix(path, "/dashboard/warehouse")) {
     return hasSubscribedModule(access, "warehouse_management");
   }
@@ -719,6 +754,13 @@ export function canAccessDashboardRoute(
     return (
       hasSubscribedModule(access, "crm") &&
       access.hasAnyPermission([...CRM_ROUTE_PERMISSIONS])
+    );
+  }
+
+  if (matchesPrefix(path, "/dashboard/property")) {
+    return (
+      hasSubscribedModule(access, "property_management") &&
+      access.hasAnyPermission([...PROPERTY_ROUTE_PERMISSIONS])
     );
   }
 

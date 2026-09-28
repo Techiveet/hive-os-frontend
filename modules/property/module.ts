@@ -1,0 +1,120 @@
+import {
+  BarChart3,
+  Building2,
+  DoorOpen,
+  FileSignature,
+  Gauge,
+  Handshake,
+  KeyRound,
+  LayoutDashboard,
+  ShoppingBag,
+  Users,
+} from "lucide-react";
+import { PROPERTY_ROUTE_PERMISSIONS } from "@/lib/route-permissions";
+import type { FrontendModuleDefinition } from "@/modules/types";
+
+const common = {
+  moduleId: "property" as const,
+  subscriptionSlug: "property_management",
+  placement: "primary" as const,
+};
+
+export const propertyModule: FrontendModuleDefinition = {
+  id: "property",
+  name: "Property Management",
+  description:
+    "Properties, buildings, floors and units; owners and occupiers; the lease lifecycle with rent billing, deposits and escalations; utilities, parking, access control and mall operations.",
+  backendModule: "Modules\\PropertyManagement",
+  routePrefixes: ["/dashboard/property"],
+  navItems: [
+    {
+      ...common,
+      translationKey: "nav.property_overview",
+      fallbackLabel: "Property",
+      href: "/dashboard/property",
+      icon: LayoutDashboard,
+      permissions: [...PROPERTY_ROUTE_PERMISSIONS],
+    },
+    {
+      ...common,
+      translationKey: "nav.property_properties",
+      fallbackLabel: "Properties",
+      href: "/dashboard/property/properties",
+      icon: Building2,
+      permissions: ["view_properties", "manage_properties"],
+    },
+    {
+      ...common,
+      translationKey: "nav.property_units",
+      fallbackLabel: "Units",
+      href: "/dashboard/property/units",
+      icon: DoorOpen,
+      permissions: ["view_units", "manage_units"],
+    },
+    {
+      ...common,
+      translationKey: "nav.property_leases",
+      fallbackLabel: "Leases",
+      href: "/dashboard/property/leases",
+      icon: FileSignature,
+      permissions: ["view_leases", "manage_leases"],
+    },
+    {
+      ...common,
+      translationKey: "nav.property_leasing",
+      fallbackLabel: "Leasing pipeline",
+      href: "/dashboard/property/leasing",
+      icon: Handshake,
+      permissions: ["view_viewings", "manage_viewings", "view_reservations", "manage_reservations"],
+      placement: "secondary",
+    },
+    {
+      ...common,
+      translationKey: "nav.property_people",
+      fallbackLabel: "Owners & Occupiers",
+      href: "/dashboard/property/people",
+      icon: Users,
+      permissions: ["view_property_owners", "manage_property_owners", "view_property_tenants", "manage_property_tenants"],
+      placement: "secondary",
+    },
+    {
+      ...common,
+      translationKey: "nav.property_utilities",
+      fallbackLabel: "Utilities",
+      href: "/dashboard/property/utilities",
+      icon: Gauge,
+      permissions: ["view_utilities", "manage_utilities"],
+      placement: "secondary",
+    },
+    {
+      ...common,
+      translationKey: "nav.property_access",
+      fallbackLabel: "Access & Vehicles",
+      href: "/dashboard/property/access",
+      icon: KeyRound,
+      permissions: ["view_access_credentials", "manage_access_credentials", "view_vehicles", "manage_vehicles"],
+      placement: "secondary",
+    },
+    {
+      ...common,
+      translationKey: "nav.property_mall",
+      fallbackLabel: "Mall Operations",
+      href: "/dashboard/property/mall",
+      icon: ShoppingBag,
+      permissions: [
+        "view_mall_sales", "verify_mall_sales", "view_mall_footfall", "manage_mall_footfall", "view_mall_promotions",
+        "manage_mall_promotions", "view_advertising_spaces", "manage_advertising_spaces", "manage_mall_operations",
+      ],
+      placement: "secondary",
+    },
+    {
+      ...common,
+      translationKey: "nav.property_reports",
+      fallbackLabel: "Property Reports",
+      href: "/dashboard/property/reports",
+      icon: BarChart3,
+      permissions: ["view_property_reports", "view_owner_statements", "manage_properties"],
+      placement: "secondary",
+    },
+  ],
+};

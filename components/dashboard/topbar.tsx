@@ -30,7 +30,7 @@ import {
   getTenantHeaders,
   getWorkspaceScopeKey,
 } from "@/lib/runtime-context";
-import { clearHiveSession, handleAuthFailureResponse, isImpersonatingSession, stopImpersonation } from "@/lib/auth-sync";
+import { handleAuthFailureResponse, isImpersonatingSession, logoutHiveSession, stopImpersonation } from "@/lib/auth-sync";
 import { prepareNavForTour } from "@/lib/tour-events";
 import { buildSidebarTourSteps } from "@/lib/tour-steps";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -166,8 +166,10 @@ export function DashboardTopbar() {
     };
   }, [queryClient]);
 
-  const handleLogout = () => {
-    clearHiveSession();
+  const handleLogout = async () => {
+    // Revoke the token server-side before dropping local state; clearing
+    // storage alone leaves the bearer token usable outside the browser.
+    await logoutHiveSession();
     queryClient.clear();
     router.push("/sign-in");
   };

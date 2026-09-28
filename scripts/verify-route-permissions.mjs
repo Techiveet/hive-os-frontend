@@ -52,6 +52,18 @@ const b2bTenantWithModuleAccess = {
   hasModule: (slug) => slug === "b2b_marketplace",
 };
 
+const logisticsViewerWithoutModuleAccess = {
+  canBypassModuleSubscriptions: false,
+  hasPermission: (permission) => permission === "view_logistics_jobs",
+  hasAnyPermission: (permissions) => permissions.includes("view_logistics_jobs"),
+  hasModule: () => false,
+};
+
+const logisticsViewerWithModuleAccess = {
+  ...logisticsViewerWithoutModuleAccess,
+  hasModule: (slug) => slug === "logistics_freight_forwarding",
+};
+
 if (!canAccessDashboardRoute("/dashboard/workflow/rules", centralOverrideAccess)) {
   throw new Error("Central override users must not be blocked by workflow subscription checks.");
 }
@@ -66,6 +78,18 @@ if (canAccessDashboardRoute("/dashboard/b2b-marketplace", b2bTenantWithoutModule
 
 if (!canAccessDashboardRoute("/dashboard/b2b-marketplace", b2bTenantWithModuleAccess)) {
   throw new Error("Tenant users with b2b_marketplace must be allowed into the B2B marketplace.");
+}
+
+if (canAccessDashboardRoute("/dashboard/logistics/jobs/10", logisticsViewerWithoutModuleAccess)) {
+  throw new Error("Tenant users without logistics_freight_forwarding must be blocked from Logistics routes.");
+}
+
+if (!canAccessDashboardRoute("/dashboard/logistics/jobs/10", logisticsViewerWithModuleAccess)) {
+  throw new Error("Subscribed Logistics viewers must be allowed to view forwarding jobs.");
+}
+
+if (!canAccessDashboardRoute("/dashboard/logistics/jobs/create", logisticsViewerWithModuleAccess)) {
+  throw new Error("Subscribed Logistics viewers must reach the create page's fine-grained permission denial.");
 }
 
 console.log("route-permissions central override checks passed");

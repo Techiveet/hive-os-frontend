@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { ShieldAlert, Clock } from "lucide-react";
 import { useSystemSettings } from "@/components/providers/settings-provider"; 
-import { clearHiveSession, handleAuthFailureResponse } from "@/lib/auth-sync";
+import { handleAuthFailureResponse, logoutHiveSession } from "@/lib/auth-sync";
 import { getAccessToken, getBackendApiRoot, getTenantHeaders } from "@/lib/runtime-context";
 import {
     AlertDialog,
@@ -38,27 +38,22 @@ export function SessionTimeoutProvider({ children }: SessionTimeoutProviderProps
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pingRef = useRef<NodeJS.Timeout | null>(null);
+  // The idle checker runs every 3s, so without this guard every tick while
+  // the revocation request was still in flight fired another /logout.
+  const loggingOutRef = useRef(false);
 
   // 🚀 2. SECURE LOGOUT HANDLER
   const performLogout = useCallback(async () => {
-    const token = getAccessToken();
-    if (!token) return;
+    if (loggingOutRef.current) return;
+
+    loggingOutRef.current = true;
 
     try {
-      const endpoint = "/logout";
-      
-      await fetch(`${getBackendApiRoot()}${endpoint}`, {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
-          ...getTenantHeaders(),
-        }
-      });
-    } catch (error) {
-      console.error("Logout notification failed", error);
+      // Shared with the sidebar/topbar sign-out so an impersonated session
+      // revokes the borrowed token *and* the administrator's original one,
+      // instead of only telling the server about the active one.
+      await logoutHiveSession();
     } finally {
-      clearHiveSession();
       setShowWarning(false);
 
       toast("SECURITY OVERRIDE", {
@@ -67,6 +62,7 @@ export function SessionTimeoutProvider({ children }: SessionTimeoutProviderProps
       });
 
       router.push("/sign-in");
+      loggingOutRef.current = false;
     }
   }, [router, dynamicTimeoutMinutes]);
 
@@ -159,7 +155,21 @@ export function SessionTimeoutProvider({ children }: SessionTimeoutProviderProps
     <>
       {children}
 
-      <AlertDialog open={showWarning} onOpenChange={setShowWarning}>
+      {/*
+        Dismissing by Escape or overlay click has to count as activity. Merely
+        closing the dialog left `lastActivity` in the past, so the next 3s tick
+        either reopened it at once or signed the user out mid-keystroke.
+      */}
+      <AlertDialog
+        open={showWarning}
+        onOpenChange={(open) => {
+          if (open) {
+            setShowWarning(true);
+            return;
+          }
+          handleStayLoggedIn();
+        }}
+      >
         <AlertDialogContent className="rounded-[2rem] bg-background/95 backdrop-blur-xl border-amber-500/20 shadow-[0_0_100px_rgba(245,158,11,0.15)] sm:max-w-md z-[100]">
           <AlertDialogHeader className="flex flex-col items-center text-center space-y-4 pt-4">
             <div className="h-16 w-16 bg-amber-500/10 rounded-full flex items-center justify-center relative">
