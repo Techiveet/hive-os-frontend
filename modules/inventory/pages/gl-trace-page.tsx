@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowDown, FileText, Layers3, Loader2, Lock, Receipt, Route, Search } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useTranslation } from "@/store/use-translation";
 
@@ -24,6 +25,8 @@ type TraceResult = {
   business_document?: { reference_type: string | null; reference_id: string | null } | null;
 };
 
+type TraceMode = "valuation" | "journal";
+
 function Node({ icon: Icon, title, children }: { icon: React.ComponentType<{ className?: string }>; title: string; children: React.ReactNode }) {
   return (
     <Card className="rounded-3xl border-border/60 p-5">
@@ -39,15 +42,27 @@ export default function GlTracePage() {
   const { t } = useTranslation();
   const { hasPermission, isLoaded } = usePermissions();
   const canView = hasPermission("view_finance");
+  const searchParams = useSearchParams();
 
-  const [mode, setMode] = React.useState<"valuation" | "journal">("valuation");
-  const [id, setId] = React.useState("");
+  const entryParam = searchParams.get("entry");
+  const journalParam = searchParams.get("journal");
+  const initialMode: TraceMode = journalParam && !entryParam ? "journal" : "valuation";
+  const initialId = (entryParam || journalParam || "").trim();
+
+  const [mode, setMode] = React.useState<TraceMode>(initialMode);
+  const [id, setId] = React.useState(initialId);
   const [result, setResult] = React.useState<TraceResult | null>(null);
+  const autoRanFor = React.useRef<string | null>(null);
 
   const traceMutation = useMutation({
-    mutationFn: async () => {
-      const numId = Number(id);
-      if (mode === "valuation") return (await fetchGlTraceFromValuation(numId)) as TraceResult;
+    mutationFn: async (payload?: { mode: TraceMode; id: string }) => {
+      const nextMode = payload?.mode ?? mode;
+      const nextId = payload?.id ?? id;
+      const numId = Number(nextId);
+      if (!Number.isFinite(numId) || numId <= 0) {
+        throw { response: { status: 404 } };
+      }
+      if (nextMode === "valuation") return (await fetchGlTraceFromValuation(numId)) as TraceResult;
       return (await fetchGlTraceFromJournal(numId)) as TraceResult;
     },
     onSuccess: (data) => setResult(data),
@@ -58,6 +73,18 @@ export default function GlTracePage() {
         : (error?.response?.data?.message ?? t("inventory.common.failed", "Trace failed.")));
     },
   });
+
+  // Deep-link from Valuation: ?entry=123 or ?journal=45 auto-runs once.
+  React.useEffect(() => {
+    if (!canView || !initialId) return;
+    const key = `${initialMode}:${initialId}`;
+    if (autoRanFor.current === key) return;
+    autoRanFor.current = key;
+    setMode(initialMode);
+    setId(initialId);
+    traceMutation.mutate({ mode: initialMode, id: initialId });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per deep-link pair
+  }, [canView, initialId, initialMode]);
 
   if (isLoaded && !canView) {
     return (
@@ -76,7 +103,10 @@ export default function GlTracePage() {
           {t("inventory.gltrace.title", "Inventory ↔ GL Trace")}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {t("inventory.gltrace.subtitle", "Follow the audit chain from a valuation entry or GL journal to its source stock movement and document.")}
+          {t(
+            "inventory.gltrace.subtitle",
+            "Open Trace from a valuation movement, or look up by valuation entry / journal id."
+          )}
         </p>
       </div>
 
@@ -84,7 +114,7 @@ export default function GlTracePage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="w-full sm:w-48">
             <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("inventory.gltrace.trace_by", "Trace by")}</label>
-            <Select value={mode} onValueChange={(v) => { setMode(v as typeof mode); setResult(null); }}>
+            <Select value={mode} onValueChange={(v) => { setMode(v as TraceMode); setResult(null); }}>
               <SelectTrigger className="mt-1 rounded-xl"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="valuation">{t("inventory.gltrace.by_valuation", "Valuation entry")}</SelectItem>
@@ -93,14 +123,20 @@ export default function GlTracePage() {
             </Select>
           </div>
           <div className="flex-1">
-            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("inventory.gltrace.id_label", "ID")}</label>
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {mode === "valuation"
+                ? t("inventory.gltrace.valuation_id_label", "Valuation entry #")
+                : t("inventory.gltrace.journal_id_label", "Journal #")}
+            </label>
             <Input
               className="mt-1 rounded-xl font-mono"
               value={id}
               inputMode="numeric"
               onChange={(e) => setId(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && id) traceMutation.mutate(); }}
-              placeholder={mode === "valuation" ? t("inventory.gltrace.ph_valuation", "Valuation entry id") : t("inventory.gltrace.ph_journal", "Journal id")}
+              placeholder={mode === "valuation"
+                ? t("inventory.gltrace.ph_valuation", "From Valuation → Trace, or type #")
+                : t("inventory.gltrace.ph_journal", "From journal badge, or type #")}
             />
           </div>
           <Button className="rounded-full px-5" disabled={!id || traceMutation.isPending} onClick={() => traceMutation.mutate()}>
@@ -108,6 +144,7 @@ export default function GlTracePage() {
             {t("inventory.gltrace.trace_btn", "Trace")}
           </Button>
         </div>
+
       </Card>
 
       {result ? (

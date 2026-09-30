@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -8,7 +10,6 @@ import {
   Ban,
   CheckCircle2,
   Copy,
-  CreditCard,
   FileClock,
   History,
   Pencil,
@@ -18,7 +19,6 @@ import {
   Search,
   ShieldCheck,
   Trash2,
-  UserRoundCheck,
   UsersRound,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -43,7 +43,14 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { getWorkspaceScopeKey } from "@/lib/runtime-context";
+import {
+  getAuthHeaders,
+  getBackendApiRoot,
+  getBackendOrigin,
+  getBackendStorageUrl,
+  getWorkspaceScopeKey,
+} from "@/lib/runtime-context";
+import { SecureAssetImage } from "@/components/ui/secure-asset-image";
 import {
   deleteIdentityCardTemplate,
   duplicateIdentityCardTemplate,
@@ -120,13 +127,115 @@ function StatusBadge({ status }: { status: EmployeeIdentityCard["effective_statu
   );
 }
 
-function IdentityCardPreview({
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+type CardPreviewModel = {
+  template: Pick<
+    IdentityCardTemplate,
+    | "orientation"
+    | "width_mm"
+    | "height_mm"
+    | "primary_color"
+    | "accent_color"
+    | "text_color"
+    | "front_fields"
+    | "back_fields"
+    | "card_type"
+  >;
+  organizationName: string;
+  organizationLogoUrl: string | null;
+  name: string;
+  preferredName: string | null;
+  number: string;
+  role: string;
+  unit: string;
+  workEmail: string | null;
+  phone: string | null;
+  hiredOn: string | null;
+  cardNumber: string;
+  issuedOn: string;
+  expiresOn: string;
+  verificationValue: string;
+  initials: string;
+  photoUrl: string | null;
+};
+
+function resolveMediaUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  const trimmed = path.trim();
+  if (!trimmed) return null;
+
+  // Already a usable absolute/relative serve URL (including signed shared-serve).
+  if (
+    trimmed.startsWith("blob:") ||
+    trimmed.startsWith("data:") ||
+    trimmed.includes("/api/v1/files/") ||
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://")
+  ) {
+    if (trimmed.includes("/api/v1/files/")) {
+      const idx = trimmed.indexOf("/api/v1/files/");
+      return trimmed.substring(idx);
+    }
+    return trimmed;
+  }
+
+  return getBackendStorageUrl(trimmed) ?? trimmed;
+}
+
+async function resolvePrintableImageUrl(
+  path: string | null | undefined,
+): Promise<string | null> {
+  const resolved = resolveMediaUrl(path);
+  if (!resolved) return null;
+  if (resolved.startsWith("data:") || resolved.startsWith("blob:")) return resolved;
+
+  const fetchUrl = resolved.startsWith("http")
+    ? resolved
+    : resolved.startsWith("/")
+      ? `${typeof window !== "undefined" ? window.location.origin : getBackendOrigin()}${resolved}`
+      : resolved;
+
+  try {
+    const response = await fetch(fetchUrl, {
+      headers: getAuthHeaders(),
+      credentials: "include",
+    });
+    if (!response.ok) return resolved;
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/")) return resolved;
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return resolved;
+  }
+}
+
+function resolveCardPreviewModel({
   card,
   template,
   employeeName,
   employeeNumber,
   position,
   organizationUnit,
+  preferredName,
+  workEmail,
+  phone,
+  photoPath,
+  hiredOn,
+  organizationLogoUrl,
+  organizationName,
 }: {
   card?: EmployeeIdentityCard | null;
   template?: IdentityCardTemplate | null;
@@ -134,10 +243,20 @@ function IdentityCardPreview({
   employeeNumber?: string;
   position?: string | null;
   organizationUnit?: string | null;
-}) {
+  preferredName?: string | null;
+  workEmail?: string | null;
+  phone?: string | null;
+  photoPath?: string | null;
+  hiredOn?: string | null;
+  organizationLogoUrl?: string | null;
+  organizationName?: string | null;
+}): CardPreviewModel {
   const selectedTemplate = template ?? card?.template;
   const name =
-    employeeName ?? card?.employee?.primary_name ?? card?.snapshot?.primary_name ?? "Employee name";
+    employeeName ??
+    card?.employee?.primary_name ??
+    card?.snapshot?.primary_name ??
+    "Employee name";
   const number =
     employeeNumber ??
     card?.employee?.employee_number ??
@@ -147,92 +266,879 @@ function IdentityCardPreview({
     position ??
     card?.employee?.primary_assignment?.position?.title ??
     card?.snapshot?.position ??
-    "Position";
+    "Not assigned";
   const unit =
     organizationUnit ??
     card?.employee?.primary_assignment?.organization_unit?.name ??
     card?.snapshot?.organization_unit ??
-    "Organization unit";
+    "Not assigned";
   const verificationValue =
     typeof window === "undefined"
       ? card?.verification_path ?? "HIVE.OS employee identity card"
       : card
         ? `${window.location.origin}${card.verification_path}`
         : window.location.href;
-  const initials = name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const rawPhoto =
+    photoPath ??
+    card?.employee?.profile_photo_path ??
+    (typeof card?.snapshot?.profile_photo_path === "string"
+      ? card.snapshot.profile_photo_path
+      : null);
 
-  return (
-    <div
-      className="identity-card-print relative mx-auto aspect-[1.586/1] w-full max-w-[540px] overflow-hidden rounded-[1.4rem] border border-white/20 p-5 text-white shadow-2xl"
-      style={{
-        backgroundColor: selectedTemplate?.primary_color ?? "#0F172A",
-        color: selectedTemplate?.text_color ?? "#FFFFFF",
-      }}
-      aria-label={`Employee ID card preview for ${name}`}
-    >
-      <div
-        className="pointer-events-none absolute inset-y-0 right-0 w-2/5 skew-x-[-12deg] translate-x-10 opacity-90"
-        style={{ backgroundColor: selectedTemplate?.accent_color ?? "#D97706" }}
-        aria-hidden="true"
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-10"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px)",
-          backgroundSize: "22px 22px",
-        }}
-        aria-hidden="true"
-      />
-      <div className="relative flex h-full flex-col justify-between">
-        <div className="flex items-start justify-between gap-4">
+  return {
+    template: {
+      orientation: selectedTemplate?.orientation ?? "landscape",
+      width_mm: selectedTemplate?.width_mm ?? 85.6,
+      height_mm: selectedTemplate?.height_mm ?? 53.98,
+      primary_color: selectedTemplate?.primary_color ?? "#0F172A",
+      accent_color: selectedTemplate?.accent_color ?? "#D97706",
+      text_color: selectedTemplate?.text_color ?? "#FFFFFF",
+      front_fields: selectedTemplate?.front_fields ?? emptyTemplate.front_fields,
+      back_fields: selectedTemplate?.back_fields ?? emptyTemplate.back_fields,
+      card_type: selectedTemplate?.card_type ?? "employee",
+    },
+    organizationName: String(
+      card?.snapshot?.organization_name ?? organizationName ?? "HIVE.OS",
+    ),
+    organizationLogoUrl: organizationLogoUrl ?? null,
+    name,
+    preferredName:
+      preferredName ??
+      card?.employee?.preferred_name ??
+      (typeof card?.snapshot?.preferred_name === "string"
+        ? card.snapshot.preferred_name
+        : null),
+    number,
+    role,
+    unit,
+    workEmail:
+      workEmail ??
+      card?.employee?.work_email ??
+      (typeof card?.snapshot?.work_email === "string"
+        ? card.snapshot.work_email
+        : null),
+    phone:
+      phone ??
+      (typeof card?.snapshot?.phone === "string" ? card.snapshot.phone : null),
+    hiredOn:
+      hiredOn ??
+      (typeof card?.snapshot?.hired_on === "string" ? card.snapshot.hired_on : null),
+    cardNumber: card?.card_number ?? "Generated when issued",
+    issuedOn: card?.issued_on ?? "Issue date pending",
+    expiresOn: card?.expires_on ?? "per template policy",
+    verificationValue,
+    initials: name
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase(),
+    photoUrl: resolveMediaUrl(rawPhoto),
+  };
+}
+
+function showsField(fields: IdentityCardField[], field: IdentityCardField) {
+  return fields.includes(field);
+}
+
+async function printIdentityCard(model: CardPreviewModel) {
+  const width = model.template.width_mm;
+  const height = model.template.height_mm;
+  const primary = model.template.primary_color;
+  const accent = model.template.accent_color;
+  const text = model.template.text_color;
+  const printablePhotoUrl = await resolvePrintableImageUrl(model.photoUrl);
+  const printableLogoUrl = await resolvePrintableImageUrl(model.organizationLogoUrl);
+  const qrSvg = renderToStaticMarkup(
+    <QRCodeSVG value={model.verificationValue} size={120} level="M" includeMargin />,
+  );
+  const front = model.template.front_fields;
+  const back = model.template.back_fields;
+  const pageWidth =
+    model.template.orientation === "portrait" ? height : width;
+  const pageHeight =
+    model.template.orientation === "portrait" ? width : height;
+
+  const frontMeta = [
+    showsField(front, "position") ? `<p class="role">${escapeHtml(model.role)}</p>` : "",
+    showsField(front, "organization_unit")
+      ? `<p class="unit">${escapeHtml(model.unit)}</p>`
+      : "",
+    showsField(front, "employee_number")
+      ? `<p class="mono">${escapeHtml(model.number)}</p>`
+      : "",
+    showsField(front, "preferred_name") && model.preferredName
+      ? `<p class="unit">Preferred: ${escapeHtml(model.preferredName)}</p>`
+      : "",
+    showsField(front, "phone") && model.phone
+      ? `<p class="unit">${escapeHtml(model.phone)}</p>`
+      : "",
+    showsField(front, "work_email") && model.workEmail
+      ? `<p class="unit">${escapeHtml(model.workEmail)}</p>`
+      : "",
+    showsField(front, "hired_on") && model.hiredOn
+      ? `<p class="unit">Hired ${escapeHtml(model.hiredOn)}</p>`
+      : "",
+  ].join("");
+
+  const backRows = [
+    showsField(back, "card_number")
+      ? `<div class="field"><span class="label">Card number</span><span class="value mono">${escapeHtml(model.cardNumber)}</span></div>`
+      : "",
+    showsField(back, "issued_on")
+      ? `<div class="field"><span class="label">Issued</span><span class="value">${escapeHtml(model.issuedOn)}</span></div>`
+      : "",
+    showsField(back, "expires_on")
+      ? `<div class="field"><span class="label">Expires</span><span class="value">${escapeHtml(model.expiresOn)}</span></div>`
+      : "",
+    showsField(back, "work_email") && model.workEmail
+      ? `<div class="field"><span class="label">Work email</span><span class="value">${escapeHtml(model.workEmail)}</span></div>`
+      : "",
+    showsField(back, "phone") && model.phone
+      ? `<div class="field"><span class="label">Phone</span><span class="value">${escapeHtml(model.phone)}</span></div>`
+      : "",
+    showsField(back, "hired_on") && model.hiredOn
+      ? `<div class="field"><span class="label">Hired</span><span class="value">${escapeHtml(model.hiredOn)}</span></div>`
+      : "",
+    showsField(back, "employee_number")
+      ? `<div class="field"><span class="label">Employee number</span><span class="value mono">${escapeHtml(model.number)}</span></div>`
+      : "",
+    showsField(back, "position")
+      ? `<div class="field"><span class="label">Position</span><span class="value">${escapeHtml(model.role)}</span></div>`
+      : "",
+    showsField(back, "organization_unit")
+      ? `<div class="field"><span class="label">Unit</span><span class="value">${escapeHtml(model.unit)}</span></div>`
+      : "",
+  ].join("");
+
+  const qrBlock = `<div class="qr">${qrSvg}</div>`;
+  const hasBack = back.length > 0;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(model.cardNumber)} · Employee ID</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #0f172a;
+      font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    @page {
+      size: ${pageWidth}mm ${pageHeight}mm;
+      margin: 0;
+    }
+    .card {
+      position: relative;
+      width: ${pageWidth}mm;
+      height: ${pageHeight}mm;
+      overflow: hidden;
+      color: ${text};
+      background: ${primary};
+      padding: 3.2mm 3.6mm;
+      page-break-after: always;
+      break-after: page;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .card:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+    .card.back { background: #0b1220; color: #f8fafc; }
+    .accent {
+      position: absolute;
+      inset: 0 auto 0 58%;
+      width: 55%;
+      transform: skewX(-12deg);
+      background: ${accent};
+      opacity: 0.92;
+    }
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      opacity: 0.12;
+      background-image:
+        linear-gradient(rgba(255,255,255,.55) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.55) 1px, transparent 1px);
+      background-size: 18px 18px;
+    }
+    .content {
+      position: relative;
+      z-index: 1;
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 2mm;
+    }
+    .eyebrow {
+      margin: 0;
+      font-size: 7px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      opacity: 0.75;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .org {
+      margin: 1mm 0 0;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 2mm;
+      min-width: 0;
+    }
+    .brand-logo {
+      width: 9mm;
+      height: 9mm;
+      object-fit: contain;
+      flex-shrink: 0;
+      background: rgba(255,255,255,.92);
+      border-radius: 1.5mm;
+      padding: 0.6mm;
+    }
+    .identity {
+      display: flex;
+      align-items: flex-end;
+      gap: 2.5mm;
+      min-height: 0;
+    }
+    .photo {
+      width: 14mm;
+      height: 14mm;
+      flex-shrink: 0;
+      border-radius: 2.5mm;
+      border: 0.4mm solid rgba(255,255,255,.65);
+      background: rgba(255,255,255,.16);
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      font-weight: 900;
+      overflow: hidden;
+    }
+    .photo img { width: 100%; height: 100%; object-fit: cover; }
+    .name { margin: 0; font-size: 14px; font-weight: 900; line-height: 1.1; }
+    .role { margin: 0.6mm 0 0; font-size: 9px; font-weight: 700; opacity: 0.9; line-height: 1.15; }
+    .unit { margin: 0.4mm 0 0; font-size: 8px; opacity: 0.75; line-height: 1.15; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.04em; }
+    .identity .mono { margin: 1mm 0 0; font-size: 8px; }
+    .qr {
+      background: #fff;
+      border-radius: 2mm;
+      padding: 1mm;
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      align-self: flex-end;
+    }
+    .qr svg { display: block; width: 12mm; height: 12mm; }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 2mm;
+      font-size: 8px;
+      opacity: 0.9;
+      line-height: 1.15;
+    }
+    .back-head { min-width: 0; }
+    .back-title { margin: 0; font-size: 12px; font-weight: 900; line-height: 1.1; }
+    .back-copy { margin: 1mm 0 0; font-size: 7.5px; line-height: 1.25; opacity: 0.8; max-width: 68%; }
+    .fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.6mm 3mm;
+      align-content: start;
+      min-height: 0;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4mm;
+      min-width: 0;
+    }
+    .label {
+      font-size: 7px;
+      opacity: 0.65;
+      line-height: 1.1;
+    }
+    .value {
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <section class="card" aria-label="Identity card front">
+    <div class="accent" aria-hidden="true"></div>
+    <div class="grid-overlay" aria-hidden="true"></div>
+    <div class="content">
+      <div style="display:flex;justify-content:space-between;gap:2mm;align-items:flex-start;">
+        <div class="brand-row">
+          ${
+            showsField(front, "organization_logo") && printableLogoUrl
+              ? `<img class="brand-logo" src="${escapeHtml(printableLogoUrl)}" alt="" />`
+              : showsField(front, "organization_logo")
+                ? `<div class="brand-logo" style="display:grid;place-items:center;font-size:8px;font-weight:700;">LOGO</div>`
+                : ""
+          }
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/70">
-              Verified workforce credential
-            </p>
-            <p className="mt-1 text-lg font-black tracking-tight">
-              {card?.snapshot?.organization_name ?? "HIVE.OS"}
-            </p>
+            <p class="eyebrow">Verified ${escapeHtml(model.template.card_type)} credential</p>
+            ${
+              showsField(front, "organization_name")
+                ? `<p class="org">${escapeHtml(model.organizationName)}</p>`
+                : ""
+            }
           </div>
-          <ShieldCheck className="h-8 w-8" aria-hidden="true" />
-        </div>
-        <div className="flex items-end gap-4">
-          <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl border-2 border-white/60 bg-white/15 text-2xl font-black">
-            {initials}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xl font-black">{name}</p>
-            <p className="truncate text-sm font-semibold text-white/85">{role}</p>
-            <p className="truncate text-xs text-white/70">{unit}</p>
-            <p className="mt-2 font-mono text-xs tracking-wider">{number}</p>
-          </div>
-          <div className="rounded-xl bg-white p-1.5 text-slate-950">
-            <QRCodeSVG value={verificationValue} size={58} level="M" />
-          </div>
-        </div>
-        <div className="flex items-end justify-between gap-3 text-[10px] text-white/75">
-          <span>{card?.card_number ?? "Generated when issued"}</span>
-          <span>Expires {card?.expires_on ?? "per template policy"}</span>
         </div>
       </div>
+      <div class="identity">
+        ${
+          showsField(front, "photo")
+            ? `<div class="photo">${
+                printablePhotoUrl
+                  ? `<img src="${escapeHtml(printablePhotoUrl)}" alt="" />`
+                  : escapeHtml(model.initials)
+              }</div>`
+            : ""
+        }
+        <div style="min-width:0;flex:1;">
+          ${
+            showsField(front, "primary_name")
+              ? `<p class="name">${escapeHtml(model.name)}</p>`
+              : ""
+          }
+          ${frontMeta}
+        </div>
+        ${showsField(front, "qr_code") ? qrBlock : ""}
+      </div>
+      <div class="footer">
+        <span>${
+          showsField(front, "card_number")
+            ? escapeHtml(model.cardNumber)
+            : escapeHtml(model.number)
+        }</span>
+        <span>${
+          showsField(front, "expires_on")
+            ? `Expires ${escapeHtml(model.expiresOn)}`
+            : showsField(front, "issued_on")
+              ? `Issued ${escapeHtml(model.issuedOn)}`
+              : ""
+        }</span>
+      </div>
+    </div>
+  </section>
+  ${
+    hasBack
+      ? `<section class="card back" aria-label="Identity card back">
+    <div class="accent" aria-hidden="true"></div>
+    <div class="grid-overlay" aria-hidden="true"></div>
+    <div class="content">
+      <div class="back-head">
+        <p class="back-title">${escapeHtml(model.organizationName)}</p>
+        ${
+          showsField(back, "verification_instructions")
+            ? `<p class="back-copy">Scan the QR code to verify this credential with authorized HR staff.</p>`
+            : ""
+        }
+      </div>
+      <div class="fields">${backRows}</div>
+      <div class="footer">
+        <span>${escapeHtml(model.name)}</span>
+        ${showsField(back, "qr_code") ? qrBlock : ""}
+      </div>
+    </div>
+  </section>`
+      : ""
+  }
+</body>
+</html>`;
+
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.title = "Identity card print";
+  frame.style.position = "fixed";
+  frame.style.right = "0";
+  frame.style.bottom = "0";
+  frame.style.width = "0";
+  frame.style.height = "0";
+  frame.style.border = "0";
+  frame.style.opacity = "0";
+  frame.style.pointerEvents = "none";
+  document.body.appendChild(frame);
+
+  const frameWindow = frame.contentWindow;
+  const frameDocument = frame.contentDocument ?? frameWindow?.document;
+  if (!frameWindow || !frameDocument) {
+    frame.remove();
+    toast.error("Unable to prepare the identity card for printing.");
+    return;
+  }
+
+  frameDocument.open();
+  frameDocument.write(html);
+  frameDocument.close();
+
+  const cleanup = () => {
+    frame.remove();
+  };
+
+  const triggerPrint = () => {
+    try {
+      frameWindow.focus();
+      frameWindow.print();
+    } finally {
+      window.setTimeout(cleanup, 1000);
+    }
+  };
+
+  const images = Array.from(frameDocument.images);
+  if (images.length === 0) {
+    window.setTimeout(triggerPrint, 150);
+    return;
+  }
+
+  let remaining = images.length;
+  const done = () => {
+    remaining -= 1;
+    if (remaining <= 0) triggerPrint();
+  };
+  images.forEach((img) => {
+    if (img.complete) done();
+    else {
+      img.onload = done;
+      img.onerror = done;
+    }
+  });
+}
+
+const DEMO_CARD_VALUES = {
+  organizationName: "Your Organization",
+  name: "Abebe Bikila",
+  preferredName: "Abebe",
+  number: "EMP-001",
+  role: "Operations Lead",
+  unit: "Head Office",
+  workEmail: "abebe.bikila@example.com",
+  phone: "+251 911 000 000",
+  hiredOn: "2024-01-15",
+  cardNumber: "HID-2026-SAMPLE01",
+  issuedOn: "2026-01-01",
+  expiresOn: "2028-01-01",
+};
+
+function withDemoCardValues(
+  model: CardPreviewModel,
+  enabled: boolean,
+): CardPreviewModel {
+  if (!enabled) return model;
+  return {
+    ...model,
+    organizationName:
+      model.organizationName === "HIVE.OS" || !model.organizationName
+        ? DEMO_CARD_VALUES.organizationName
+        : model.organizationName,
+    name:
+      model.name === "Employee name" ? DEMO_CARD_VALUES.name : model.name,
+    preferredName: model.preferredName ?? DEMO_CARD_VALUES.preferredName,
+    number: model.number === "EMP-000" ? DEMO_CARD_VALUES.number : model.number,
+    role: model.role === "Not assigned" || model.role === "Position"
+      ? DEMO_CARD_VALUES.role
+      : model.role,
+    unit:
+      model.unit === "Not assigned" || model.unit === "Organization unit"
+        ? DEMO_CARD_VALUES.unit
+        : model.unit,
+    workEmail: model.workEmail ?? DEMO_CARD_VALUES.workEmail,
+    phone: model.phone ?? DEMO_CARD_VALUES.phone,
+    hiredOn: model.hiredOn ?? DEMO_CARD_VALUES.hiredOn,
+    cardNumber:
+      model.cardNumber === "Generated when issued"
+        ? DEMO_CARD_VALUES.cardNumber
+        : model.cardNumber,
+    issuedOn:
+      model.issuedOn === "Issue date pending"
+        ? DEMO_CARD_VALUES.issuedOn
+        : model.issuedOn,
+    expiresOn:
+      model.expiresOn === "per template policy"
+        ? DEMO_CARD_VALUES.expiresOn
+        : model.expiresOn,
+    initials: (model.name === "Employee name"
+      ? DEMO_CARD_VALUES.name
+      : model.name
+    )
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase(),
+  };
+}
+
+function IdentityCardPreview({
+  card,
+  template,
+  employeeName,
+  employeeNumber,
+  position,
+  organizationUnit,
+  preferredName,
+  workEmail,
+  phone,
+  photoPath,
+  hiredOn,
+  organizationLogoUrl,
+  organizationName,
+  showBack = false,
+  demo = false,
+}: {
+  card?: EmployeeIdentityCard | null;
+  template?: IdentityCardTemplate | null;
+  employeeName?: string;
+  employeeNumber?: string;
+  position?: string | null;
+  organizationUnit?: string | null;
+  preferredName?: string | null;
+  workEmail?: string | null;
+  phone?: string | null;
+  photoPath?: string | null;
+  hiredOn?: string | null;
+  organizationLogoUrl?: string | null;
+  organizationName?: string | null;
+  showBack?: boolean;
+  demo?: boolean;
+}) {
+  const model = withDemoCardValues(
+    resolveCardPreviewModel({
+      card,
+      template,
+      employeeName,
+      employeeNumber,
+      position,
+      organizationUnit,
+      preferredName,
+      workEmail,
+      phone,
+      photoPath,
+      hiredOn,
+      organizationLogoUrl,
+      organizationName,
+    }),
+    demo || !card,
+  );
+  const front = model.template.front_fields;
+  const back = model.template.back_fields;
+  const aspect =
+    model.template.orientation === "portrait"
+      ? `${model.template.height_mm} / ${model.template.width_mm}`
+      : `${model.template.width_mm} / ${model.template.height_mm}`;
+
+  const renderFieldBlock = (fields: IdentityCardField[], compact = false) => (
+    <div className={compact ? "min-w-0 flex-1 space-y-0.5" : "min-w-0 flex-1 space-y-1"}>
+      {showsField(fields, "primary_name") && (
+        <p className={`truncate font-black ${compact ? "text-base" : "text-xl"}`}>
+          {model.name}
+        </p>
+      )}
+      {showsField(fields, "preferred_name") && (
+        <p className="truncate text-xs text-white/70">
+          Preferred: {model.preferredName}
+        </p>
+      )}
+      {showsField(fields, "position") && (
+        <p className="truncate text-sm font-semibold text-white/85">{model.role}</p>
+      )}
+      {showsField(fields, "organization_unit") && (
+        <p className="truncate text-xs text-white/70">{model.unit}</p>
+      )}
+      {showsField(fields, "employee_number") && (
+        <p className="font-mono text-xs tracking-wider">{model.number}</p>
+      )}
+      {showsField(fields, "phone") && (
+        <p className="truncate text-xs text-white/70">{model.phone}</p>
+      )}
+      {showsField(fields, "work_email") && (
+        <p className="truncate text-xs text-white/70">{model.workEmail}</p>
+      )}
+      {showsField(fields, "hired_on") && (
+        <p className="truncate text-xs text-white/70">Hired {model.hiredOn}</p>
+      )}
+      {showsField(fields, "issued_on") && (
+        <p className="truncate text-xs text-white/70">Issued {model.issuedOn}</p>
+      )}
+      {showsField(fields, "expires_on") && (
+        <p className="truncate text-xs text-white/70">Expires {model.expiresOn}</p>
+      )}
+      {showsField(fields, "card_number") && (
+        <p className="font-mono text-[10px] tracking-wider text-white/80">
+          {model.cardNumber}
+        </p>
+      )}
+    </div>
+  );
+
+  const face = (side: "front" | "back") => {
+    const fields = side === "front" ? front : back;
+    const isBack = side === "back";
+    return (
+      <div
+        className="relative mx-auto w-full max-w-[540px] overflow-hidden rounded-[1.4rem] border border-white/20 p-4 shadow-2xl sm:p-5"
+        style={{
+          aspectRatio: aspect,
+          backgroundColor: isBack ? "#0B1220" : model.template.primary_color,
+          color: model.template.text_color,
+        }}
+        aria-label={`Employee ID card ${side} preview for ${model.name}`}
+      >
+        <div
+          className="pointer-events-none absolute inset-y-0 right-0 w-2/5 skew-x-[-12deg] translate-x-10 opacity-90"
+          style={{ backgroundColor: model.template.accent_color }}
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-10"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px)",
+            backgroundSize: "22px 22px",
+          }}
+          aria-hidden="true"
+        />
+        <div className="relative flex h-full flex-col justify-between gap-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2.5">
+              {showsField(fields, "organization_logo") && (
+                model.organizationLogoUrl ? (
+                  <SecureAssetImage
+                    src={model.organizationLogoUrl}
+                    alt=""
+                    className="h-10 w-10 shrink-0 rounded-lg bg-white/95 object-contain p-1"
+                    loadingClassName="h-10 w-10 shrink-0 rounded-lg bg-white/20"
+                  />
+                ) : (
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-dashed border-white/50 bg-white/10 text-[9px] font-bold uppercase tracking-wide text-white/80">
+                    Logo
+                  </div>
+                )
+              )}
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-white/70">
+                  {isBack ? "Credential reverse" : `Verified ${model.template.card_type}`}
+                </p>
+                {showsField(fields, "organization_name") && (
+                  <p className="mt-1 truncate text-base font-black tracking-tight sm:text-lg">
+                    {model.organizationName}
+                  </p>
+                )}
+              </div>
+            </div>
+            {!isBack && <ShieldCheck className="h-7 w-7 shrink-0" aria-hidden="true" />}
+          </div>
+
+          {isBack ? (
+            <>
+              {showsField(fields, "verification_instructions") && (
+                <p className="max-w-[75%] text-[11px] leading-4 text-white/75">
+                  Scan the QR code or open the verification link to confirm this
+                  credential with authorized HR staff.
+                </p>
+              )}
+              <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-x-3 gap-y-2 overflow-hidden text-xs">
+                {(
+                  [
+                    ["card_number", "Card number", model.cardNumber, true],
+                    ["issued_on", "Issued", model.issuedOn, false],
+                    ["expires_on", "Expires", model.expiresOn, false],
+                    ["work_email", "Work email", model.workEmail, false],
+                    ["phone", "Phone", model.phone, false],
+                    ["hired_on", "Hired", model.hiredOn, false],
+                    ["employee_number", "Employee number", model.number, true],
+                    ["primary_name", "Name", model.name, false],
+                    ["preferred_name", "Preferred", model.preferredName, false],
+                    ["position", "Position", model.role, false],
+                    ["organization_unit", "Unit", model.unit, false],
+                  ] as const
+                )
+                  .filter(([field]) => showsField(fields, field))
+                  .map(([field, label, value, mono]) => (
+                    <div key={field} className="min-w-0">
+                      <p className="text-[10px] text-white/60">{label}</p>
+                      <p
+                        className={`truncate font-semibold ${mono ? "font-mono text-[11px]" : ""}`}
+                      >
+                        {value}
+                      </p>
+                    </div>
+                  ))}
+              </div>
+              <div className="flex items-end justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  {showsField(fields, "photo") && (
+                    <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/50 bg-white/15 text-sm font-black">
+                      {model.photoUrl ? (
+                        <SecureAssetImage
+                          src={model.photoUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loadingClassName="h-full w-full bg-white/20"
+                        />
+                      ) : (
+                        model.initials
+                      )}
+                    </div>
+                  )}
+                  <span className="truncate text-xs text-white/75">{model.name}</span>
+                </div>
+                {showsField(fields, "qr_code") && (
+                  <div className="rounded-xl bg-white p-1.5 text-slate-950">
+                    <QRCodeSVG value={model.verificationValue} size={52} level="M" />
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex min-h-0 flex-1 items-end gap-3">
+                {showsField(fields, "photo") && (
+                  <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border-2 border-white/60 bg-white/15 text-2xl font-black">
+                    {model.photoUrl ? (
+                      <SecureAssetImage
+                        src={model.photoUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loadingClassName="h-full w-full bg-white/20"
+                      />
+                    ) : (
+                      model.initials
+                    )}
+                  </div>
+                )}
+                {renderFieldBlock(fields)}
+                {showsField(fields, "qr_code") && (
+                  <div className="rounded-xl bg-white p-1.5 text-slate-950">
+                    <QRCodeSVG value={model.verificationValue} size={58} level="M" />
+                  </div>
+                )}
+              </div>
+              {(showsField(fields, "card_number") ||
+                showsField(fields, "issued_on") ||
+                showsField(fields, "expires_on") ||
+                showsField(fields, "verification_instructions")) && (
+                <div className="flex flex-wrap items-end justify-between gap-2 text-[10px] text-white/75">
+                  <span>
+                    {showsField(fields, "card_number")
+                      ? model.cardNumber
+                      : showsField(fields, "employee_number")
+                        ? model.number
+                        : ""}
+                  </span>
+                  <span className="text-right">
+                    {[
+                      showsField(fields, "issued_on")
+                        ? `Issued ${model.issuedOn}`
+                        : null,
+                      showsField(fields, "expires_on")
+                        ? `Expires ${model.expiresOn}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Front
+        </p>
+        {face("front")}
+      </div>
+      {showBack ? (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Back {back.length === 0 ? "(no fields selected)" : ""}
+          </p>
+          {back.length > 0 ? (
+            face("back")
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-muted-foreground">
+              Toggle back fields to preview the reverse side.
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 const identityCardTabs = new Set(["cards", "issue", "templates", "verify"]);
 
+const identityCardTabRoutes: Record<string, string> = {
+  cards: "/dashboard/identity-cards",
+  issue: "/dashboard/identity-cards/issue",
+  templates: "/dashboard/identity-cards/templates",
+  verify: "/dashboard/identity-cards/verify",
+};
+
+function tabFromPathname(pathname: string | null | undefined): string {
+  if (!pathname) return "cards";
+  if (pathname.startsWith("/dashboard/identity-cards/issue")) return "issue";
+  if (pathname.startsWith("/dashboard/identity-cards/templates")) return "templates";
+  if (pathname.startsWith("/dashboard/identity-cards/verify")) return "verify";
+  return "cards";
+}
+
 export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: string }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const scope = getWorkspaceScopeKey();
   const queryClient = useQueryClient();
   const templateTriggerRef = useRef<HTMLElement | null>(null);
-  const [tab, setTab] = useState(
-    identityCardTabs.has(initialTab) ? initialTab : "cards",
-  );
+  const [tab, setTab] = useState(() => {
+    const fromRoute = tabFromPathname(pathname);
+    if (identityCardTabs.has(fromRoute)) return fromRoute;
+    return identityCardTabs.has(initialTab) ? initialTab : "cards";
+  });
+
+  const navigateToTab = (nextTab: string) => {
+    if (!identityCardTabs.has(nextTab)) return;
+    setTab(nextTab);
+    const href = identityCardTabRoutes[nextTab] ?? identityCardTabRoutes.cards;
+    if (pathname !== href) {
+      router.push(href, { scroll: false });
+    }
+  };
+
+  useEffect(() => {
+    const fromRoute = tabFromPathname(pathname);
+    if (identityCardTabs.has(fromRoute) && fromRoute !== tab) {
+      setTab(fromRoute);
+    }
+  }, [pathname, tab]);
   const [cardSearch, setCardSearch] = useState("");
   const [cardStatus, setCardStatus] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
@@ -277,6 +1183,24 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
     queryKey: ["hr-identity-card-templates", scope],
     queryFn: fetchIdentityCardTemplates,
   });
+  const brandQuery = useQuery({
+    queryKey: ["hr-identity-card-brand", scope],
+    queryFn: async () => {
+      const response = await fetch(`${getBackendApiRoot()}/settings/brand/public`, {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) return null;
+      const payload = await response.json();
+      return (payload?.data ?? payload ?? null) as {
+        app_title?: string;
+        pdf_logo?: string | null;
+        logo_light?: string | null;
+        logo_dark?: string | null;
+        logo?: string | null;
+      } | null;
+    },
+    staleTime: 5 * 60_000,
+  });
 
   const workspace = workspaceQuery.data?.data;
   const templates = templatesQuery.data?.data ?? workspace?.templates ?? [];
@@ -288,6 +1212,14 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
   const selectedTemplate = templates.find(
     (template) => String(template.id) === issueForm.template_id,
   );
+  const organizationLogoUrl = resolveMediaUrl(
+    brandQuery.data?.pdf_logo ||
+      brandQuery.data?.logo_light ||
+      brandQuery.data?.logo_dark ||
+      brandQuery.data?.logo ||
+      null,
+  );
+  const organizationNameFromBrand = brandQuery.data?.app_title?.trim() || null;
 
   useEffect(() => {
     if (!issueForm.template_id && templates.length > 0) {
@@ -401,7 +1333,7 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get("verify");
     if (!value) return;
-    setTab("verify");
+    navigateToTab("verify");
     setVerifyValue(value);
     verifyMutation.mutate(value);
     // Run only for the initial QR route.
@@ -473,22 +1405,47 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
 
   const submitVerification = (event: FormEvent) => {
     event.preventDefault();
+    const raw = verifyValue.trim();
     const publicId =
-      verifyValue.match(
+      raw.match(
         /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i,
-      )?.[0] ?? verifyValue.trim();
+      )?.[0] ??
+      raw.match(/\bHID-\d{4}-[A-Z0-9]+\b/i)?.[0] ??
+      raw;
     if (publicId) verifyMutation.mutate(publicId);
   };
 
+  const buildPreviewModel = (
+    card?: EmployeeIdentityCard | null,
+    extras?: {
+      template?: IdentityCardTemplate | null;
+      employeeName?: string;
+      employeeNumber?: string;
+      position?: string | null;
+      organizationUnit?: string | null;
+      preferredName?: string | null;
+      workEmail?: string | null;
+      phone?: string | null;
+      photoPath?: string | null;
+    },
+  ) =>
+    resolveCardPreviewModel({
+      card,
+      template: extras?.template,
+      employeeName: extras?.employeeName,
+      employeeNumber: extras?.employeeNumber,
+      position: extras?.position,
+      organizationUnit: extras?.organizationUnit,
+      preferredName: extras?.preferredName,
+      workEmail: extras?.workEmail,
+      phone: extras?.phone,
+      photoPath: extras?.photoPath,
+      organizationLogoUrl,
+      organizationName: organizationNameFromBrand,
+    });
+
   return (
     <main className="min-w-0 space-y-6 pb-12">
-      <style jsx global>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          .identity-card-print, .identity-card-print * { visibility: visible !important; }
-          .identity-card-print { position: fixed !important; inset: 24px auto auto 24px !important; width: 540px !important; }
-        }
-      `}</style>
       <header className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 px-5 py-7 text-white shadow-xl sm:px-8">
         <div
           className="absolute inset-0 opacity-15"
@@ -515,7 +1472,7 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
           <Button
             type="button"
             onClick={() => {
-              setTab("issue");
+              navigateToTab("issue");
               document.getElementById("identity-card-tabs")?.focus();
             }}
             className="min-h-11 bg-amber-700 font-bold text-white hover:bg-amber-800"
@@ -549,7 +1506,7 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
         </div>
       </section>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={navigateToTab}>
         <div className="overflow-x-auto pb-1">
           <TabsList
             id="identity-card-tabs"
@@ -648,9 +1605,20 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
                           <td className="px-4 py-3">{card.expires_on ?? "No expiry"}</td>
                           <td className="px-4 py-3"><StatusBadge status={card.effective_status} /></td>
                           <td className="px-4 py-3">
-                            <div className="flex justify-end gap-2">
+                            <div className="flex flex-wrap justify-end gap-2">
                               <Button type="button" size="sm" variant="outline" onClick={() => setPreviewCard(card)}>
                                 View
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  void printIdentityCard(buildPreviewModel(card))
+                                }
+                              >
+                                <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                                Print
                               </Button>
                               {card.effective_status === "active" && (
                                 <>
@@ -842,7 +1810,21 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
                 employeeNumber={selectedEmployee?.employee_number}
                 position={selectedEmployee?.position}
                 organizationUnit={selectedEmployee?.organization_unit}
+                preferredName={selectedEmployee?.preferred_name}
+                workEmail={selectedEmployee?.work_email}
+                phone={selectedEmployee?.phone}
+                photoPath={selectedEmployee?.profile_photo_path}
+                organizationLogoUrl={organizationLogoUrl}
+                organizationName={organizationNameFromBrand}
+                demo={!selectedEmployee}
               />
+              {selectedEmployee && !selectedEmployee.profile_photo_path && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  No photo found for {selectedEmployee.primary_name}. ID cards pull the avatar
+                  from the linked security user. Edit this employee in HR and confirm a User is
+                  linked, then make sure that user has a photo on Security → Users (or Profile).
+                </p>
+              )}
             </div>
           </div>
         </TabsContent>
@@ -898,7 +1880,13 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <IdentityCardPreview template={template} />
+                  <IdentityCardPreview
+                    template={template}
+                    demo
+                    showBack
+                    organizationLogoUrl={organizationLogoUrl}
+                    organizationName={organizationNameFromBrand}
+                  />
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div><p className="font-bold">{template.validity_months}</p><p className="text-xs text-muted-foreground">Months valid</p></div>
                     <div><p className="font-bold">{template.front_fields.length}</p><p className="text-xs text-muted-foreground">Front fields</p></div>
@@ -915,14 +1903,14 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
             <CardHeader>
               <CardTitle>Verify an employee credential</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Paste a card QR link or verification ID. Results are restricted to authorized HR users.
+                Paste a card QR link, public verification UUID, or card number (for example HID-2026-XXXXXXXX). Results are restricted to authorized HR users.
               </p>
             </CardHeader>
             <CardContent className="space-y-5">
               <form onSubmit={submitVerification} className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="min-w-0 flex-1">
                   <Label htmlFor="verification-id">QR link or verification ID</Label>
-                  <Input id="verification-id" value={verifyValue} onChange={(event) => setVerifyValue(event.target.value)} required className="mt-1 font-mono" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                  <Input id="verification-id" value={verifyValue} onChange={(event) => setVerifyValue(event.target.value)} required className="mt-1 font-mono" placeholder="UUID, HID-2026-XXXXXXXX, or QR verification link" />
                 </div>
                 <Button type="submit" className="min-h-10" disabled={verifyMutation.isPending}>
                   <Search className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -931,21 +1919,56 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
               </form>
               <div aria-live="polite">
                 {verification && (
-                  <div className={`rounded-2xl border p-5 ${verification.is_valid ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
+                  <div
+                    className={`rounded-2xl border p-5 ${
+                      verification.is_valid
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+                        : "border-red-300 bg-red-50 text-red-950"
+                    }`}
+                  >
                     <div className="flex items-start gap-3">
                       {verification.is_valid ? (
-                        <CheckCircle2 className="mt-0.5 h-6 w-6 text-emerald-700" aria-hidden="true" />
+                        <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-emerald-700" aria-hidden="true" />
                       ) : (
-                        <Ban className="mt-0.5 h-6 w-6 text-red-700" aria-hidden="true" />
+                        <Ban className="mt-0.5 h-6 w-6 shrink-0 text-red-700" aria-hidden="true" />
                       )}
-                      <div>
-                        <h3 className="font-black">{verification.is_valid ? "Valid active credential" : "Credential is not valid"}</h3>
-                        <p className="mt-1 text-sm">{verification.card.employee.primary_name} · {verification.card.employee.employee_number}</p>
+                      <div className="min-w-0">
+                        <h3 className="font-black text-current">
+                          {verification.is_valid
+                            ? "Valid active credential"
+                            : "Credential is not valid"}
+                        </h3>
+                        <p className="mt-1 text-sm text-current/90">
+                          {verification.card.employee.primary_name} ·{" "}
+                          {verification.card.employee.employee_number}
+                        </p>
                         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                          <div><dt className="text-muted-foreground">Card number</dt><dd className="font-mono font-semibold">{verification.card.card_number}</dd></div>
-                          <div><dt className="text-muted-foreground">Status</dt><dd className="font-semibold">{fieldLabel(verification.card.effective_status)}</dd></div>
-                          <div><dt className="text-muted-foreground">Assignment</dt><dd className="font-semibold">{verification.card.employee.position ?? "Not assigned"}</dd></div>
-                          <div><dt className="text-muted-foreground">Expires</dt><dd className="font-semibold">{verification.card.expires_on ?? "No expiry"}</dd></div>
+                          <div>
+                            <dt className="text-current/65">Card number</dt>
+                            <dd className="font-mono font-semibold text-current">
+                              {verification.card.card_number}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-current/65">Status</dt>
+                            <dd className="font-semibold text-current">
+                              {fieldLabel(verification.card.effective_status)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-current/65">Assignment</dt>
+                            <dd className="font-semibold text-current">
+                              {verification.card.employee.position ??
+                                verification.card.employee.organization_unit ??
+                                "Not assigned"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-current/65">Expires</dt>
+                            <dd className="font-semibold text-current">
+                              {verification.card.expires_on ?? "No expiry"}
+                            </dd>
+                          </div>
                         </dl>
                       </div>
                     </div>
@@ -965,10 +1988,21 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
               {previewCard?.card_number} · {previewCard?.employee?.primary_name ?? previewCard?.snapshot.primary_name}
             </DialogDescription>
           </DialogHeader>
-          <IdentityCardPreview card={previewCard} />
+          <IdentityCardPreview
+            card={previewCard}
+            showBack
+            organizationLogoUrl={organizationLogoUrl}
+            organizationName={organizationNameFromBrand}
+          />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setPreviewCard(null)}>Close</Button>
-            <Button type="button" onClick={() => window.print()}>
+            <Button
+              type="button"
+              onClick={() => {
+                if (!previewCard) return;
+                void printIdentityCard(buildPreviewModel(previewCard));
+              }}
+            >
               <Printer className="mr-2 h-4 w-4" aria-hidden="true" />
               Print card
             </Button>
@@ -1019,6 +2053,16 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
               <div><Label htmlFor="renew-expires-on">Custom expiry</Label><Input id="renew-expires-on" type="date" min={renewForm.issued_on} value={renewForm.expires_on} onChange={(event) => setRenewForm({ ...renewForm, expires_on: event.target.value })} className="mt-1" /></div>
             </div>
             <div><Label htmlFor="renew-reason">Renewal reason</Label><Input id="renew-reason" value={renewForm.reason} onChange={(event) => setRenewForm({ ...renewForm, reason: event.target.value })} className="mt-1" /></div>
+            <div>
+              <Label htmlFor="renew-notes">Notes</Label>
+              <Textarea
+                id="renew-notes"
+                value={renewForm.notes}
+                onChange={(event) => setRenewForm({ ...renewForm, notes: event.target.value })}
+                className="mt-1"
+                maxLength={2000}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setRenewCard(null)}>Cancel</Button>
@@ -1063,6 +2107,46 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
                 <div><Label htmlFor="template-validity">Validity (months)</Label><Input id="template-validity" type="number" min={1} max={120} required value={templateForm.validity_months} onChange={(event) => setTemplateForm({ ...templateForm, validity_months: Number(event.target.value) })} className="mt-1" /></div>
                 <div><Label htmlFor="template-type">Credential type</Label><NativeSelect id="template-type" value={templateForm.card_type} onChange={(event) => setTemplateForm({ ...templateForm, card_type: event.target.value as IdentityCardTemplatePayload["card_type"] })} className="mt-1 w-full"><NativeSelectOption value="employee">Employee</NativeSelectOption><NativeSelectOption value="contractor">Contractor</NativeSelectOption><NativeSelectOption value="visitor">Visitor</NativeSelectOption><NativeSelectOption value="badge">Badge</NativeSelectOption></NativeSelect></div>
               </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="template-width">Card width (mm)</Label>
+                  <Input
+                    id="template-width"
+                    type="number"
+                    min={40}
+                    max={150}
+                    step="0.01"
+                    required
+                    value={templateForm.width_mm}
+                    onChange={(event) =>
+                      setTemplateForm({
+                        ...templateForm,
+                        width_mm: Number(event.target.value),
+                      })
+                    }
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="template-height">Card height (mm)</Label>
+                  <Input
+                    id="template-height"
+                    type="number"
+                    min={40}
+                    max={150}
+                    step="0.01"
+                    required
+                    value={templateForm.height_mm}
+                    onChange={(event) =>
+                      setTemplateForm({
+                        ...templateForm,
+                        height_mm: Number(event.target.value),
+                      })
+                    }
+                    className="mt-1"
+                  />
+                </div>
+              </div>
               <fieldset>
                 <legend className="text-sm font-semibold">Brand colors</legend>
                 <div className="mt-2 grid gap-3 sm:grid-cols-3">
@@ -1080,6 +2164,9 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
               {(["front_fields", "back_fields"] as const).map((side) => (
                 <fieldset key={side} className="rounded-xl border p-4">
                   <legend className="px-1 text-sm font-bold">{side === "front_fields" ? "Front fields" : "Back fields"}</legend>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Toggled fields appear immediately in the live preview with sample employee data.
+                  </p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {IDENTITY_CARD_FIELDS.map((field) => (
                       <label key={field} className="flex min-h-10 items-center gap-2 rounded-lg px-2 hover:bg-slate-50">
@@ -1088,6 +2175,32 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
                       </label>
                     ))}
                   </div>
+                  {(templateForm[side].includes("photo") ||
+                    templateForm[side].includes("organization_logo")) && (
+                    <div className="mt-3 space-y-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      {templateForm[side].includes("photo") && (
+                        <p>
+                          <span className="font-semibold text-slate-800">Photo:</span>{" "}
+                          there is no separate HR photo upload. The card uses the avatar from the
+                          security user linked to that employee (Users / Profile). Open the
+                          employee in HR and confirm a User is linked, and that user has a photo.
+                        </p>
+                      )}
+                      {templateForm[side].includes("organization_logo") && (
+                        <p>
+                          <span className="font-semibold text-slate-800">Organization logo:</span>{" "}
+                          uses the logo from{" "}
+                          <a
+                            href="/dashboard/settings?tab=brand"
+                            className="font-semibold text-amber-800 underline underline-offset-2"
+                          >
+                            Settings → Brand
+                          </a>
+                          . Set PDF logo or light logo there.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </fieldset>
               ))}
               <div className="flex flex-wrap gap-5">
@@ -1096,7 +2209,17 @@ export function IdentityCardWorkspace({ initialTab = "cards" }: { initialTab?: s
               </div>
             </div>
             <div className="space-y-4 lg:sticky lg:top-0 lg:self-start">
-              <IdentityCardPreview template={{ ...templateForm, id: 0 }} />
+              <IdentityCardPreview
+                template={{ ...templateForm, id: 0 }}
+                showBack
+                demo
+                organizationLogoUrl={organizationLogoUrl}
+                organizationName={organizationNameFromBrand}
+              />
+              <p className="text-xs text-muted-foreground">
+                Preview uses sample employee data so every toggled field is visible.
+                Real cards fill from the employee record and brand settings.
+              </p>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setTemplateEditor(null)}>Cancel</Button>
                 <Button type="submit" disabled={templateMutation.isPending || templateForm.front_fields.length === 0}>

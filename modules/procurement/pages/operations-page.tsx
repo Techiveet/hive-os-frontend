@@ -4839,6 +4839,7 @@ function ReceiptForm({
   const selectOrder = (value: string) => {
     setOrderId(value);
     const order = orders.find((row) => row.id === Number(value));
+    const defaultLocationId = references.warehouse_locations?.[0]?.id ?? null;
     setLines(
       order?.items.map((line) => ({
         ...line,
@@ -4849,6 +4850,8 @@ function ReceiptForm({
         batch_number: "",
         serial_numbers: [],
         expiry_date: "",
+        warehouse_location_id:
+          line.warehouse_location_id ?? defaultLocationId,
       })) ?? [],
     );
   };
@@ -4877,6 +4880,15 @@ function ReceiptForm({
               toast.error("The selected order has no lines to receive.");
               return;
             }
+            const missingLocation = lines.find(
+              (line) => line.inventory_item_id && !line.warehouse_location_id,
+            );
+            if (missingLocation) {
+              toast.error(
+                "Select a warehouse location for every inventory-tracked line.",
+              );
+              return;
+            }
         const form = new FormData(event.currentTarget);
         mutation.mutate({
           purchase_order_id: Number(orderId),
@@ -4894,6 +4906,7 @@ function ReceiptForm({
                   unit: line.unit,
                   unit_price: line.unit_price,
                   inventory_item_id: line.inventory_item_id || undefined,
+                  warehouse_location_id: line.warehouse_location_id || undefined,
                   received_quantity: received,
                   accepted_quantity: accepted,
                   rejected_quantity: Number(
@@ -5863,7 +5876,35 @@ function ReceiptLines({
               ))}
             </select>
           </Field>
-            <Field id={`receipt-${line.line_key}-lot`} label="Lot number">
+          <Field
+            id={`receipt-${line.line_key}-location`}
+            label="Warehouse location"
+            hint="Required to post inventory-tracked stock"
+          >
+            <select
+              id={`receipt-${line.line_key}-location`}
+              value={line.warehouse_location_id ?? ""}
+              onChange={(e) =>
+                update(index, {
+                  warehouse_location_id: e.target.value
+                    ? Number(e.target.value)
+                    : null,
+                })
+              }
+              className={fieldClass}
+              required={Boolean(line.inventory_item_id)}
+            >
+              <option value="">Select bin / location</option>
+              {(references.warehouse_locations ?? []).map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {(loc.warehouse_name ? `${loc.warehouse_name} · ` : "") +
+                    (loc.code ? `[${loc.code}] ` : "") +
+                    loc.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field id={`receipt-${line.line_key}-lot`} label="Lot number">
               <Input
                 id={`receipt-${line.line_key}-lot`}
                 value={line.lot_number ?? ""}

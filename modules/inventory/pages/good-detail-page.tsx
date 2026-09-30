@@ -80,9 +80,11 @@ import type {
   GoodRecord,
   GoodStockLocationRecord,
   GoodType,
+  SuggestedPurchaseOrderResponse,
 } from "@/modules/inventory/types";
 import { GoodFormModal } from "./components/good-form-modal";
 import { GoodStockAdjustDialog } from "./components/good-stock-adjust-dialog";
+import { GoodSuggestPoDialog } from "./components/good-suggest-po-dialog";
 
 const GOOD_TYPE_COLORS: Record<GoodType, { bg: string; text: string; border: string }> = {
   raw_material: { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", border: "border-blue-500/20" },
@@ -102,6 +104,8 @@ export default function GoodDetailPage({ goodId }: { goodId: number }) {
   const [adjustDialogOpen, setAdjustDialogOpen] = React.useState(false);
   const [adjustDialogTab, setAdjustDialogTab] = React.useState<"adjust" | "transfer">("adjust");
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [suggestPoOpen, setSuggestPoOpen] = React.useState(false);
+  const [suggestPoResult, setSuggestPoResult] = React.useState<SuggestedPurchaseOrderResponse | null>(null);
 
   // Fetch Good Details
   const { data: detailData, isLoading, error } = useQuery({
@@ -133,10 +137,8 @@ export default function GoodDetailPage({ goodId }: { goodId: number }) {
   const suggestPoMutation = useMutation({
     mutationFn: () => suggestGoodPurchaseOrder(goodId),
     onSuccess: (po) => {
-      toast.success(
-        `Recommended Restock: ${po.suggested_quantity} ${po.uom} from ${po.preferred_supplier?.name || "preferred vendor"} ($${po.estimated_total})`,
-        { duration: 6000 }
-      );
+      setSuggestPoResult(po);
+      setSuggestPoOpen(true);
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.message || "Could not generate PO suggestion");
@@ -1051,10 +1053,20 @@ export default function GoodDetailPage({ goodId }: { goodId: number }) {
       <GoodStockAdjustDialog
         open={adjustDialogOpen}
         good={good}
+        stockLocations={locationStocks}
         initialTab={adjustDialogTab}
         onClose={() => setAdjustDialogOpen(false)}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["inventory", "goods", "detail", goodId] });
+        }}
+      />
+
+      <GoodSuggestPoDialog
+        open={suggestPoOpen}
+        suggestion={suggestPoResult}
+        onClose={() => {
+          setSuggestPoOpen(false);
+          setSuggestPoResult(null);
         }}
       />
     </div>

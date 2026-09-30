@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import Link from "next/link";
@@ -96,9 +96,11 @@ import type {
   GoodRecord,
   GoodStatus,
   GoodType,
+  SuggestedPurchaseOrderResponse,
 } from "@/modules/inventory/types";
 import { GoodFormModal } from "./components/good-form-modal";
 import { GoodStockAdjustDialog } from "./components/good-stock-adjust-dialog";
+import { GoodSuggestPoDialog } from "./components/good-suggest-po-dialog";
 
 type SortDirection = "asc" | "desc";
 
@@ -156,6 +158,9 @@ export default function GoodsPage() {
   const [adjustDialogOpen, setAdjustDialogOpen] = React.useState(false);
   const [adjustDialogInitialTab, setAdjustDialogInitialTab] = React.useState<"adjust" | "transfer">("adjust");
   const [adjustSelectedGood, setAdjustSelectedGood] = React.useState<GoodRecord | null>(null);
+
+  const [suggestPoOpen, setSuggestPoOpen] = React.useState(false);
+  const [suggestPoResult, setSuggestPoResult] = React.useState<SuggestedPurchaseOrderResponse | null>(null);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [goodToDelete, setGoodToDelete] = React.useState<GoodRecord | null>(null);
@@ -247,11 +252,9 @@ export default function GoodsPage() {
   // Suggest PO Mutation
   const suggestPoMutation = useMutation({
     mutationFn: (goodId: number) => suggestGoodPurchaseOrder(goodId),
-    onSuccess: (po: any) => {
-      toast.success(
-        `Draft PO suggested for ${po.suggested_quantity} ${po.uom} from ${po.preferred_supplier?.name || "preferred vendor"} ($${po.estimated_total})`,
-        { duration: 6000 }
-      );
+    onSuccess: (po) => {
+      setSuggestPoResult(po);
+      setSuggestPoOpen(true);
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.message || "Could not generate PO suggestion");
@@ -928,6 +931,7 @@ export default function GoodsPage() {
         <GoodStockAdjustDialog
           open={adjustDialogOpen}
           good={adjustSelectedGood}
+          locations={options?.locations}
           initialTab={adjustDialogInitialTab}
           onClose={() => {
             setAdjustDialogOpen(false);
@@ -938,6 +942,15 @@ export default function GoodsPage() {
           }}
         />
       )}
+
+      <GoodSuggestPoDialog
+        open={suggestPoOpen}
+        suggestion={suggestPoResult}
+        onClose={() => {
+          setSuggestPoOpen(false);
+          setSuggestPoResult(null);
+        }}
+      />
 
       {/* Delete Single Good Alert Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

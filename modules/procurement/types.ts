@@ -23,6 +23,7 @@ export interface ProcurementLine {
   tax_rate?: number | string;
   line_total?: number | string;
   inventory_item_id?: number | null;
+  warehouse_location_id?: number | null;
   accepted_quantity?: number | string;
   received_quantity?: number | string;
   rejected_quantity?: number | string;
@@ -254,6 +255,17 @@ export interface ProcurementReferences {
     unit: string;
     current_stock: string;
     cost_price: string;
+    track_batches?: boolean;
+    track_expiry?: boolean;
+    track_serials?: boolean;
+  }>;
+  warehouse_locations?: Array<{
+    id: number;
+    warehouse_id?: number | null;
+    warehouse_name?: string | null;
+    code?: string | null;
+    name: string;
+    type?: string | null;
   }>;
   agreements: Agreement[];
   projects: Array<{ id: number; name: string; status: string }>;
