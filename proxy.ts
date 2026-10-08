@@ -26,12 +26,12 @@ const extractHost = (value?: string | null): string | null => {
 export function proxy(req: NextRequest) {
     const url = req.nextUrl;
     
-    // Get the hostname (e.g., 'techive.gulfingot.com' or 'localhost')
+    // Get the hostname (e.g., 'techive.techiveet.com' or 'localhost')
     const hostname = req.headers.get('host') || ''; 
     const currentHost = hostname.split(':')[0].toLowerCase(); 
 
-    // Get root domain from env or default to gulfingot.com
-    const rootDomain = process.env.ROOT_DOMAIN || 'gulfingot.com';
+    // Get root domain from env or default to techiveet.com
+    const rootDomain = process.env.ROOT_DOMAIN || 'techiveet.com';
 
     // Define domains that should be treated as "Central" (Main Landing Page)
     const centralDomains = new Set(
