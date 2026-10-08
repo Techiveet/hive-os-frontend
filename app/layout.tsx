@@ -11,6 +11,8 @@ import { Toaster } from "@/components/ui/toaster";
 import BrandCursor from "@/components/brand-cursor";
 import { PublicBrandSyncProvider } from "@/components/providers/public-brand-sync-provider";
 import { formatDocumentTitle } from "@/lib/document-title";
+import { isCentralHost } from "@/lib/runtime-context";
+import { buildHiveIntroGate } from "@/modules/landing/intro-gate";
 import { fetchPublicBrandSettings, fetchSeoSettings } from "@/lib/seo";
 
 // 🚀 IMPORT OUR NEW GLOBAL SETTINGS PROVIDER
@@ -138,6 +140,10 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const seo = await fetchSeoSettings();
+  const requestHeaders = await headers();
+  const requestHost = (requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "")
+    .split(",")[0]
+    .trim();
   const ga = seo.google_analytics_id?.trim();
   const gtm = seo.google_tag_manager_id?.trim();
   const pixel = seo.facebook_pixel_id?.trim();
@@ -166,6 +172,8 @@ export default async function RootLayout({
         suppressHydrationWarning
         className="font-sans bg-background text-foreground antialiased overflow-x-hidden"
       >
+      {/* Must run before the landing intro curtain paints — see intro-gate.ts. */}
+      <script dangerouslySetInnerHTML={{ __html: buildHiveIntroGate(isCentralHost(requestHost)) }} />
       {orgJsonLd && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
       )}

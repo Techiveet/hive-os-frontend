@@ -20,18 +20,17 @@ import {
   Code2,
   Database,
   FileText,
-  Globe,
   Network,
-  PieChart,
   ShieldCheck,
   SmartphoneNfc,
   Wallet,
   Zap,
 } from "lucide-react";
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring } from "framer-motion";
 import { useTheme } from "next-themes";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/store/use-translation";
 import { LandingNavbar } from "@/modules/landing/components/landing-navbar";
@@ -45,6 +44,9 @@ import { ErpWorkbenchPreview } from "@/modules/landing/components/erp-workbench-
 import { SupportWebchatWidget } from "@/components/support-bot/support-webchat-widget";
 import { ErpIndustrySolutions } from "@/modules/landing/components/erp-industry-solutions";
 import { ErpSubdomainChecker } from "@/modules/landing/components/erp-subdomain-checker";
+import { HiveIntro } from "@/modules/landing/components/hive-intro";
+import { HiveBeacon, HiveLockup, HiveMark } from "@/modules/landing/components/hive-mark";
+import { HiveModuleMap } from "@/modules/landing/components/hive-module-map";
 import { fetchPublicSubscriptionCatalog } from "@/modules/subscription/api";
 import type { SignupCatalogModule } from "@/modules/subscription/components/signup-catalog-selector";
 import { Reveal, RevealGroup, RevealItem, SpotlightCard } from "@/modules/landing/components/reveal";
@@ -84,10 +86,6 @@ interface LandingUIProps {
 type PartnerLogo = {
   name: string;
   logo: string;
-};
-
-type HexParticle = {
-  update: () => void;
 };
 
 // 🚀 SAFE LOGO COMPONENT
@@ -218,10 +216,14 @@ const PartnerSlider = ({ partners }: { partners: PartnerLogo[] }) => {
     const handleMouseEnter = () => (isHovered = true);
     const handleMouseLeave = () => (isHovered = false);
 
+    // Only horizontal intent (trackpad swipe or shift+wheel) moves the strip.
+    // It used to swallow every vertical wheel event, so page scrolling stalled
+    // whenever the cursor crossed the partner band.
     const handleWheel = (e: WheelEvent) => {
-      if (e.deltaY !== 0) {
+      const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
+      if (horizontal !== 0) {
         e.preventDefault();
-        scroller.scrollLeft += e.deltaY;
+        scroller.scrollLeft += horizontal;
       }
     };
 
@@ -458,8 +460,11 @@ function buildPlanFeatures(
     .map((slug) => moduleNames.get(slug))
     .filter((name): name is string => Boolean(name));
 
-  const features = Array.from(new Set([...includedModules.slice(0, 5), `${storageLabel} storage quota`]));
-  return features.length ? features : fallback.features;
+  // Without a resolved module list (catalog still loading, or failed) the card
+  // used to show a lone "N GB storage quota" line. Fall back to the plan's
+  // written feature list instead.
+  if (!includedModules.length) return fallback.features;
+  return Array.from(new Set([...includedModules.slice(0, 5), `${storageLabel} storage quota`]));
 }
 
 
@@ -468,7 +473,6 @@ function LandingUI({
   initialTenantSlug = "hive",
   initialIsTenant = false,
 }: Partial<LandingUIProps>) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const { resolvedTheme } = useTheme();
   const { t, locale } = useTranslation();
   const [mounted, setMounted] = useState(false);
@@ -545,7 +549,11 @@ function LandingUI({
     enabled: !initialIsTenant,
   });
 
-  const catalogPayload = catalogData?.data ?? {};
+  // The server always renders the fallback plans (it has no catalog). If the
+  // query resolves before this subtree hydrates, rendering live names/prices on
+  // that first pass is a text mismatch and React throws the tree away. Live
+  // plans therefore apply from the first post-mount render onwards.
+  const catalogPayload = (mounted ? catalogData?.data : undefined) ?? {};
   const catalogModules = useMemo(
     () => (catalogPayload.catalog ?? []) as SignupCatalogModule[],
     [catalogPayload.catalog],
@@ -585,7 +593,9 @@ function LandingUI({
     });
   }, [catalogModules, planDefaults, planPricing]);
 
-  const brandSettings = brandData?.data;
+  // Same reason as catalogPayload above: brand data can land before this tree
+  // hydrates, and the server rendered the defaults (title, footer text, logo).
+  const brandSettings = mounted ? brandData?.data : undefined;
   const tenantLandingPayload = tenantLandingData?.data;
 
   // Default to Dark Mode during hydration
@@ -601,6 +611,17 @@ function LandingUI({
   }, [brandSettings, isDark]);
 
   const appTitle = brandSettings?.app_title || initialPortalName;
+
+  // The shipped /branding/ lockup is a 758 KB raster that arrives late and
+  // cannot animate, so the vector Hive mark stands in for it. A logo an admin
+  // actually uploaded still wins.
+  const customLogoUrl = rawLogoUrl && !rawLogoUrl.startsWith("/branding/") ? rawLogoUrl : null;
+
+  const router = useRouter();
+  const reducedMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll();
+  const scrollProgress = useSpring(scrollYProgress, { stiffness: 140, damping: 30, mass: 0.4 });
+  const [footerEmail, setFooterEmail] = useState("");
 
   // 🌍 BROWSER METADATA SYNC
   useEffect(() => {
@@ -637,87 +658,6 @@ function LandingUI({
       window.scrollTo({ top: y, behavior: "smooth" });
     }
   };
-
-  // Hexagon Background Logic
-  useEffect(() => {
-    if (isTenantExperience) {
-      return;
-    }
-
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        let hexagons: HexParticle[] = [];
-
-        const isDarkNow = document.documentElement.classList.contains("dark");
-        const r = isDarkNow ? 255 : 180;
-        const g = isDarkNow ? 183 : 83;
-        const b = isDarkNow ? 0 : 9;
-
-        class Hex {
-          x: number;
-          y: number;
-          size: number;
-          speed: number;
-          opacity: number;
-          constructor() {
-            this.x = Math.random() * (canvas?.width || 0);
-            this.y = Math.random() * (canvas?.height || 0);
-            this.size = Math.random() * 20 + 5;
-            this.speed = Math.random() * 0.3 + 0.1;
-            this.opacity = Math.random() * 0.4;
-          }
-          draw() {
-            if (!ctx) return;
-            ctx.beginPath();
-            for (let i = 0; i < 6; i++) {
-              ctx.lineTo(
-                this.x + this.size * Math.cos((i * 2 * Math.PI) / 6),
-                this.y + this.size * Math.sin((i * 2 * Math.PI) / 6),
-              );
-            }
-            ctx.closePath();
-            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${this.opacity})`;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-          update() {
-            if (!canvas) return;
-            this.y -= this.speed;
-            if (this.y < -50) this.y = canvas.height + 50;
-            this.draw();
-          }
-        }
-
-        const initHex = () => {
-          for (let i = 0; i < 60; i++) hexagons.push(new Hex());
-        };
-        const animateHex = () => {
-          if (!canvas || !ctx) return;
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          hexagons.forEach((hex) => hex.update());
-          requestAnimationFrame(animateHex);
-        };
-
-        initHex();
-        animateHex();
-
-        const handleResize = () => {
-          if (!canvas) return;
-          canvas.width = window.innerWidth;
-          canvas.height = window.innerHeight;
-          hexagons = [];
-          initHex();
-        };
-
-        window.addEventListener("resize", handleResize);
-        return () => window.removeEventListener("resize", handleResize);
-      }
-    }
-  }, [isTenantExperience, resolvedTheme]);
 
   const partners = [
     { name: t('landing.partners.cbe', 'COMMERCIAL BANK'), logo: "/logos/cbe.png" },
@@ -932,7 +872,16 @@ function LandingUI({
   }
 
   return (
-    <div className="relative min-h-screen w-full bg-background text-foreground font-sans selection:bg-primary/20 overflow-x-hidden">
+    <div className="hive-landing relative min-h-screen w-full bg-background text-foreground font-sans selection:bg-amber-400/30 overflow-x-hidden">
+      <HiveIntro />
+
+      {/* Reading progress: a cobalt-to-honey filament across the top edge */}
+      <motion.div
+        aria-hidden
+        style={{ scaleX: reducedMotion ? scrollYProgress : scrollProgress }}
+        className="fixed inset-x-0 top-0 z-[120] h-[2px] origin-left bg-gradient-to-r from-primary via-sky-400 to-amber-400"
+      />
+
       {/* 🚀 SCROLL TO TOP BUTTON */}
       <AnimatePresence>
         {showScrollTop && (
@@ -965,15 +914,10 @@ function LandingUI({
         onNavigateSection={scrollToSection}
         brand={
           <SafeLogo
-            src={rawLogoUrl}
+            src={customLogoUrl}
             alt={appTitle}
             className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
-            fallback={
-              <div className="flex items-center gap-2">
-                <Globe className="text-primary h-5 w-5 transition-transform duration-700 group-hover:rotate-180" />
-                <span>{appTitle}</span>
-              </div>
-            }
+            fallback={<HiveLockup />}
           />
         }
       />
@@ -982,13 +926,6 @@ function LandingUI({
       <LandingHero
         isTenant={initialIsTenant}
         appTitle={appTitle}
-        canvasSlot={
-          <canvas
-            id="hive-canvas"
-            ref={canvasRef}
-            className="pointer-events-none absolute inset-0 h-full w-full opacity-30"
-          />
-        }
       />
 
       {/* --- PLATFORM FACTS --- */}
@@ -1029,7 +966,7 @@ function LandingUI({
         </Reveal>
       </SectionShell>
 
-      {/* --- BENTO GRID MODULES --- */}
+      {/* --- THE HIVE: every module as one cell in the comb --- */}
       <SectionShell id="modules" tone="base" glow="primary">
         <SectionHeading
           eyebrow={t("landing.modules.badge", "All-in-one solution")}
@@ -1041,138 +978,7 @@ function LandingUI({
           )}
         />
 
-        {/* No fixed row height: the finance tile's inner ledger panel is taller
-            than half the grid, and a hard `h-[34rem]` made it overflow its own
-            card. Rows size to the tallest content and the spanning tile
-            stretches to match. */}
-        <RevealGroup
-          step={0.1}
-          className="grid grid-cols-1 gap-4 md:grid-cols-4 md:grid-rows-2"
-        >
-          <RevealItem variant="scale" className="min-h-0 md:col-span-2 md:row-span-2">
-            <SpotlightCard className="group flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-border/70 bg-card/40 p-8 backdrop-blur-sm transition-colors duration-300 hover:border-primary/40">
-              <div
-                aria-hidden
-                className="absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl transition-colors duration-700 group-hover:bg-primary/20"
-              />
-              <div className="relative">
-                <IconPlate size="lg" className="mb-6">
-                  <Wallet className="h-7 w-7" />
-                </IconPlate>
-                <h3 className="mb-3 font-space text-2xl font-bold tracking-tight md:text-3xl">
-                  {t("landing.modules.finance_title", "Intelligent Finance")}
-                </h3>
-                <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-                  {t(
-                    "landing.modules.finance_desc",
-                    "Automated ERCA tax compliance, local bank API integrations for immediate reconciliation, and multi-currency ledger management (ETB/USD).",
-                  )}
-                </p>
-              </div>
-
-              <div className="relative mt-8 overflow-hidden rounded-2xl border border-border/70 bg-background/70">
-                <WindowChrome
-                  label={t("landing.modules.ledger_label", "Ledger sync")}
-                  status={t("landing.modules.ledger_status", "Auto")}
-                />
-                <div className="divide-y divide-border/60">
-                  {[
-                    {
-                      k: t("landing.modules.telebirr_sync", "Telebirr Sync"),
-                      v: t("landing.preview.success", "SUCCESS"),
-                    },
-                    {
-                      k: t("landing.modules.vat_calc", "VAT Calculation"),
-                      v: t("landing.modules.automated", "AUTOMATED"),
-                    },
-                    {
-                      k: t("landing.modules.cbe_recon", "CBE Reconciliation"),
-                      v: t("landing.modules.matched", "MATCHED"),
-                    },
-                  ].map((row) => (
-                    <div
-                      key={row.k}
-                      className="flex items-center justify-between px-4 py-2.5 font-mono text-[12px]"
-                    >
-                      <span className="text-muted-foreground">{row.k}</span>
-                      <span className="flex items-center gap-1.5 text-primary">
-                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                        {row.v}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </SpotlightCard>
-          </RevealItem>
-
-          <RevealItem variant="scale" className="min-h-0 md:col-span-2 md:row-span-1">
-            <SpotlightCard className="flex h-full items-start gap-5 overflow-hidden rounded-3xl border border-border/70 bg-card/40 p-8 backdrop-blur-sm transition-colors duration-300 hover:border-primary/40">
-              <IconPlate size="lg">
-                <Boxes className="h-6 w-6" />
-              </IconPlate>
-              <div>
-                <h3 className="mb-2 font-space text-xl font-bold">
-                  {t("landing.modules.inventory_title", "Inventory Management")}
-                </h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {t(
-                    "landing.modules.inventory_desc",
-                    "Multi-branch stock syncing, automated reorder triggers, and warehouse routing.",
-                  )}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {[
-                    t("landing.modules.tag_reorder", "Reorder points"),
-                    t("landing.modules.tag_transfers", "Branch transfers"),
-                    t("landing.modules.tag_batch", "Batch & expiry"),
-                  ].map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full border border-border/70 bg-background/60 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </SpotlightCard>
-          </RevealItem>
-
-          <RevealItem variant="scale" className="min-h-0 md:col-span-1 md:row-span-1">
-            <SpotlightCard className="flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-border/70 bg-card/40 p-7 backdrop-blur-sm transition-colors duration-300 hover:border-primary/40">
-              <IconPlate size="lg" className="mb-5">
-                <ShieldCheck className="h-6 w-6" />
-              </IconPlate>
-              <div>
-                <h3 className="mb-2 font-space text-xl font-bold">
-                  {t("landing.modules.compliance_title", "Compliance")}
-                </h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {t("landing.modules.compliance_desc", "INSA & NBE aligned reporting.")}
-                </p>
-              </div>
-            </SpotlightCard>
-          </RevealItem>
-
-          <RevealItem variant="scale" className="min-h-0 md:col-span-1 md:row-span-1">
-            <div className="relative flex h-full flex-col justify-between overflow-hidden rounded-3xl bg-primary p-7 text-primary-foreground shadow-xl shadow-primary/20 transition-transform duration-300 hover:-translate-y-0.5">
-              <div
-                aria-hidden
-                className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary-foreground/10 blur-2xl"
-              />
-              <PieChart className="relative mb-5 h-9 w-9 opacity-90" />
-              <div className="relative">
-                <h3 className="mb-2 font-space text-xl font-bold">
-                  {t("landing.modules.bi_title", "Real-Time BI")}
-                </h3>
-                <p className="text-sm text-primary-foreground/80">
-                  {t("landing.modules.bi_desc", "Predictive operational analytics.")}
-                </p>
-              </div>
-            </div>
-          </RevealItem>
-        </RevealGroup>
+        <HiveModuleMap />
       </SectionShell>
 
       {/* --- FINTECH & PAYMENT GATEWAY INTEGRATION --- */}
@@ -2015,14 +1821,16 @@ function LandingUI({
           <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
             <div className="absolute inset-0 bg-primary/[0.04]" />
             <div className="absolute left-1/2 top-1/2 h-[28rem] w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-[110px]" />
+            <div className="absolute left-1/2 top-[30%] h-64 w-64 -translate-x-1/2 rounded-full bg-amber-400/10 blur-[90px]" />
             <div className="tech-grid absolute inset-0 opacity-30" />
           </div>
 
           <Reveal className="relative z-10 mx-auto max-w-3xl text-center">
+            <HiveBeacon className="mb-10" />
             <Eyebrow>{t("landing.cta.eyebrow", "Get started")}</Eyebrow>
             <h2 className="text-balance font-space text-[2.5rem] font-bold leading-[1.05] tracking-[-0.025em] md:text-6xl">
               {t("landing.cta.title_part1", "Ready to deploy your")}{" "}
-              <span className="font-serif font-normal italic tracking-[-0.03em] text-primary">
+              <span className="hive-gradient-text font-serif font-normal italic tracking-[-0.03em]">
                 {t("landing.cta.title_part2", "Hive workspace?")}
               </span>
             </h2>
@@ -2062,15 +1870,15 @@ function LandingUI({
           <div className="md:col-span-2">
             {/* 🚀 Using SafeLogo for the footer as well */}
             <SafeLogo
-              src={rawLogoUrl}
+              src={customLogoUrl}
               alt={appTitle}
               className="h-10 w-auto object-contain mb-4 transition-transform hover:scale-105"
               fallback={
-                <h2
-                  className={`font-space text-3xl font-bold mb-2 uppercase ${initialIsTenant ? "text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400" : "text-primary"}`}
-                >
-                  {appTitle}
-                </h2>
+                <HiveLockup
+                  showTagline
+                  className="group mb-5"
+                  markClassName="h-11 w-11"
+                />
               }
             />
 
@@ -2078,17 +1886,37 @@ function LandingUI({
               {brandSettings?.footer_text ||
                 t('landing.footer.tagline', 'The robust Enterprise Resource Planning system. Streamlining Finance, HR, Smart Mobility, and Logistics for the modern Ethiopian business.')}
             </p>
-            <div className="flex items-center border-b border-border pb-2 max-w-xs mt-6 group">
-              <span className="text-primary font-mono mr-2">
+            {/* Was an input with no form and a decorative arrow — typing an
+                email did nothing. It now hands the address to the demo request
+                form, which is the platform's real contact channel. */}
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const email = footerEmail.trim();
+                router.push(email ? `/request-demo?email=${encodeURIComponent(email)}` : "/request-demo");
+              }}
+              className="group mt-6 flex max-w-xs items-center border-b border-border pb-2 focus-within:border-primary"
+            >
+              <label htmlFor="footer-email" className="mr-2 font-mono text-primary">
                 system@{initialTenantSlug}:~$
-              </span>
+              </label>
               <input
-                type="text"
+                id="footer-email"
+                type="email"
+                autoComplete="email"
+                value={footerEmail}
+                onChange={(event) => setFooterEmail(event.target.value)}
                 placeholder={t('landing.footer.newsletter', 'enter email for updates')}
-                className="bg-transparent border-none outline-none text-foreground w-full font-mono text-sm focus:ring-0 placeholder:text-muted-foreground/50"
+                className="w-full border-none bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0"
               />
-              <ArrowRight className="h-4 w-4 text-primary cursor-pointer group-hover:translate-x-2 transition-transform duration-300" />
-            </div>
+              <button
+                type="submit"
+                aria-label={t("landing.footer.subscribe", "Send")}
+                className="rounded-sm text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-2" />
+              </button>
+            </form>
           </div>
 
           {/* These were <li>s with cursor-pointer and no handler — they looked
@@ -2122,7 +1950,7 @@ function LandingUI({
         <div className="mx-auto max-w-6xl mt-16 pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-muted-foreground font-mono relative z-10">
           <div className="flex flex-col md:flex-row items-center gap-4">
             <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-full border border-border">
-              <div className="h-2 w-2 rounded-full bg-primary animate-pulse-hex"></div>
+              <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse-hex"></div>
               {initialIsTenant
                 ? t('landing.footer.node_online', '{appTitle} NODE: ONLINE').replace('{appTitle}', appTitle)
                 : t('landing.footer.cluster_online', 'HIVE CLUSTER: ONLINE')}
@@ -2132,11 +1960,7 @@ function LandingUI({
           <div className="flex flex-col items-center md:items-end text-center md:text-right gap-3">
             {initialIsTenant && (
               <div className="flex flex-col items-center justify-center gap-2 relative group mt-2">
-                <img
-                  src="/logos/hive_icon.png"
-                  alt="Hive Icon"
-                  className="h-6 w-6 drop-shadow-md group-hover:scale-110 transition-transform duration-300"
-                />
+                <HiveMark className="h-6 w-6 drop-shadow-md transition-transform duration-300 group-hover:scale-110" />
                 <div className="bg-primary/10 px-3 py-1 rounded-lg border border-primary/20 overflow-hidden relative">
                   <div className="absolute inset-0 bg-primary/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                   <span className="font-bold text-primary uppercase tracking-widest text-[11px] relative z-10">
@@ -2147,7 +1971,7 @@ function LandingUI({
             )}
             <p className="text-sm text-muted-foreground/80 mt-2">
               {t('landing.footer.developed_by', 'Developed by')}{" "}
-              <span className="text-foreground font-bold hover:text-primary transition-colors cursor-pointer px-1">
+              <span className="px-1 font-bold text-foreground">
                 {t('landing.footer.techive', 'Techive Technology Solutions')}
               </span>{" "}
               &copy; 2026

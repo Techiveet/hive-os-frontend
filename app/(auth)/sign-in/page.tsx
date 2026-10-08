@@ -85,7 +85,12 @@ export default function LoginPage() {
     retry: 1,
   });
 
-  const brandSettings = brandData?.data;
+  // Brand data (same query key as the layout's PublicBrandSyncProvider) can be
+  // cached before this page hydrates, while the server rendered the defaults —
+  // a hydration mismatch on the logo and portal name. Apply it after mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const brandSettings = mounted ? brandData?.data : undefined;
   // Sign-in renders before authentication, so the asset has to come from the
   // public-serve route. getBackendStorageUrl returns the token-protected
   // /files/{id}/serve path, which 401s here and left the background blank.
