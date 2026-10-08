@@ -13,6 +13,35 @@ interface TranslationState {
 
 const getApiUrl = (endpoint: string) => `${getBackendApiRoot()}${endpoint}`;
 
+/**
+ * One request per locale. initLocale() is called by two providers (and twice
+ * again under React dev double-effects), and each call used to download the
+ * full ~230 KB dictionary — four times on every dashboard load. Concurrent
+ * callers now share the in-flight request, and a locale already loaded is not
+ * fetched again.
+ */
+const inflight: Record<string, Promise<void> | undefined> = {};
+
+/** The dictionary for a locale, or null when it could not be loaded. */
+const fetchDictionary = async (locale: string): Promise<Record<string, string> | null> => {
+  try {
+    const res = await fetch(getApiUrl(`/translations/${locale}`), {
+      headers: {
+        'Accept': 'application/json',
+        ...getTenantHeaders()
+      }
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    return data.data || data || {};
+  } catch (err) {
+    console.error("Failed to load dictionary:", err);
+    return null;
+  }
+};
+
 export const useTranslation = create<TranslationState>((set, get) => ({
   locale: 'en',
   dictionary: {},
@@ -28,25 +57,22 @@ export const useTranslation = create<TranslationState>((set, get) => ({
       safeLocalStorageSetItem('hive_locale', newLocale);
     }
 
-    try {
-      const res = await fetch(getApiUrl(`/translations/${newLocale}`), {
-        headers: {
-          'Accept': 'application/json',
-          ...getTenantHeaders()
-        }
+    const current = get();
+    if (current.isReady && current.locale === newLocale && Object.keys(current.dictionary).length > 0) {
+      return;
+    }
+
+    inflight[newLocale] ??= fetchDictionary(newLocale)
+      .then((dictionary) => {
+        set(dictionary
+          ? { locale: newLocale, dictionary, isReady: true }
+          : { locale: newLocale, isReady: true });
+      })
+      .finally(() => {
+        inflight[newLocale] = undefined;
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        const cleanDictionary = data.data || data || {};
-        set({ locale: newLocale, dictionary: cleanDictionary, isReady: true });
-      } else {
-        set({ locale: newLocale, isReady: true });
-      }
-    } catch (err) {
-      console.error("Failed to load dictionary:", err);
-      set({ locale: newLocale, isReady: true });
-    }
+    return inflight[newLocale];
   },
 
   t: (key: string, fallback?: string, replacements?: Record<string, any>) => {

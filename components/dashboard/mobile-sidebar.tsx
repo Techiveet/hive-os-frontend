@@ -256,7 +256,10 @@ export function MobileSidebar() {
   const workspaceScope = getWorkspaceScopeKey();
 
   const { data: brandData } = useQuery({
-    queryKey: ["publicBrandSettings", "sidebar", workspaceScope],
+    // Same key as PublicBrandSyncProvider: it is the same request, so React
+    // Query fetches it once per page instead of once per consumer.
+    queryKey: ["publicBrandSettings", workspaceScope],
+    staleTime: 600000,
     queryFn: async () => {
       const res = await fetch(`${getBackendApiRoot()}/settings/brand/public`, {
         headers: {
