@@ -7,7 +7,7 @@ export type ModuleId =
   | "payroll" | "finance" | "performance" | "procurement" | "supplychain"
   | "logistics" | "sales" | "crm" | "fleet" | "service" | "internal-audit"
   | "strategy" | "vantage" | "agriculture" | "lms" | "b2b-marketplace"
-  | "landing-templates" | "video-conferencing" | "support_bot" | "daily-reports" | "property";
+  | "landing-templates" | "video-conferencing" | "support_bot" | "daily-reports" | "property" | "parking";
 export type DashboardNavPlacement = "primary" | "secondary";
 
 export interface ModuleNavItem {

@@ -44,6 +44,7 @@ import {
   Telescope,
   Truck,
   Building2,
+  Car,
   Handshake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -231,6 +232,7 @@ export function MobileSidebar() {
   const [isCrmOpen, setIsCrmOpen] = useState(false);
   const [isFleetOpen, setIsFleetOpen] = useState(false);
   const [isPropertyOpen, setIsPropertyOpen] = useState(false);
+  const [isParkingOpen, setIsParkingOpen] = useState(false);
   const [isServiceOpen, setIsServiceOpen] = useState(false);
   const [isInternalAuditOpen, setIsInternalAuditOpen] = useState(false);
   const [isStrategyOpen, setIsStrategyOpen] = useState(false);
@@ -461,6 +463,9 @@ export function MobileSidebar() {
   const propertyModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "property",
   );
+  const parkingModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "parking",
+  );
   const serviceModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "service",
   );
@@ -584,6 +589,10 @@ export function MobileSidebar() {
     if (pathname.startsWith("/dashboard/property")) {
       setIsModulesOpen(true);
       setIsPropertyOpen(true);
+    }
+    if (pathname.startsWith("/dashboard/parking")) {
+      setIsModulesOpen(true);
+      setIsParkingOpen(true);
     }
     if (pathname.startsWith("/dashboard/service")) {
       setIsModulesOpen(true);
@@ -1157,6 +1166,14 @@ export function MobileSidebar() {
                           icon: Building2,
                           openState: isPropertyOpen,
                           onToggle: () => setIsPropertyOpen((value) => !value),
+                        })}
+
+                        {renderModuleSection({
+                          items: parkingModuleItems,
+                          label: t("nav.parking", "Car Parking"),
+                          icon: Car,
+                          openState: isParkingOpen,
+                          onToggle: () => setIsParkingOpen((value) => !value),
                         })}
 
                         {renderModuleSection({
