@@ -121,7 +121,7 @@ function enrolmentBadge(status: UserLinkingRecord["enrolment_status"]) {
   }
 }
 
-type ConfirmAction = "bulk-link" | "enrol" | null;
+type ConfirmAction = "bulk-link" | "enroll" | null;
 
 export function AttendanceUserLinkingWorkspace() {
   const scope = getWorkspaceScopeKey();
@@ -373,7 +373,7 @@ export function AttendanceUserLinkingWorkspace() {
               User Account & Employee Linking
             </h1>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-700 dark:text-slate-200">
-              Manage user-to-employee profile mapping, run deterministic tenant-wide bulk linking, and enrol employees into Attendance Management.
+              Manage user-to-employee profile mapping, run deterministic tenant-wide bulk linking, and enroll employees into Attendance Management.
             </p>
           </div>
 
@@ -406,7 +406,7 @@ export function AttendanceUserLinkingWorkspace() {
               className="min-h-11"
             >
               <ShieldCheck aria-hidden="true" className="mr-1.5 h-4 w-4" />
-              Enrol All Eligible Employees
+              Enroll All Eligible Employees
             </Button>
           </div>
         </div>
@@ -986,12 +986,12 @@ export function AttendanceUserLinkingWorkspace() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {confirmAction === "enrol" ? "Enrol all eligible employees?" : "Link all eligible users?"}
+              {confirmAction === "enrol" ? "Enroll all eligible employees?" : "Link all eligible users?"}
             </DialogTitle>
             <DialogDescription>
               {confirmAction === "enrol"
                 ? `This will create attendance schedules for up to ${summaryData.employees_missing_enrolment} active employees who are not yet enrolled. Existing schedules are left unchanged.`
-                : `This will link ${summaryData.will_link} deterministic email matches and enrol those employees in attendance. Ambiguous matches and conflicts are skipped.`}
+                : `This will link ${summaryData.will_link} deterministic email matches and enroll those employees in attendance. Ambiguous matches and conflicts are skipped.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1022,7 +1022,7 @@ export function AttendanceUserLinkingWorkspace() {
               {confirmAction === "enrol"
                 ? enrolMutation.isPending
                   ? "Enrolling…"
-                  : "Confirm Enrolment"
+                  : "Confirm Enrollment"
                 : executeMutation.isPending
                   ? "Linking…"
                   : "Confirm Bulk Link"}

@@ -45,13 +45,25 @@ export function WorkflowDashboardPage() {
         setUsers(((userData as { data?: Option[] })?.data || []) as Option[]);
         setDefinitions((definitionData || []) as Definition[]);
         setDashboard(dashboardData);
-        const requestedModule = new URLSearchParams(window.location.search).get("module");
-        const requestedTarget = requestedModule
-          ? loadedTargets.find((item) => item.module_slug === requestedModule)
-          : undefined;
+        const params = new URLSearchParams(window.location.search);
+        const requestedModule = params.get("module");
+        const requestedEvent = params.get("event");
+        const requestedTarget = requestedEvent
+          ? loadedTargets.find(
+              (item) =>
+                item.events.includes(requestedEvent) &&
+                (!requestedModule || item.module_slug === requestedModule),
+            )
+          : requestedModule
+            ? loadedTargets.find((item) => item.module_slug === requestedModule)
+            : undefined;
         if (requestedTarget) {
           setSelectedTarget(requestedTarget.value);
-          setEvent(requestedTarget.events[0] || "");
+          setEvent(
+            requestedEvent && requestedTarget.events.includes(requestedEvent)
+              ? requestedEvent
+              : requestedTarget.events[0] || "",
+          );
           setName(`${requestedTarget.label} approval`);
         }
       })

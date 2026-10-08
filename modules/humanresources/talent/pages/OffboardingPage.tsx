@@ -22,6 +22,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -149,6 +159,8 @@ export default function OffboardingPage() {
   const [settleOpen, setSettleOpen] = React.useState(false);
   const [settleAmount, setSettleAmount] = React.useState("");
   const [settleNotes, setSettleNotes] = React.useState("");
+  const [caseToCancel, setCaseToCancel] = React.useState<OffboardingCase | null>(null);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = React.useState(false);
 
   const employeesQuery = useQuery({
     queryKey: ["hr-employees-lite", scope],
@@ -1171,16 +1183,8 @@ export default function OffboardingPage() {
                     className="text-destructive"
                     disabled={cancelCase.isPending}
                     onClick={() => {
-                      if (
-                        window.confirm(
-                          t(
-                            "hr_talent.offboarding.confirm_cancel",
-                            "Cancel this exit? It will not be settled or completed.",
-                          ),
-                        )
-                      ) {
-                        cancelCase.mutate(detail.id);
-                      }
+                      setCaseToCancel(detail);
+                      setCancelConfirmOpen(true);
                     }}
                   >
                     {t("hr_talent.offboarding.cancel_case", "Cancel exit")}
@@ -1300,6 +1304,58 @@ export default function OffboardingPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={cancelConfirmOpen}
+        onOpenChange={(open) => {
+          setCancelConfirmOpen(open);
+          if (!open) setCaseToCancel(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("hr_talent.offboarding.cancel_title", "Cancel this exit?")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {caseToCancel
+                ? t(
+                    "hr_talent.offboarding.confirm_cancel_named",
+                    "Cancel exit “{case}” for {name}? It will not be settled or completed.",
+                  )
+                    .replace("{case}", caseToCancel.case_number)
+                    .replace(
+                      "{name}",
+                      caseToCancel.employee?.primary_name ??
+                        resolveEmployeeLabel(caseToCancel.employee_id) ??
+                        `#${caseToCancel.employee_id}`,
+                    )
+                : t(
+                    "hr_talent.offboarding.confirm_cancel",
+                    "Cancel this exit? It will not be settled or completed.",
+                  )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">
+              {t("hr_talent.common.cancel", "Cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelCase.isPending}
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (caseToCancel) {
+                  cancelCase.mutate(caseToCancel.id);
+                  setCancelConfirmOpen(false);
+                  setCaseToCancel(null);
+                }
+              }}
+            >
+              {t("hr_talent.offboarding.cancel_case", "Cancel exit")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
