@@ -65,7 +65,10 @@ export const useTranslation = create<TranslationState>((set, get) => ({
       Object.entries(replacements)
         .sort((a, b) => b[0].length - a[0].length)
         .forEach(([k, v]) => {
+          // `{{key}}` first: replacing `{key}` inside it would leave the outer
+          // braces behind ("{29} days left").
           text = text
+            .replace(new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, 'g'), String(v))
             .replace(new RegExp(`:${k}\\b`, 'g'), String(v))
             .replace(new RegExp(`:${k}`, 'g'), String(v))
             .replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));

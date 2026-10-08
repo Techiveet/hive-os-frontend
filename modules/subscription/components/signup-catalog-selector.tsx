@@ -38,6 +38,9 @@ export type SignupLandingTemplate = {
   current_version_id?: number;
   is_premium: boolean;
   required_module?: string | null;
+  /** One-time price added to the signup payment. 0 = included. */
+  price_etb?: number;
+  requires_purchase?: boolean;
   business_types: string[];
   preview_url: string;
 };
@@ -240,7 +243,7 @@ export function SignupLandingTemplateSelection({
           <LayoutTemplate className="h-5 w-5" aria-hidden="true" />
         </div>
         <p id="landing-template-help" className="text-sm leading-6 text-muted-foreground">
-          Select a master template assigned to this business type. A private draft is created only after payment is confirmed, ready to edit and publish.
+          Pick a ready-made website for your business, or skip and choose one later from your dashboard. Paid templates are a one-time charge added to this payment; your editable copy is created as soon as payment is confirmed.
         </p>
       </div>
 
@@ -277,6 +280,7 @@ export function SignupLandingTemplateSelection({
           const extraPrice = requiredModule && !includedModules.has(requiredModule.slug)
             ? Number(requiredModule.monthly_price_etb ?? 0)
             : 0;
+          const oneTimePrice = Number(template.price_etb ?? 0);
 
           return (
             <li key={template.id} className="rounded-2xl border border-slate-500 bg-background p-1">
@@ -308,7 +312,11 @@ export function SignupLandingTemplateSelection({
                     </span>
                     <span className="mt-1 block text-xs leading-5 text-muted-foreground">{template.description}</span>
                     <span className="mt-2 block text-xs font-bold text-foreground">
-                      {extraPrice > 0 ? `Adds ETB ${extraPrice.toLocaleString()}/month` : "Included with this plan"}
+                      {oneTimePrice > 0
+                        ? `Adds ETB ${oneTimePrice.toLocaleString()} one-time`
+                        : extraPrice > 0
+                          ? `Adds ETB ${extraPrice.toLocaleString()}/month`
+                          : "Included with this plan"}
                     </span>
                   </span>
                   <span aria-hidden="true" className={cn("mt-1 h-4 w-4 rounded-full border border-slate-600", checked && "border-4 border-primary")} />

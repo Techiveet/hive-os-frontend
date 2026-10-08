@@ -9,12 +9,15 @@
  *  - the tenant is on nothing                     → show what their business
  *    type entitles them to, so they can pick one
  *
- * Premium templates they cannot use yet arrive `locked` rather than hidden —
- * a tenant who cannot see a template can never decide to buy it.
+ * Templates they cannot use yet arrive `locked` rather than hidden — a tenant
+ * who cannot see a template can never decide to buy it. A priced template
+ * (`lock_reason: "purchase"`) is bought right here; an unpriced premium one
+ * (`"premium"`) still unlocks through the plan add-on.
  */
 
 import * as React from "react";
-import { CheckCircle2, Loader2, Lock, Sparkles, Store } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { BadgeCheck, CheckCircle2, Clock, Loader2, Lock, ShoppingCart, Sparkles, Store } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -25,11 +28,14 @@ import { cn } from "@/lib/utils";
 import { getBackendOrigin } from "@/lib/runtime-context";
 import {
   fetchAvailableTemplates,
+  fetchTemplatePurchase,
   selectTemplate,
-  type TemplateLibraryCard,
+  type TemplatePaymentOptions,
+  type TenantTemplateCard,
 } from "@/modules/landing-templates/lib/api";
+import { formatEtb, TemplatePurchaseDialog } from "@/modules/landing-templates/components/template-purchase-dialog";
 
-type MarketplaceCard = TemplateLibraryCard & { locked?: boolean };
+type MarketplaceCard = TenantTemplateCard;
 
 export function TenantTemplateMarketplace({ onSelected }: { onSelected?: () => void }) {
   const [templates, setTemplates] = React.useState<MarketplaceCard[]>([]);
@@ -39,6 +45,10 @@ export function TenantTemplateMarketplace({ onSelected }: { onSelected?: () => v
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [selecting, setSelecting] = React.useState<number | null>(null);
+  const [payment, setPayment] = React.useState<TemplatePaymentOptions | undefined>(undefined);
+  const [buying, setBuying] = React.useState<MarketplaceCard | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -49,6 +59,7 @@ export function TenantTemplateMarketplace({ onSelected }: { onSelected?: () => v
       setCurrent(data.current ? { template_id: data.current.template_id, status: data.current.status } : null);
       setRecommendedId(data.recommended_template_id ?? null);
       setBusinessLabel(data.business_type_meta?.label ?? data.business_type ?? "");
+      setPayment(data.payment);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load your available templates.");
     } finally {
@@ -59,6 +70,46 @@ export function TenantTemplateMarketplace({ onSelected }: { onSelected?: () => v
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  // Back from the payment gateway: ?template_checkout=<token>[&cancelled=1].
+  const checkoutToken = searchParams.get("template_checkout");
+  const checkoutCancelled = searchParams.get("cancelled") === "1";
+  React.useEffect(() => {
+    if (!checkoutToken) return;
+    let cancelled = false;
+
+    const clearParams = () => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("template_checkout");
+      params.delete("cancelled");
+      router.replace(`?${params.toString()}`, { scroll: false });
+    };
+
+    if (checkoutCancelled) {
+      toast.info("Payment cancelled — the template was not purchased.");
+      clearParams();
+      return;
+    }
+
+    void (async () => {
+      try {
+        const { data } = await fetchTemplatePurchase(checkoutToken);
+        if (cancelled) return;
+        if (data.owned) toast.success("Payment received — the template is yours. Choose “Use this template” to start.");
+        else if (data.order.status === "failed") toast.error("The payment failed. You were not charged for the template.");
+        else toast.info("Payment is still processing. The template unlocks as soon as it is confirmed.");
+        await load();
+      } catch (e) {
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Could not confirm the template payment.");
+      } finally {
+        if (!cancelled) clearParams();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [checkoutToken, checkoutCancelled, load, router, searchParams]);
 
   const choose = async (template: MarketplaceCard) => {
     setSelecting(template.id);
@@ -137,10 +188,18 @@ export function TenantTemplateMarketplace({ onSelected }: { onSelected?: () => v
               status={current?.status}
               busy={selecting === template.id}
               onChoose={() => void choose(template)}
+              onBuy={() => setBuying(template)}
             />
           ))}
         </div>
       )}
+
+      <TemplatePurchaseDialog
+        template={buying}
+        payment={payment}
+        onOpenChange={(open) => !open && setBuying(null)}
+        onSubmitted={() => void load()}
+      />
     </div>
   );
 }
@@ -152,6 +211,7 @@ function MarketplaceTile({
   status,
   busy,
   onChoose,
+  onBuy,
 }: {
   template: MarketplaceCard;
   isActive: boolean;
@@ -159,8 +219,12 @@ function MarketplaceTile({
   status?: string;
   busy: boolean;
   onChoose: () => void;
+  onBuy: () => void;
 }) {
   const locked = !!template.locked;
+  const needsPurchase = locked && template.lock_reason === "purchase";
+  const pending = template.pending_purchase;
+  const awaitingTransfer = pending?.status === "pending_manual_review";
 
   return (
     <Card
@@ -187,10 +251,21 @@ function MarketplaceTile({
               Recommended
             </Badge>
           )}
-          {locked && (
+          {locked && !needsPurchase && (
             <Badge variant="outline" className="border-amber-400/40 bg-black/50 text-amber-200">
               <Lock className="mr-1 h-3 w-3" />
               Premium
+            </Badge>
+          )}
+          {needsPurchase && (
+            <Badge variant="outline" className="border-amber-400/40 bg-black/60 text-amber-100">
+              {formatEtb(template.price_etb)}
+            </Badge>
+          )}
+          {template.owned && (
+            <Badge variant="outline" className="border-emerald-400/40 bg-black/50 text-emerald-200">
+              <BadgeCheck className="mr-1 h-3 w-3" />
+              Owned
             </Badge>
           )}
         </div>
@@ -213,7 +288,24 @@ function MarketplaceTile({
       </CardContent>
 
       <CardFooter className="p-4 pt-0">
-        {locked ? (
+        {needsPurchase && awaitingTransfer ? (
+          <Button variant="outline" disabled className="w-full gap-2 rounded-xl">
+            <Clock className="h-3.5 w-3.5" />
+            Transfer awaiting verification
+          </Button>
+        ) : needsPurchase && pending?.checkout_url ? (
+          <Button variant="outline" className="w-full gap-2 rounded-xl" asChild>
+            <a href={pending.checkout_url}>
+              <ShoppingCart className="h-3.5 w-3.5" />
+              Finish payment
+            </a>
+          </Button>
+        ) : needsPurchase ? (
+          <Button onClick={onBuy} className="w-full gap-2 rounded-xl">
+            <ShoppingCart className="h-4 w-4" />
+            Buy for {formatEtb(template.price_etb)}
+          </Button>
+        ) : locked ? (
           <Button variant="outline" className="w-full gap-2 rounded-xl border-amber-500/40 text-amber-600 dark:text-amber-300" asChild>
             {/* /dashboard/billing does not exist — subscriptions is the real plan page. */}
             <a href="/dashboard/subscriptions">

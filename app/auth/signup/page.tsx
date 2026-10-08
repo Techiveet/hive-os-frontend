@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ShieldAlert,
   AlertCircle, ArrowLeft, ArrowRight, BadgeCheck, Building2,
   Check, CheckCircle2, ChevronRight, CreditCard, Globe, HardDrive,
   Layers, Loader2, Lock, Mail, Phone, Rocket, ShieldCheck, Sparkles,
@@ -469,7 +470,10 @@ export default function TenantSignupPage() {
   const cycleMultiplier = billingCycle === "yearly"
     ? 12 * (1 - Number(billingPolicy?.yearly_discount_percent ?? 0) / 100)
     : 1;
-  const standardTotalAmountEtb = totalAmountEtb * cycleMultiplier;
+  // A paid landing template is a one-time charge on this payment, so it is
+  // added after the billing-cycle multiplier, never multiplied by it.
+  const templateAmountEtb = Number(selectedTemplate?.price_etb ?? 0);
+  const standardTotalAmountEtb = totalAmountEtb * cycleMultiplier + templateAmountEtb;
   const isFree = standardTotalAmountEtb <= 0;
   const hybridAvailable = Boolean(
     billingPolicy?.hybrid_enabled
@@ -610,8 +614,13 @@ export default function TenantSignupPage() {
     refetchInterval: (query) => {
       const status = query.state.data?.data?.order?.status;
 
-      if (!orderToken || step !== "confirm" || status === "provisioned" || status === "manual_payment_rejected" || (query.state.data?.data?.order?.scope === "hybrid_activation" && query.state.data?.data?.order?.provisioned_at)) {
+      if (!orderToken || step !== "confirm" || status === "provisioned" || status === "manual_payment_rejected" || status === "provisioning_failed" || (query.state.data?.data?.order?.scope === "hybrid_activation" && query.state.data?.data?.order?.provisioned_at)) {
         return false;
+      }
+
+      // Workspace builds run on the queue and take a few minutes.
+      if (status === "provisioning" || status === "paid") {
+        return 5000;
       }
 
       const awaitingArifPaySettlement = (
@@ -1328,6 +1337,14 @@ export default function TenantSignupPage() {
                       <span className="font-bold text-foreground">ETB {addonAmountEtb.toLocaleString()}/month</span>
                     </div>
                   ) : null}
+                  {templateAmountEtb > 0 ? (
+                    <div className="flex items-center justify-between gap-4 text-sm">
+                      <span className="text-xs text-muted-foreground">Landing template (one-time)</span>
+                      <span className="font-bold text-foreground">
+                        {isHybrid ? "Added to activation payment" : `ETB ${templateAmountEtb.toLocaleString()}`}
+                      </span>
+                    </div>
+                  ) : null}
                   {isHybrid ? (
                     <div className="border-t border-border/30 pt-3">
                       <p className="font-black text-foreground">Activation payment follows sign-in</p>
@@ -1730,6 +1747,38 @@ export default function TenantSignupPage() {
                 </div>
               ) : null}
 
+              {/* Payment settled — the workspace is being built on the queue */}
+              {(order?.status === "provisioning" || order?.status === "paid") && order?.scope !== "hybrid_activation" && (
+                <div className="flex flex-col items-center gap-6 py-12" role="status" aria-live="polite">
+                  <div className="relative">
+                    <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                    </div>
+                    <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-ping" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black tracking-tight mb-2">Setting up your workspace</h2>
+                    <p className="mx-auto max-w-md text-sm text-muted-foreground">
+                      {order.total_amount_etb > 0 ? "Payment confirmed. " : ""}We are creating your private database, modules and admin account. This usually takes a few minutes — you can keep this page open, and we will also email you when it is ready.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {order?.status === "provisioning_failed" && (
+                <div className="flex flex-col items-center gap-6 py-12" role="alert">
+                  <div className="h-20 w-20 rounded-full bg-destructive/10 flex items-center justify-center">
+                    <ShieldAlert className="h-10 w-10 text-destructive" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black tracking-tight mb-2">Workspace setup needs attention</h2>
+                    <p className="mx-auto max-w-md text-sm text-muted-foreground">
+                      {order.total_amount_etb > 0 ? "Your payment was received and is safe. " : ""}Setting up the workspace hit a problem, and our team has been alerted to finish it for you. Please contact support with reference <span className="font-mono font-semibold text-foreground">{order.id}</span>.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Paid plan — provisioned */}
               {order?.status === "provisioned" && (
                 <ConfirmSuccess
@@ -1793,6 +1842,10 @@ export default function TenantSignupPage() {
               {order && !hybridWorkspaceReady && order.status !== "provisioned" && (
                 order.status !== "pending_manual_review"
                 && order.status !== "manual_payment_rejected"
+                // Build states have their own panels above.
+                && order.status !== "provisioning"
+                && order.status !== "provisioning_failed"
+                && !(order.status === "paid" && order.scope !== "hybrid_activation")
                 && (shouldHoldArifPayFailureState || (order.status !== "failed" && order.status !== "cancelled"))
               ) && (
                 <div className="flex flex-col items-center gap-6 py-12">
