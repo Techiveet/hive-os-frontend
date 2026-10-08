@@ -34,6 +34,7 @@ import { handleAuthFailureResponse, isImpersonatingSession, logoutHiveSession, s
 import { prepareNavForTour } from "@/lib/tour-events";
 import { buildSidebarTourSteps } from "@/lib/tour-steps";
 import { usePermissions } from "@/hooks/use-permissions";
+import { readStoredUser } from "@/lib/home-path";
 import { PROFILE_ROUTE_PERMISSIONS } from "@/lib/route-permissions";
 import { useAvatarUrl } from "@/hooks/use-avatar-url";
 
@@ -123,6 +124,10 @@ export function DashboardTopbar() {
       return res.json();
     },
     staleTime: 60000,
+    // The auth guard fetched and stored this same /user payload moments before
+    // the topbar mounted; start from it instead of requesting it again.
+    initialData: () => readStoredUser() ?? undefined,
+    initialDataUpdatedAt: () => (readStoredUser() ? Date.now() : 0),
     enabled: canViewProfile && tokenFingerprint !== "none",
   });
 
