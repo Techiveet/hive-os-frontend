@@ -459,9 +459,15 @@ const hasSubscribedModule = (
   return modules.some((slug) => access.hasModule?.(slug));
 };
 
+/**
+ * `fallback` decides routes no rule below covers (see lib/module-route-access:
+ * the module manifests). Returning null keeps the historical default of
+ * allowing them.
+ */
 export function canAccessDashboardRoute(
   rawPath: string,
   access: RoutePermissionAccess,
+  fallback?: (path: string) => boolean | null,
 ): boolean {
   const path = normalizePath(rawPath);
 
@@ -546,6 +552,11 @@ export function canAccessDashboardRoute(
       access.hasAnyPermission([...VIDEO_CONFERENCING_ROUTE_PERMISSIONS]) &&
       hasSubscribedModule(access, "video_conferencing")
     );
+  }
+
+  // Same gate as the MailBox API (tenant_module:mailbox, no extra permission).
+  if (matchesPrefix(path, "/dashboard/mail")) {
+    return hasSubscribedModule(access, "mailbox");
   }
 
   if (matchesPrefix(path, "/dashboard/chat")) {
@@ -892,5 +903,5 @@ export function canAccessDashboardRoute(
     );
   }
 
-  return true;
+  return fallback?.(path) ?? true;
 }

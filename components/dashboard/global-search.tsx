@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Loader2, User, Network, FileText, ArrowRight, Shield } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,8 @@ import { useTranslation } from "@/store/use-translation";
 import { useDebounce } from "@/hooks/use-debounce";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
-import { canAccessDashboardRoute } from "@/lib/route-permissions";
+import { canAccessDashboardRoute, type RoutePermissionAccess } from "@/lib/route-permissions";
+import { canAccessModuleRoute } from "@/lib/module-route-access";
 import { getAccessToken, getBackendApiRoot, getTenantHeaders } from "@/lib/runtime-context";
 
 interface SearchResultItem {
@@ -112,17 +113,24 @@ export function GlobalSearch() {
     fetchResults();
   }, [debouncedQuery]);
 
+  // Same answer the auth guard gives, so search never lists a page that
+  // would bounce to "subscription required" (incl. manifest-derived rules).
+  const canOpen = useCallback((url: string) => {
+    const access: RoutePermissionAccess = { hasPermission, hasAnyPermission, hasModule };
+    return canAccessDashboardRoute(url, access, (path) => canAccessModuleRoute(path, access));
+  }, [hasAnyPermission, hasModule, hasPermission]);
+
   const filteredResults = useMemo(() => {
     return results
       .map((category) => ({
         ...category,
-        items: category.items.filter((item) => canAccessDashboardRoute(item.url, { hasPermission, hasAnyPermission, hasModule })),
+        items: category.items.filter((item) => canOpen(item.url)),
       }))
       .filter((category) => category.items.length > 0);
-  }, [hasAnyPermission, hasModule, hasPermission, results]);
+  }, [canOpen, results]);
 
   const handleSelect = (url: string) => {
-    if (!canAccessDashboardRoute(url, { hasPermission, hasAnyPermission, hasModule })) {
+    if (!canOpen(url)) {
       return;
     }
 

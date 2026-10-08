@@ -48,3 +48,6 @@ next-env.d.ts
 # Local merge and verification artifacts
 *.orig
 /verify_role_dashboard.mjs
+
+# Playwright e2e dev-server build output
+/.next-e2e/
