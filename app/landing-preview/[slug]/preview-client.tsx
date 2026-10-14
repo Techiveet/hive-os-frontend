@@ -10,6 +10,7 @@ import { RestaurantLandingTemplate } from "@/modules/tenancy/components/restaura
 import { TenantBusinessLanding } from "@/modules/tenancy/components/tenant-business-landing";
 import LmsLandingTemplate from "@/modules/tenancy/components/lms-landing-template";
 import B2BLandingTemplate from "@/modules/tenancy/components/b2b-landing-template";
+import { CarParkingLandingTemplate } from "@/modules/tenancy/components/car-parking-landing-template";
 
 export type PreviewPayload = {
   slug: string;
@@ -62,6 +63,12 @@ export function LandingPreviewClient({ payload }: { payload: PreviewPayload }) {
   if (businessType === "b2b") {
     return (
       <B2BLandingTemplate brandSettings={brandSettings} template={template} tenantName={tenantName} />
+    );
+  }
+
+  if (businessType === "car-parking" || businessType === "parking") {
+    return (
+      <CarParkingLandingTemplate brandSettings={brandSettings} template={template} tenantName={tenantName} />
     );
   }
 

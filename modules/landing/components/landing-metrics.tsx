@@ -50,7 +50,12 @@ export function LandingMetrics() {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
 
-  const { data, isFetching } = useQuery<PlatformStats>({
+  // Live stats apply after mount so the hydration pass renders the same
+  // fallback figures the server did (see the matching note in app/page.tsx).
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+
+  const { data: liveData, isFetching } = useQuery<PlatformStats>({
     queryKey: ["platformPublicStats"],
     queryFn: async () => {
       const res = await fetch(`${getBackendApiRoot()}/system/platform-stats`, {
@@ -64,6 +69,8 @@ export function LandingMetrics() {
     refetchOnWindowFocus: false,
     retry: 1,
   });
+
+  const data = mounted ? liveData : undefined;
 
   const value = (key: keyof typeof FALLBACK) => {
     const raw = data?.[key];

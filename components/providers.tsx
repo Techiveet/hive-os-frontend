@@ -1,6 +1,6 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -8,31 +8,11 @@ import { OfflineStatusBanner } from "@/components/offline/offline-status-banner"
 import { OfflineQueueInspector } from "@/components/offline/queue-inspector";
 import { OfflineRuntime } from "@/components/providers/offline-runtime";
 import { useTranslation } from "@/store/use-translation";
+import { createQueryClient } from "@/lib/query-client";
 import {
   restorePersistedQueryCache,
   subscribeToPersistedQueryCache,
 } from "@/lib/offline/query-persistence";
-
-const createQueryClient = () =>
-  new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 60 * 1000,
-        gcTime: 24 * 60 * 60 * 1000,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: true,
-        retry: false,
-        networkMode: "online",
-      },
-      mutations: {
-        retry: false,
-        // Run mutations even when offline so the global axios offline
-        // interceptor can queue them. The interceptor returns a 202
-        // synthetic success to React Query, so `onSuccess` still fires.
-        networkMode: "always",
-      },
-    },
-  });
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(createQueryClient);

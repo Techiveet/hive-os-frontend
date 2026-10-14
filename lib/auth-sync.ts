@@ -287,9 +287,36 @@ export const handleAuthFailureResponse = async (response: Response): Promise<boo
   return true;
 };
 
-export const syncUserSession = async () => {
+/**
+ * /user is the heaviest call the dashboard makes, and it used to fire on every
+ * page change (the shell), on every window focus, and again from the auth
+ * guard and the topbar. Routine syncs now share one in-flight request and are
+ * skipped while the session was refreshed within SESSION_FRESH_MS. Callers that
+ * just changed roles/permissions pass { force: true }.
+ */
+const SESSION_FRESH_MS = 30_000;
+let lastSessionSyncAt = 0;
+let sessionSyncInFlight: Promise<void> | null = null;
+
+/** Record that /user was just fetched elsewhere (e.g. by the auth guard). */
+export const markUserSessionFresh = () => {
+  lastSessionSyncAt = Date.now();
+};
+
+export const syncUserSession = async (options: { force?: boolean } = {}) => {
+  if (typeof window === "undefined") return;
+  if (sessionSyncInFlight) return sessionSyncInFlight;
+  if (!options.force && Date.now() - lastSessionSyncAt < SESSION_FRESH_MS) return;
+
+  sessionSyncInFlight = runUserSessionSync().finally(() => {
+    sessionSyncInFlight = null;
+  });
+
+  return sessionSyncInFlight;
+};
+
+const runUserSessionSync = async () => {
   try {
-    if (typeof window === "undefined") return;
 
     const token = getAccessToken();
     if (!token) return;
@@ -316,6 +343,7 @@ export const syncUserSession = async () => {
     }
 
     const freshUserData = await response.json();
+    lastSessionSyncAt = Date.now();
     const localUserStr = safeLocalStorageGetItem("hive_user");
 
     if (freshUserData) {

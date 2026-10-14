@@ -1,4 +1,10 @@
 import { getAuthHeaders, getBackendApiRoot } from "@/lib/runtime-context";
+import type {
+  TenantDirectTransferSettings,
+  TenantPaymentMethod,
+  TenantPaymentProvider,
+  TenantSubscriptionOrder,
+} from "@/modules/subscription/types";
 
 export type TemplateFramework = "static-html" | "html-css-js" | "react" | "nextjs" | "visual";
 export type TemplateType = "visual" | "static" | "react" | "nextjs";
@@ -82,6 +88,9 @@ export type TemplateLibraryCard = {
   pages_count?: number;
   has_draft?: boolean;
   is_premium: boolean;
+  /** One-time price in ETB. 0 = free / included. */
+  price_etb?: number;
+  requires_purchase?: boolean;
   is_published: boolean;
   is_archived: boolean;
   assignments: TemplateAssignment[];
@@ -411,6 +420,20 @@ export const createTemplate = async (payload: {
   return response.json();
 };
 
+/** Update a master template's listing details: name, description, price, premium flag. */
+export const updateTemplateDetails = async (
+  id: number,
+  payload: { name?: string; description?: string | null; price_etb?: number; is_premium?: boolean },
+): Promise<{ data: TemplateLibraryCard }> => {
+  const response = await fetch(`${getBackendApiRoot()}/landing-templates/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw await parseError(response);
+  return response.json();
+};
+
 export const importTemplateArchive = async (file: File): Promise<{ data: TemplateImport }> => {
   const form = new FormData();
   form.append("archive", file);
@@ -528,14 +551,66 @@ export const unassignTemplate = async (
   return response.json();
 };
 
+/** A template as the signed-in tenant sees it in the marketplace. */
+export type TenantTemplateCard = TemplateLibraryCard & {
+  locked?: boolean;
+  /** What unlocks it: buying this template, or the premium plan add-on. */
+  lock_reason?: "purchase" | "premium" | null;
+  /** True when this is a paid template the tenant already owns. */
+  owned?: boolean;
+  pending_purchase?: { status: string; public_token: string; checkout_url: string | null } | null;
+};
+
+export type TemplatePaymentOptions = {
+  payment_provider?: TenantPaymentProvider | null;
+  payment_methods?: TenantPaymentMethod[];
+  direct_transfer?: TenantDirectTransferSettings | null;
+};
+
 export type AvailableTemplatesResponse = {
   data: {
     business_type: string;
     business_type_meta: { label: string; description: string; icon: string };
     recommended_template_id: number | null;
-    templates: TemplateLibraryCard[];
+    templates: TenantTemplateCard[];
+    payment?: TemplatePaymentOptions;
     current: { id: number; template_id: number | null; status: string; published_at: string | null } | null;
   };
+};
+
+export type TemplatePurchasePayload = {
+  template_id: number;
+  checkout_channel: "gateway" | "direct_transfer";
+  payment_method?: string | null;
+  billing_phone?: string | null;
+  manual_bank_account_id?: string | null;
+  manual_transaction_reference?: string | null;
+  success_url_base: string;
+  cancel_url_base: string;
+};
+
+/** Start an in-app purchase of one paid template. */
+export const purchaseTemplate = async (
+  payload: TemplatePurchasePayload,
+): Promise<{ message: string; data: { order: TenantSubscriptionOrder } }> => {
+  const response = await fetch(`${getBackendApiRoot()}/landing-templates/purchase`, {
+    method: "POST",
+    headers: getAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw await parseError(response);
+  return response.json();
+};
+
+/** Confirm a purchase after returning from the payment gateway. */
+export const fetchTemplatePurchase = async (
+  token: string,
+): Promise<{ data: { order: TenantSubscriptionOrder; owned: boolean } }> => {
+  const response = await fetch(`${getBackendApiRoot()}/landing-templates/purchases/${encodeURIComponent(token)}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw await parseError(response);
+  return response.json();
 };
 
 export const fetchAvailableTemplates = async (): Promise<AvailableTemplatesResponse> => {

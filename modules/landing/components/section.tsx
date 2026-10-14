@@ -61,7 +61,7 @@ export function SectionShell({
           <div
             className={cn(
               "absolute -bottom-32 right-1/5 h-[22rem] w-[22rem] rounded-full blur-[130px]",
-              glow === "primary" && "bg-emerald-400/[0.07]",
+              glow === "primary" && "bg-amber-400/[0.06]",
               glow === "cool" && "bg-indigo-500/[0.07]",
               glow === "warm" && "bg-orange-500/[0.07]",
             )}
@@ -92,6 +92,8 @@ export function Eyebrow({
       )}
     >
       <span className="h-px w-6 bg-gradient-to-r from-transparent to-primary/70" />
+      {/* The honey cell from the logo's chevron — the page's one recurring motif. */}
+      <span aria-hidden className="hex-clip h-2.5 w-2 shrink-0 bg-amber-400" />
       <span className="text-primary">{children}</span>
       <span className="h-px w-6 bg-gradient-to-l from-transparent to-primary/70" />
     </span>

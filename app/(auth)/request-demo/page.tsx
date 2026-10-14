@@ -121,6 +121,9 @@ export default function RequestDemoPage() {
 
   React.useEffect(() => {
     requestIdRef.current ||= createClientRequestId();
+    // The landing footer hands over the address typed there as ?email=.
+    const prefill = new URLSearchParams(window.location.search).get("email");
+    if (prefill) setEmail((current) => current || prefill);
   }, []);
 
   React.useEffect(() => {

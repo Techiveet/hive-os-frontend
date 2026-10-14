@@ -786,3 +786,294 @@ textarea,
   --lms-border: #362a63;
   --lms-surface: #1d0d4d;
 }
+
+/* ── Hive marketing landing ──────────────────────────────────────────────────
+ * The platform landing wears the Hive OS logo palette — cobalt hexagon, honey
+ * chevron, navy core — instead of the tenant-configurable --primary, which
+ * rendered emerald until brand settings arrived and then repainted blue.
+ * Scoped to .hive-landing so dashboards and tenant landings are untouched.
+ */
+.hive-landing {
+  --primary: 221 83% 53%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 221 83% 53%;
+  --accent: 221 83% 53%;
+  --accent-foreground: 0 0% 100%;
+  --primary-readable: 224 76% 46%;
+  --honey: 40 100% 50%;
+  --honey-readable: 32 95% 38%;
+  --cyan: 199 95% 55%;
+  --background: 220 33% 98%;
+  --card: 0 0% 100%;
+  --border: 220 18% 88%;
+  --muted: 220 22% 94%;
+  --muted-foreground: 220 10% 40%;
+}
+
+.dark .hive-landing {
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 217 91% 60%;
+  --accent: 217 91% 60%;
+  --primary-readable: 213 94% 70%;
+  --honey: 42 100% 55%;
+  --honey-readable: 42 100% 62%;
+  --background: 224 50% 3.5%;
+  --card: 224 42% 6%;
+  --popover: 224 42% 6%;
+  --border: 222 32% 14%;
+  --muted: 222 30% 11%;
+  --muted-foreground: 220 14% 66%;
+}
+
+/* Tailwind resolves --color-* = hsl(var(--x)) once, at :root, and children
+   inherit the *resolved* colour — so overriding --primary here alone changes
+   nothing. Re-declaring the colour tokens makes them resolve against the
+   landing palette above. */
+.hive-landing {
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-ring: hsl(var(--ring));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-background: hsl(var(--background));
+  --color-card: hsl(var(--card));
+  --color-popover: hsl(var(--popover));
+  --color-border: hsl(var(--border));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+}
+
+.text-honey {
+  color: hsl(var(--honey-readable));
+}
+
+/* Cobalt → cyan → honey: the logo's three colours as one ribbon. */
+.hive-gradient-text {
+  background-image: linear-gradient(
+    100deg,
+    hsl(var(--primary)) 0%,
+    hsl(var(--cyan)) 45%,
+    hsl(var(--honey)) 75%,
+    hsl(var(--primary)) 100%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: hive-ribbon 7s linear infinite;
+}
+
+@keyframes hive-ribbon {
+  to {
+    background-position: -220% center;
+  }
+}
+
+/* Pointy-top hexagon used by the honeycomb module map and CTA badges. */
+.hex-clip {
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+@keyframes hex-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes hex-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes honey-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+/* ── Intro curtain ────────────────────────────────────────────────────────
+ * Pure CSS on purpose: it plays from the first paint, before (and regardless
+ * of) hydration, and always ends on its own clock. JS only adds the skip class
+ * and unmounts it afterwards. html[data-hive-intro="seen"] is set by an inline
+ * script for returning visitors and reduced-motion users.
+ */
+.hive-intro {
+  animation: hive-intro-out 0.85s cubic-bezier(0.76, 0, 0.24, 1) 2.2s forwards;
+  clip-path: polygon(50% -60%, 150% -10%, 150% 110%, 50% 160%, -50% 110%, -50% -10%);
+}
+
+.hive-intro.hive-intro--skip {
+  animation: hive-intro-out 0.45s cubic-bezier(0.76, 0, 0.24, 1) forwards;
+}
+
+html[data-hive-intro="seen"] .hive-intro {
+  display: none;
+}
+
+@keyframes hive-intro-out {
+  to {
+    clip-path: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%, 50% 50%, 50% 50%);
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+.hive-intro__stage {
+  animation: hi-stage-out 0.5s cubic-bezier(0.16, 1, 0.3, 1) 2.15s forwards;
+}
+
+@keyframes hi-stage-out {
+  to {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+}
+
+.hi-fade {
+  animation: hi-fade 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hi-rise {
+  animation: hi-rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hi-grow-x {
+  animation: hi-grow-x 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hi-track {
+  animation: hi-track 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hi-bloom {
+  animation: hi-bloom 1.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes hi-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes hi-rise {
+  from {
+    transform: translateY(110%);
+  }
+}
+
+@keyframes hi-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes hi-track {
+  from {
+    opacity: 0;
+    letter-spacing: 0.9em;
+  }
+}
+
+/* `scale`, not `transform`: Tailwind v4 centres with the standalone
+   `translate` property, which a transform keyframe would stack on. */
+@keyframes hi-bloom {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+}
+
+/* HiveMark "css" build sequence — SVG parts, transform-box so each part
+   scales/drops around its own box. */
+.hm-part {
+  transform-box: fill-box;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hm-trace {
+  stroke-dasharray: 1;
+  animation: hm-trace 1.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hm-fade {
+  animation-name: hi-fade;
+  animation-duration: 0.5s;
+}
+
+.hm-pop {
+  transform-origin: center;
+  animation-name: hm-pop;
+  animation-duration: 0.55s;
+}
+
+.hm-grow {
+  transform-origin: bottom;
+  animation-name: hm-grow;
+  animation-duration: 0.5s;
+}
+
+.hm-drop {
+  animation-name: hm-drop;
+  animation-duration: 0.45s;
+}
+
+.hm-chevron {
+  animation-name: hm-chevron;
+  animation-duration: 0.6s;
+  animation-timing-function: cubic-bezier(0.34, 1.8, 0.64, 1);
+}
+
+@keyframes hm-trace {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  60% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes hm-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes hm-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes hm-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes hm-chevron {
+  from {
+    opacity: 0;
+    transform: translateY(-22px);
+  }
+}

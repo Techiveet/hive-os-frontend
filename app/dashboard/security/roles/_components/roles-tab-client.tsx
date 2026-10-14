@@ -261,7 +261,7 @@ export function RolesTabClient({
       setDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["roles-table"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
-      syncUserSession();
+      syncUserSession({ force: true });
     },
     onError: (err: any) => {
       toast.error(getErrorMessage(err, t('roles.failed_save', "Failed to save role")));
@@ -274,7 +274,7 @@ export function RolesTabClient({
       toast.success(data.message || t('roles.role_deleted', "Role deleted successfully"));
       queryClient.invalidateQueries({ queryKey: ["roles-table"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
-      syncUserSession();
+      syncUserSession({ force: true });
     },
     onError: (err: any) => {
       toast.error(getErrorMessage(err, t('roles.failed_delete', "Failed to delete role")));
@@ -292,7 +292,7 @@ export function RolesTabClient({
     toast.success(t('roles.batch_trashed', "Selected custom roles moved to Trash Bin (auto-purged in 30 days)."));
     queryClient.invalidateQueries({ queryKey: ["roles-table"] });
     queryClient.invalidateQueries({ queryKey: ["roles"] });
-    syncUserSession();
+    syncUserSession({ force: true });
   }, [deleteMut, isProtectedRole, queryClient, t]);
 
   const handleSubmit = (e: React.FormEvent) => {

@@ -24,6 +24,12 @@ export function TrialBanner({ plan, daysUntilExpiration, isExpiringSoon, needsRe
 
   const isExpired = daysUntilExpiration !== null && daysUntilExpiration <= 0;
   const isUrgent = isExpiringSoon || needsRenewal;
+  // The API reports a fractional day count (29.97…). Round up so the last
+  // partial day still reads "1 day left" rather than "0".
+  const daysLeft = daysUntilExpiration === null ? null : Math.max(0, Math.ceil(daysUntilExpiration));
+  const daysLabel = daysLeft === 1
+    ? t("trial.one_day_left", "1 day left in your trial")
+    : t("trial.days_left", ":days days left in your trial", { days: daysLeft ?? 0 });
 
   return (
     <div className={cn(
@@ -44,9 +50,9 @@ export function TrialBanner({ plan, daysUntilExpiration, isExpiringSoon, needsRe
           <p className="font-semibold">
             {isExpired
               ? t("trial.expired_title", "Your trial has expired")
-              : isUrgent
-                ? t("trial.expiring_title", `{{days}} days left in your trial`, { days: daysUntilExpiration })
-                : t("trial.active_title", `{{days}} days left in your trial`, { days: daysUntilExpiration })}
+              : daysLeft === null
+                ? t("trial.active_title_undated", "You are on a trial plan")
+                : daysLabel}
           </p>
           <p className="text-xs text-muted-foreground">
             {isExpired

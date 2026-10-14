@@ -1,3 +1,4 @@
+import { canAccessModuleRoute } from "@/lib/module-route-access";
 import { canAccessDashboardRoute, type RoutePermissionAccess } from "@/lib/route-permissions";
 import { isTenantSession } from "@/lib/runtime-context";
 
@@ -9,6 +10,7 @@ export type DashboardUserAccess = {
     bypass_checks?: boolean;
   } | null;
   central_control_override?: boolean;
+  business_type?: string | null;
 };
 
 const SUPER_ADMIN_ROLE = "Super Admin";
@@ -55,5 +57,9 @@ export const buildRoutePermissionAccess = (user: DashboardUserAccess): RoutePerm
   };
 };
 
-export const canAccessDashboardPath = (pathname: string, user: DashboardUserAccess): boolean =>
-  canAccessDashboardRoute(pathname, buildRoutePermissionAccess(user));
+export const canAccessDashboardPath = (pathname: string, user: DashboardUserAccess): boolean => {
+  const access = buildRoutePermissionAccess(user);
+  return canAccessDashboardRoute(pathname, access, (path) =>
+    canAccessModuleRoute(path, access, { businessType: user.business_type ?? null }),
+  );
+};

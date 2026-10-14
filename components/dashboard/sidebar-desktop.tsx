@@ -44,6 +44,7 @@ import {
   Telescope,
   Truck,
   Building2,
+  Car,
   Handshake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -241,6 +242,7 @@ function SidebarInner({
   const [isCrmOpen, setIsCrmOpen] = useState(false);
   const [isFleetOpen, setIsFleetOpen] = useState(false);
   const [isPropertyOpen, setIsPropertyOpen] = useState(false);
+  const [isParkingOpen, setIsParkingOpen] = useState(false);
   const [isServiceOpen, setIsServiceOpen] = useState(false);
   const [isInternalAuditOpen, setIsInternalAuditOpen] = useState(false);
   const [isStrategyOpen, setIsStrategyOpen] = useState(false);
@@ -306,7 +308,10 @@ function SidebarInner({
   const workspaceScope = getWorkspaceScopeKey();
 
   const { data: brandData } = useQuery({
-    queryKey: ["publicBrandSettings", "sidebar", workspaceScope],
+    // Same key as PublicBrandSyncProvider: it is the same request, so React
+    // Query fetches it once per page instead of once per consumer.
+    queryKey: ["publicBrandSettings", workspaceScope],
+    staleTime: 600000,
     queryFn: async () => {
       const res = await fetch(`${getBackendApiRoot()}/settings/brand/public`, {
         headers: {
@@ -460,6 +465,9 @@ function SidebarInner({
   const propertyModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "property",
   );
+  const parkingModuleItems = moduleNavItems.filter(
+    (item) => item.moduleId === "parking",
+  );
   const serviceModuleItems = moduleNavItems.filter(
     (item) => item.moduleId === "service",
   );
@@ -577,6 +585,10 @@ function SidebarInner({
     if (pathname.startsWith("/dashboard/property")) {
       setIsModulesOpen(true);
       setIsPropertyOpen(true);
+    }
+    if (pathname.startsWith("/dashboard/parking")) {
+      setIsModulesOpen(true);
+      setIsParkingOpen(true);
     }
     if (pathname.startsWith("/dashboard/service")) {
       setIsModulesOpen(true);
@@ -1331,6 +1343,14 @@ function SidebarInner({
                       icon: Building2,
                       openState: isPropertyOpen,
                       onToggle: () => setIsPropertyOpen((value) => !value),
+                    })}
+
+                    {renderModuleSection({
+                      items: parkingModuleItems,
+                      label: t("nav.parking", "Car Parking"),
+                      icon: Car,
+                      openState: isParkingOpen,
+                      onToggle: () => setIsParkingOpen((value) => !value),
                     })}
 
                     {renderModuleSection({

@@ -174,6 +174,10 @@ export function DirectTransferReviewsClient() {
     queryFn: () => apiFetch("/settings/direct-transfer/reviews"),
     enabled: isLoaded && canReview,
     staleTime: 15_000,
+    // New workspaces are built on the queue after approval; keep the ledger
+    // fresh until every build has finished.
+    refetchInterval: (query) =>
+      query.state.data?.data?.history?.some((order) => order.status === "provisioning") ? 10_000 : false,
   });
 
   const markNotificationsRead = useMutation({
@@ -200,7 +204,7 @@ export function DirectTransferReviewsClient() {
       toast.success(
         response?.message ||
           (variables.action === "approve"
-            ? "Transfer approved and workspace activated."
+            ? "Transfer approved."
             : "Transfer rejected and tenant notified.")
       );
       setDialogState(null);
@@ -268,6 +272,18 @@ export function DirectTransferReviewsClient() {
     );
   }, []);
 
+  const retryMutation = useMutation({
+    mutationFn: (orderId: string) =>
+      apiFetch(`/settings/direct-transfer/reviews/${orderId}/retry-provisioning`, { method: "POST" }),
+    onSuccess: (response) => {
+      toast.success(response?.message || "Workspace setup restarted.");
+      queryClient.invalidateQueries({ queryKey: ["direct-transfer-review-ledger"] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Could not restart the workspace setup.");
+    },
+  });
+
   const columns = React.useMemo<ColumnDef<TenantSubscriptionOrder>[]>(
     () => [
       {
@@ -283,6 +299,19 @@ export function DirectTransferReviewsClient() {
               <Badge className={cn("border-none text-[11px] uppercase tracking-widest", reviewBadge(row.original.manual_review_status))}>
                 {reviewLabel(row.original)}
               </Badge>
+              {row.original.status === "provisioning" && (
+                <Badge className="border-none bg-sky-500/15 text-[11px] uppercase tracking-widest text-sky-800 dark:text-sky-200">
+                  Setting up workspace
+                </Badge>
+              )}
+              {row.original.status === "provisioning_failed" && (
+                <Badge
+                  className="border-none bg-destructive/15 text-[11px] uppercase tracking-widest text-destructive"
+                  title={row.original.provisioning_error ?? undefined}
+                >
+                  Setup failed
+                </Badge>
+              )}
             </div>
           </div>
         ),
@@ -362,6 +391,29 @@ export function DirectTransferReviewsClient() {
           const order = row.original;
           const pending = (order.manual_review_status ?? "pending") === "pending";
 
+          if (order.status === "provisioning_failed") {
+            return (
+              <div className="space-y-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-full"
+                  disabled={retryMutation.isPending}
+                  onClick={() => retryMutation.mutate(order.id)}
+                >
+                  Retry setup
+                </Button>
+                {order.provisioning_error ? (
+                  <p className="max-w-[16rem] text-[11px] leading-4 text-destructive">{order.provisioning_error}</p>
+                ) : null}
+              </div>
+            );
+          }
+
+          if (order.status === "provisioning") {
+            return <span className="text-xs text-muted-foreground">Setting up the workspace…</span>;
+          }
+
           if (!pending) {
             return <span className="text-xs text-muted-foreground">Completed</span>;
           }
@@ -379,7 +431,7 @@ export function DirectTransferReviewsClient() {
         },
       },
     ],
-    [openDialog]
+    [openDialog, retryMutation]
   );
 
   if (!isLoaded) {

@@ -274,7 +274,7 @@ export type SubscriptionAdminTenant = {
 export type TenantSubscriptionOrder = {
   id: string;
   public_token: string;
-  scope: "public_signup" | "hybrid_activation" | "tenant_upgrade" | "tenant_renewal";
+  scope: "public_signup" | "hybrid_activation" | "tenant_upgrade" | "tenant_renewal" | "template_purchase";
   status: string;
   provider?: string | null;
   payment_channel?: string | null;
@@ -316,6 +316,8 @@ export type TenantSubscriptionOrder = {
   renewal_term_days?: number | null;
   paid_at?: string | null;
   provisioned_at?: string | null;
+  /** Why the queued workspace setup failed (status `provisioning_failed`). */
+  provisioning_error?: string | null;
   created_at?: string | null;
   module_request?: TenantModuleSubscriptionPayload;
 };

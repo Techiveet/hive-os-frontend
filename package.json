@@ -13,6 +13,7 @@
     "build:webpack:diagnose": "node scripts/diagnose-webpack-build.mjs",
     "test:e2e": "playwright test",
     "test:security:rich-text": "tsx tests/security/sanitize-rich-text.test.ts",
+    "test:security:route-access": "tsx tests/security/module-route-access.test.ts",
     "test:e2e:waiter-pos": "playwright test tests/e2e/waiter-pos",
     "test:e2e:waiter-pos:headed": "playwright test tests/e2e/waiter-pos --headed"
   },

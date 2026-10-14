@@ -253,6 +253,18 @@ export const PROCUREMENT_ROUTE_PERMISSIONS = [
   "export_procurement_reports",
   "manage_procurement_settings",
 ] as const;
+export const CAR_PARKING_ROUTE_PERMISSIONS = [
+  "view_car_parking",
+  "manage_car_parking",
+  "create_car_parking_tickets",
+  "checkout_car_parking_tickets",
+  "manage_car_parking_tariffs",
+  "manage_car_parking_passes",
+  "manage_car_parking_reservations",
+  "manage_car_parking_violations",
+  "view_car_parking_reports",
+] as const;
+
 export const PROPERTY_ROUTE_PERMISSIONS = [
   "view_properties", "manage_properties", "view_units", "manage_units", "view_leases", "manage_leases",
   "view_property_owners", "manage_property_owners", "view_property_tenants", "manage_property_tenants",
@@ -447,9 +459,15 @@ const hasSubscribedModule = (
   return modules.some((slug) => access.hasModule?.(slug));
 };
 
+/**
+ * `fallback` decides routes no rule below covers (see lib/module-route-access:
+ * the module manifests). Returning null keeps the historical default of
+ * allowing them.
+ */
 export function canAccessDashboardRoute(
   rawPath: string,
   access: RoutePermissionAccess,
+  fallback?: (path: string) => boolean | null,
 ): boolean {
   const path = normalizePath(rawPath);
 
@@ -534,6 +552,11 @@ export function canAccessDashboardRoute(
       access.hasAnyPermission([...VIDEO_CONFERENCING_ROUTE_PERMISSIONS]) &&
       hasSubscribedModule(access, "video_conferencing")
     );
+  }
+
+  // Same gate as the MailBox API (tenant_module:mailbox, no extra permission).
+  if (matchesPrefix(path, "/dashboard/mail")) {
+    return hasSubscribedModule(access, "mailbox");
   }
 
   if (matchesPrefix(path, "/dashboard/chat")) {
@@ -757,6 +780,13 @@ export function canAccessDashboardRoute(
     );
   }
 
+  if (matchesPrefix(path, "/dashboard/parking")) {
+    return (
+      hasSubscribedModule(access, "car_parking_management") &&
+      access.hasAnyPermission([...CAR_PARKING_ROUTE_PERMISSIONS])
+    );
+  }
+
   if (matchesPrefix(path, "/dashboard/property")) {
     return (
       hasSubscribedModule(access, "property_management") &&
@@ -873,5 +903,5 @@ export function canAccessDashboardRoute(
     );
   }
 
-  return true;
+  return fallback?.(path) ?? true;
 }

@@ -59,6 +59,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getBackendOrigin } from "@/lib/runtime-context";
 import { AssignTemplateDialog } from "../components/assign-template-dialog";
+import { TemplateDetailsDialog } from "../components/template-details-dialog";
 import { ImportTemplateDialog } from "../components/import-template-dialog";
 import { LandingWorkspaceNav } from "../components/landing-workspace-nav";
 import { TemplateEditDialog } from "../components/template-edit-dialog";
@@ -124,6 +125,8 @@ export default function LandingLibraryPage() {
   const [editTarget, setEditTarget] =
     React.useState<TemplateLibraryCard | null>(null);
   const [ejectTarget, setEjectTarget] =
+    React.useState<TemplateLibraryCard | null>(null);
+  const [detailsTarget, setDetailsTarget] =
     React.useState<TemplateLibraryCard | null>(null);
   const [busyId, setBusyId] = React.useState<number | null>(null);
   const loadRequestRef = React.useRef(0);
@@ -613,11 +616,15 @@ export default function LandingLibraryPage() {
                       <h3 className="font-bold text-base tracking-tight leading-snug group-hover:text-primary transition-colors">
                         {tpl.name}
                       </h3>
-                      {tpl.is_premium && (
+                      {Number(tpl.price_etb ?? 0) > 0 ? (
+                        <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-300 border-emerald-500/30 shrink-0 tabular-nums">
+                          ETB {Number(tpl.price_etb).toLocaleString()}
+                        </Badge>
+                      ) : tpl.is_premium ? (
                         <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30 shrink-0">
                           Premium
                         </Badge>
-                      )}
+                      ) : null}
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2">
                       {tpl.description || "Production-grade multi-tenant website landing template."}
@@ -659,10 +666,21 @@ export default function LandingLibraryPage() {
                       variant="ghost"
                       size="icon"
                       className="h-11 w-11 rounded-lg"
-                      aria-label={`Edit ${tpl.name} metadata`}
+                      aria-label={`Edit ${tpl.name} content`}
+                      title="Edit content"
                       onClick={() => setEditTarget(tpl)}
                     >
                       <FileCode2 className="h-4 w-4 text-slate-700 dark:text-slate-200" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 rounded-lg"
+                      aria-label={`${tpl.name} details and pricing`}
+                      title="Details & pricing"
+                      onClick={() => setDetailsTarget(tpl)}
+                    >
+                      <Tag className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                     </Button>
                     <Button
                       variant="ghost"
@@ -862,6 +880,12 @@ export default function LandingLibraryPage() {
           onAssigned={loadData}
         />
       )}
+
+      <TemplateDetailsDialog
+        template={detailsTarget}
+        onOpenChange={(open) => !open && setDetailsTarget(null)}
+        onSaved={loadData}
+      />
 
       {editTarget && (
         <TemplateEditDialog

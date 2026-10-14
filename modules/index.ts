@@ -32,6 +32,7 @@ import { videoConferencingModule } from "@/modules/video-conferencing/module";
 import { supportBotModule } from "@/modules/support-bot/module";
 import { dailyReportsModule } from "@/modules/daily-reports/module";
 import { propertyModule } from "@/modules/property/module";
+import { parkingModule } from "@/modules/parking/module";
 import type { FrontendModuleDefinition, ModuleId, ModuleNavItem } from "@/modules/types";
 
 export type { FrontendModuleDefinition, ModuleNavItem } from "@/modules/types";
@@ -44,7 +45,7 @@ export const FEATURE_MODULES: FrontendModuleDefinition[] = [
   procurementModule, supplyChainModule, logisticsModule, salesModule, crmModule,
   fleetModule, serviceModule, internalAuditModule, strategyModule, vantageModule,
   agricultureModule, b2bMarketplaceModule, landingTemplatesModule,
-  videoConferencingModule, supportBotModule, dailyReportsModule, propertyModule,
+  videoConferencingModule, supportBotModule, dailyReportsModule, propertyModule, parkingModule,
 ];
 
 const SYSTEM_MODULE_IDS = new Set<ModuleId>(["core", "identity", "subscription", "tenancy"]);

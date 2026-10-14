@@ -25,15 +25,15 @@ import { useTranslation } from "@/store/use-translation";
 
 import { DURATION, EASE, springSoft, stagger, wordUp } from "../motion";
 import { CountUp } from "./count-up";
+import { HiveMark } from "./hive-mark";
+import { HoneycombField } from "./honeycomb-field";
 
 type Props = {
   isTenant: boolean;
   appTitle: string;
-  /** The hexagon particle canvas, owned by the page so its lifecycle is unchanged. */
-  canvasSlot?: React.ReactNode;
 };
 
-export function LandingHero({ isTenant, appTitle, canvasSlot }: Props) {
+export function LandingHero({ isTenant, appTitle }: Props) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
   const sectionRef = React.useRef<HTMLElement>(null);
@@ -66,7 +66,7 @@ export function LandingHero({ isTenant, appTitle, canvasSlot }: Props) {
       ref={sectionRef}
       className="relative z-10 flex min-h-screen flex-col items-center justify-start overflow-hidden px-4 pb-0 pt-28 text-center md:pt-32"
     >
-      {/* ── Ambience: drifting grid, three-blob aurora and the particle canvas,
+      {/* ── Ambience: drifting grid, cobalt/honey aurora and the live honeycomb,
              all fading out as the hero scrolls away so they never compete with
              the sections below. ────────────────────────────────────────── */}
       <motion.div
@@ -92,7 +92,7 @@ export function LandingHero({ isTenant, appTitle, canvasSlot }: Props) {
           />
           <div
             className={cn(
-              "absolute left-[28%] top-[46%] h-[26rem] w-[26rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400/12 blur-[120px]",
+              "absolute left-[28%] top-[46%] h-[26rem] w-[26rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-400/10 blur-[120px]",
               !reduced && "animate-[aurora-b_23s_ease-in-out_infinite]",
             )}
           />
@@ -104,7 +104,7 @@ export function LandingHero({ isTenant, appTitle, canvasSlot }: Props) {
           />
         </div>
 
-        {canvasSlot}
+        <HoneycombField />
       </motion.div>
 
       <motion.div
@@ -116,10 +116,11 @@ export function LandingHero({ isTenant, appTitle, canvasSlot }: Props) {
       >
         {/* Status pill */}
         <motion.div variants={wordUp}>
-          <div className="liquid-glass mb-7 inline-flex items-center gap-2 rounded-full px-3 py-1.5">
+          <div className="liquid-glass mb-7 inline-flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3.5">
+            <HiveMark className="h-6 w-6" />
             <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
             </span>
             <span className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               {isTenant
@@ -135,9 +136,7 @@ export function LandingHero({ isTenant, appTitle, canvasSlot }: Props) {
         <h1 className="max-w-4xl font-space text-5xl font-black leading-[1.05] tracking-tighter md:text-7xl md:leading-[1.02]">
           <MaskedLine reduced={reduced}>{headline.lead}</MaskedLine>
           <MaskedLine reduced={reduced} className="mt-1 md:mt-2">
-            <span className="bg-gradient-to-r from-primary via-primary/70 to-primary bg-[length:200%_auto] bg-clip-text text-transparent [animation:shimmer-text_6s_linear_infinite]">
-              {headline.accent}
-            </span>{" "}
+            <span className="hive-gradient-text">{headline.accent}</span>{" "}
             <span className="font-serif font-normal italic tracking-[-1px] text-foreground">
               {headline.tail}
             </span>
@@ -172,7 +171,7 @@ export function LandingHero({ isTenant, appTitle, canvasSlot }: Props) {
               transition={springSoft}
               className="block"
             >
-              <Button className="group h-14 w-full rounded-full border-none bg-primary px-8 font-space text-base font-bold uppercase tracking-wider text-primary-foreground shadow-xl shadow-primary/25 sm:w-auto">
+              <Button className="group h-14 w-full rounded-full border-none bg-primary px-8 font-space text-base font-bold uppercase tracking-wider text-primary-foreground shadow-xl shadow-primary/30 ring-1 ring-inset ring-white/20 sm:w-auto">
                 {isTenant
                   ? t("landing.nav.signin", "Sign In")
                   : t("landing.cta.pill_plan", "Start Free — Pick a Plan")}
@@ -250,7 +249,7 @@ function MaskedLine({
   reduced: boolean | null;
 }) {
   return (
-    <span className={cn("block overflow-hidden pb-[0.12em] pt-[0.04em]", className)}>
+    <span className={cn("block overflow-hidden pb-[0.2em] pt-[0.04em]", className)}>
       <motion.span
         variants={
           reduced

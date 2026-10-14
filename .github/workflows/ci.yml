@@ -25,6 +25,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: SSR request-cache regression
+        run: npx tsx --test tests/query-client-ssr.test.ts
+
       - name: Lint
         run: npm run lint
 
@@ -76,17 +79,17 @@ jobs:
 
       # hive-os-backend is a private repository. The default GITHUB_TOKEN is
       # scoped to this repository only, so it cannot read it and checkout fails
-      # with "repository not found". A repository admin must create a read-only
-      # PAT and store it as the HIVE_BACKEND_READ_PAT repository secret.
+      # with "repository not found". Use a dedicated read-only deploy key for
+      # the backend, not an expiring user PAT or a broadly scoped user token.
       - name: Verify the private backend checkout secret is configured
         env:
-          HIVE_BACKEND_READ_PAT: ${{ secrets.HIVE_BACKEND_READ_PAT }}
+          HIVE_BACKEND_READ_SSH_KEY: ${{ secrets.HIVE_BACKEND_READ_SSH_KEY }}
         run: |
-          if [ -z "${HIVE_BACKEND_READ_PAT}" ]; then
-            echo "::error::HIVE_BACKEND_READ_PAT is not set. A repository admin must add a read-only PAT with access to Techiveet/hive-os-backend under Settings > Secrets and variables > Actions."
+          if [ -z "${HIVE_BACKEND_READ_SSH_KEY}" ]; then
+            echo "::error::HIVE_BACKEND_READ_SSH_KEY is not set. Add the dedicated read-only backend deploy key under Settings > Secrets and variables > Actions."
             exit 1
           fi
-          echo "HIVE_BACKEND_READ_PAT is present."
+          echo "The read-only backend checkout key is configured."
 
       - name: Checkout backend required by the acceptance fixture
         uses: actions/checkout@v4
@@ -94,7 +97,8 @@ jobs:
           repository: Techiveet/hive-os-backend
           ref: main
           path: hive-os-backend
-          token: ${{ secrets.HIVE_BACKEND_READ_PAT }}
+          ssh-key: ${{ secrets.HIVE_BACKEND_READ_SSH_KEY }}
+          persist-credentials: false
 
       - name: Checkout local integration Compose definition
         uses: actions/checkout@v4
