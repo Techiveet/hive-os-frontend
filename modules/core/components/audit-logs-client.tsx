@@ -158,15 +158,15 @@ export function AuditLogsClient() {
     scope: string;
     timezone: string;
   } | null>(null);
-  const [page, setPage] = React.useState(1);
+  const [page, setPage] = React.useState(Number(params.get("page")) || 1);
   const [pageSize, setPageSize] = useLocalStorage<number>(
     "audit_logs_page_size",
     25,
   );
   const [search, setSearch] = React.useState(params.get("search") || "");
   const [sort, setSort] = React.useState({
-    column: "created_at",
-    direction: "desc",
+    column: params.get("sortCol") || "created_at",
+    direction: params.get("sortDir") === "asc" ? "asc" : "desc",
   });
   const [live, setLive] = React.useState(false);
   const [tableRevision, setTableRevision] = React.useState(0);
@@ -338,12 +338,16 @@ export function AuditLogsClient() {
     requestAnimationFrame(() => {
       const previous = trigger.current;
       const label = previous?.getAttribute("aria-label");
-      const target = (previous?.isConnected
-        ? previous
-        : label ? Array.from(
-            document.querySelectorAll<HTMLButtonElement>("button[aria-label]"),
-          ).find((button) => button.getAttribute("aria-label") === label) : null)
-        ?? document.getElementById("tour-audit-filters-reset");
+      const target =
+        (previous?.isConnected
+          ? previous
+          : label
+            ? Array.from(
+                document.querySelectorAll<HTMLButtonElement>(
+                  "button[aria-label]",
+                ),
+              ).find((button) => button.getAttribute("aria-label") === label)
+            : null) ?? document.getElementById("tour-audit-filters-reset");
       target?.focus({ preventScroll: true });
     });
   };
@@ -845,9 +849,21 @@ export function AuditLogsClient() {
           pageIndex={page}
           pageSize={pageSize}
           searchPlaceholder="Search descriptions, operators, IPs or IDs…"
-          defaultSortCol="created_at"
-          defaultSortDir="desc"
+          defaultSearch={search}
+          defaultSortCol={sort.column}
+          defaultSortDir={sort.direction === "asc" ? "asc" : "desc"}
           onQueryChange={(query) => {
+            const url = new URL(window.location.href);
+            Object.entries({
+              page: query.page,
+              search: query.search,
+              sortCol: query.sortCol,
+              sortDir: query.sortDir,
+            }).forEach(([key, value]) => {
+              if (value == null || value === "") url.searchParams.delete(key);
+              else url.searchParams.set(key, String(value));
+            });
+            window.history.replaceState(null, "", url);
             if (query.page) setPage(query.page);
             if (query.pageSize) setPageSize(query.pageSize);
             if (query.search !== undefined) setSearch(query.search);
@@ -867,7 +883,7 @@ export function AuditLogsClient() {
           canCopy={canExport}
           canExport={canExport}
           canPrint={canExport}
-          syncWithUrl
+          syncWithUrl={false}
         />
       )}
 
