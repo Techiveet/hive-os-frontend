@@ -199,7 +199,7 @@ export function UsersTabClient(props: Props) {
   const queryClient = useQueryClient();
   const { t, locale } = useTranslation();
 
-  const { hasAnyPermission } = usePermissions();
+  const { hasAnyPermission, roles: operatorRoles } = usePermissions();
   const canCreate = hasAnyPermission(["manage_users", "create_users"]);
   const canEdit = hasAnyPermission(["manage_users", "edit_users"]);
   const canDelete = hasAnyPermission(["manage_users", "delete_users"]);
@@ -208,6 +208,7 @@ export function UsersTabClient(props: Props) {
   const canExport = hasAnyPermission(["manage_users", "view_users", "export_users"]);
   const canManageStorage = hasAnyPermission(["manage_storage"]);
   const canBrowseAvatarLibrary = hasAnyPermission(["view_storage", "manage_storage"]);
+  const canEditTenantAdministrator = !isCentralAdmin && operatorRoles.includes("Super Admin") && canEdit;
   const { hasModule } = useTenantModuleAccess();
   const hasHospitalityModule = hasModule("hospitality");
 
@@ -347,6 +348,7 @@ export function UsersTabClient(props: Props) {
   const [editingUser, setEditingUser] = React.useState<UserForClient | null>(null);
   const [viewUser, setViewUser] = React.useState<UserForClient | null>(null);
   const isEdit = !!editingUser;
+  const isProtectedTenantEdit = !isCentralAdmin && isProtectedUser(editingUser);
 
   const [formName, setFormName] = React.useState("");
   const [formEmail, setFormEmail] = React.useState("");
@@ -420,7 +422,7 @@ export function UsersTabClient(props: Props) {
     if (!normalizedEmail) errors.email = "Email address is required.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) errors.email = "Enter a valid email address.";
 
-    if (!formRoleId || formRoleId.startsWith("__")) errors.role = "Select a clearance level.";
+    if (!isProtectedTenantEdit && (!formRoleId || formRoleId.startsWith("__"))) errors.role = "Select a clearance level.";
 
     if (!isEdit && !formPassword) errors.password = "Encryption key is required.";
     else if (formPassword) {
@@ -437,7 +439,7 @@ export function UsersTabClient(props: Props) {
     }
 
     return Object.keys(errors).length === 0;
-  }, [formEmail, formName, formPassword, formRoleId, isEdit]);
+  }, [formEmail, formName, formPassword, formRoleId, isEdit, isProtectedTenantEdit]);
 
   const { data: usersData, isLoading, isFetching } = useQuery({
     queryKey: ["users", page, pageSize, search, statusFilter, roleFilter, onboardingFilter, avatarFilter, dateFrom, dateTo, sortCol, sortDir, tenantId],
@@ -565,6 +567,7 @@ export function UsersTabClient(props: Props) {
 
   const createMut = useOfflineMutation<unknown, Error, UserOfflinePayload>({
     definition: createUserOfflineMutationDefinition,
+    queueWhenOffline: false,
     onSuccess: (data) => {
       notifyMutationOutcome(data, {
         savedMessage: t('users.user_provisioned', 'User provisioned'),
@@ -587,6 +590,7 @@ export function UsersTabClient(props: Props) {
 
   const updateMut = useOfflineMutation<unknown, Error, UserUpdateOfflinePayload>({
     definition: updateUserOfflineMutationDefinition,
+    queueWhenOffline: false,
     onSuccess: (data) => {
       notifyMutationOutcome(data, {
         savedMessage: t('users.user_updated', 'User updated'),
@@ -716,7 +720,7 @@ export function UsersTabClient(props: Props) {
   }, [resetForm, triggerAudit]);
 
   const openEdit = React.useCallback((u: UserForClient) => {
-    if (isProtectedUser(u)) {
+    if (isProtectedUser(u) && !canEditTenantAdministrator) {
         toast.error(t('users.protected_user', "This profile is protected and cannot be edited."));
         return;
     }
@@ -735,7 +739,7 @@ export function UsersTabClient(props: Props) {
     setFieldErrors({});
     setCreateDialogOpen(true);
     triggerAudit('viewed', `Accessed Operator Modification form for: ${u.name || u.email}`);
-  }, [assignableRoles, getStorageUrl, isProtectedUser, t, triggerAudit]);
+  }, [assignableRoles, getStorageUrl, isProtectedUser, canEditTenantAdministrator, t, triggerAudit]);
 
   const handleFileSelect = React.useCallback((file: PickerFile) => {
       const avatarPath = file?.media_details?.relative_path || file?.path;
@@ -876,11 +880,11 @@ export function UsersTabClient(props: Props) {
       name: formName.trim(),
       email: formEmail.trim().toLowerCase(),
     };
-    if (formPassword.trim() !== "") payload.password = formPassword.trim();
+    if (formPassword !== "") payload.password = formPassword;
     if (tenantId) payload.tenant_id = tenantId;
 
     const roleObj = assignableRoles.find((r) => r.id === formRoleId);
-    if (roleObj) payload.role = roleObj.name;
+    if (roleObj && !isProtectedTenantEdit) payload.role = roleObj.name;
 
     if (formAvatarPath) payload.avatar_path = formAvatarPath;
     else if (isAvatarRemoved) payload.remove_avatar = "1";
@@ -921,7 +925,7 @@ export function UsersTabClient(props: Props) {
       }
       // Non-422 errors are surfaced by the mutation's onError handler.
     }
-  }, [formName, formEmail, formPassword, formRoleId, formAvatarPath, isAvatarRemoved, isEdit, editingUser, assignableRoles, tenantId, updateMut, createMut, t, formHospitalityStaffId, hasHospitalityModule, validateUserForm]);
+  }, [formName, formEmail, formPassword, formRoleId, formAvatarPath, isAvatarRemoved, isEdit, isProtectedTenantEdit, editingUser, assignableRoles, tenantId, updateMut, createMut, t, formHospitalityStaffId, hasHospitalityModule, validateUserForm]);
 
   const getPrimaryRoleName = React.useCallback((u: UserForClient) => {
     if (u.role) return u.role;
@@ -1013,7 +1017,7 @@ export function UsersTabClient(props: Props) {
       cell: ({ row }) => {
         const u = row.original;
 
-        if (isProtectedUser(u)) return <div className="flex justify-end"><Badge variant="outline" className="text-[11px] uppercase tracking-widest text-amber-600 border-amber-200 bg-amber-50/50">Protected</Badge></div>;
+        if (isProtectedUser(u)) return <div className="tenant-operations flex items-center justify-end gap-2"><Badge variant="outline">Protected</Badge>{canEditTenantAdministrator && <Button variant="outline" size="sm" className="min-h-11" aria-label={`Edit credentials: ${u.name || u.email}`} onClick={() => openEdit(u)}><Pencil aria-hidden="true" data-icon="inline-start" />Edit credentials</Button>}</div>;
 
         return (
           <div className="flex items-center justify-end gap-1">
@@ -1080,7 +1084,7 @@ export function UsersTabClient(props: Props) {
         );
       },
     },
-  ], [page, pageSize, handleToggle, toggleMut.isPending, deleteMut, openEdit, isProtectedUser, initials, getPrimaryRoleName, getRoleBadgeVariant, formatDate, canEdit, canDelete, isCentralAdmin, impersonateMut, t, locale, canImpersonate, handleRefresh]);
+  ], [page, pageSize, handleToggle, toggleMut.isPending, deleteMut, openEdit, isProtectedUser, initials, getPrimaryRoleName, getRoleBadgeVariant, formatDate, canEdit, canDelete, canEditTenantAdministrator, isCentralAdmin, impersonateMut, t, locale, canImpersonate, handleRefresh]);
 
   const exportUrl = `${isCentralAdmin ? '' : '/tenant'}/users/export?status=${statusFilter}&role=${encodeURIComponent(roleFilter)}&onboarding=${onboardingFilter}&avatar=${avatarFilter}&date_from=${dateFrom}&date_to=${dateTo}&search=${encodeURIComponent(search)}&sortCol=${sortCol || ""}&sortDir=${sortDir || ""}&locale=${locale}`;
 
@@ -1536,7 +1540,7 @@ export function UsersTabClient(props: Props) {
                       <Label htmlFor="email" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", fieldErrors.email && "text-destructive")}>
                         {t('users.email_address', 'Email Address')} <span className="text-destructive font-bold">*</span>
                       </Label>
-                      {isEdit && (
+                      {isEdit && isCentralAdmin && (
                         <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border border-border/50">
                           {t('users.locked_on_edit', 'Locked on edit')}
                         </span>
@@ -1552,14 +1556,14 @@ export function UsersTabClient(props: Props) {
                         value={formEmail}
                         onChange={(e) => { setFormEmail(e.target.value); validateField("email", e.target.value); }}
                         required
-                        disabled={isEdit}
+                        disabled={isEdit && isCentralAdmin}
                         aria-invalid={Boolean(fieldErrors.email)}
                         aria-describedby={fieldErrors.email ? "email-hint email-error" : "email-hint"}
                         placeholder="operator@hive.os"
                         className={cn("h-11 rounded-xl border border-border/70 bg-background/80 pl-10 text-sm font-medium transition-all hover:border-border focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:border-primary disabled:opacity-60 disabled:bg-muted/30", fieldErrors.email && "border-destructive focus-visible:ring-destructive text-destructive")}
                       />
                     </div>
-                    <p id="email-hint" className="text-xs text-muted-foreground leading-relaxed">{isEdit ? t('users.email_locked_hint', 'Email is the account identifier and cannot be changed here.') : t('users.email_hint', 'This email will be used to sign in.')}</p>
+                    <p id="email-hint" className="text-xs text-muted-foreground leading-relaxed">{isEdit && isCentralAdmin ? t('users.email_locked_hint', 'Email is the account identifier and cannot be changed here.') : t('users.email_hint', 'This email will be used to sign in.')}</p>
                     {fieldErrors.email && <p id="email-error" className="text-[11px] text-destructive font-bold uppercase tracking-wider flex items-center gap-1 mt-1 animate-in fade-in"><AlertCircle aria-hidden="true" className="h-3 w-3" /> {fieldErrors.email}</p>}
                   </div>
 
@@ -1568,7 +1572,7 @@ export function UsersTabClient(props: Props) {
                     <Label htmlFor="role" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", fieldErrors.role && "text-destructive")}>
                       {t('users.clearance_level', 'Clearance Level')} <span className="text-destructive font-bold">*</span>
                     </Label>
-                    <Select value={formRoleId} onValueChange={(val) => {
+                    {isProtectedTenantEdit ? <Input id="role" value="Super Admin" readOnly aria-describedby="role-hint" /> : <Select value={formRoleId} onValueChange={(val) => {
                       if (val === "__create_new") {
                         setCreateRoleDialogOpen(true);
                       } else {
@@ -1610,8 +1614,8 @@ export function UsersTabClient(props: Props) {
                           </div>
                         </SelectItem>
                       </SelectContent>
-                    </Select>
-                    <p id="role-hint" className="text-xs text-muted-foreground leading-relaxed">{t('users.role_hint', 'Choose the clearance level that covers this operator’s permissions.')}</p>
+                    </Select>}
+                    <p id="role-hint" className="text-xs text-muted-foreground leading-relaxed">{isProtectedTenantEdit ? 'Administrator access is preserved when updating these credentials.' : t('users.role_hint', 'Choose the clearance level that covers this operator’s permissions.')}</p>
                     {fieldErrors.role && <p id="role-error" className="text-[11px] font-bold uppercase tracking-wider text-destructive">{fieldErrors.role}</p>}
                   </div>
 

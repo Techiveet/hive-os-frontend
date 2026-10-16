@@ -25,6 +25,7 @@ type UseOfflineMutationOptions<TData, TError, TVariables, TContext> = Omit<
 > & {
   definition: OfflineMutationDefinition<TVariables, TData>;
   onQueued?: (variables: TVariables, queued: OfflineQueuedMutationResult) => void;
+  queueWhenOffline?: boolean;
 };
 
 type UseOfflineMutationResult<TData, TError, TVariables, TContext> = Omit<
@@ -43,12 +44,13 @@ export const useOfflineMutation = <
 >(
   options: UseOfflineMutationOptions<TData, TError, TVariables, TContext>,
 ): UseOfflineMutationResult<TData, TError, TVariables, TContext> => {
-  const { definition, onQueued, onSuccess, ...mutationOptions } = options;
+  const { definition, onQueued, onSuccess, queueWhenOffline = true, ...mutationOptions } = options;
   const queryClient = useQueryClient();
 
   const wrappedExecute = React.useCallback(
     async (variables: TVariables): Promise<TData> => {
       if (!onlineManager.isOnline()) {
+        if (!queueWhenOffline) throw new Error("Connect to the server before changing tenant access or credentials. This action was not queued.");
         const queued = enqueueOfflineMutation(definition.key, definition.label, variables);
         onQueued?.(variables, queued);
         return queued as unknown as TData;
@@ -58,7 +60,7 @@ export const useOfflineMutation = <
       try {
         return await definition.execute(variables);
       } catch (error) {
-        if (isLikelyOfflineMutationError(error)) {
+        if (queueWhenOffline && isLikelyOfflineMutationError(error)) {
           const queued = enqueueOfflineMutation(definition.key, definition.label, variables);
           onQueued?.(variables, queued);
           return queued as unknown as TData;
@@ -68,7 +70,7 @@ export const useOfflineMutation = <
         release();
       }
     },
-    [definition, onQueued],
+    [definition, onQueued, queueWhenOffline],
   );
 
   const wrappedOnSuccess = React.useCallback(

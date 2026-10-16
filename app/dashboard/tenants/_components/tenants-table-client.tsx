@@ -15,7 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable, type CompanySettingsInfo, type BrandingSettingsInfo } from "@/components/datatable/data-table";
 import { useOfflineMutation } from "@/hooks/use-offline-mutation";
 import { isOfflineMutationQueuedResult } from "@/lib/offline/mutation-queue";
@@ -35,6 +36,8 @@ import type { TenantCustomModuleInput, TenantSelectedModule } from "@/modules/su
 import { type VirtualFile } from "@/components/ui/code-editor";
 import { api, fetchTenants } from "@/modules/tenancy/api";
 import { TenantDomainManager } from "@/modules/tenancy/components/tenant-domain-manager";
+import { TenantPlatformOverview, TenantActivityPanel } from "@/modules/tenancy/components/tenant-activity-dashboard";
+import { fetchTenant } from "@/modules/tenancy/api";
 import { TenantLandingTemplateEditor } from "@/modules/tenancy/components/tenant-landing-template-editor";
 import { TemplatePickerDialog } from "@/modules/landing-templates/components/template-picker-dialog";
 import { TemplatePreviewDialog } from "@/modules/landing-templates/components/template-preview-dialog";
@@ -88,6 +91,10 @@ type TenantRecord = {
     is_active?: boolean;
     admin_active?: boolean;
     admin_email?: string;
+    admin_name?: string;
+    admin_exists?: boolean;
+    workspace_available?: boolean;
+    provisioning_status?: string;
     created_at?: string;
     landing_page_template?: unknown;
     module_subscriptions?: {
@@ -157,7 +164,8 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
     const canCreate = hasAnyPermission(["manage_tenants", "provision_tenants"]);
     const canEdit = hasAnyPermission(["manage_tenants", "edit_tenants"]);
     const canDelete = hasAnyPermission(["manage_tenants", "delete_tenants"]);
-    const canSuspend = hasAnyPermission(["manage_tenants", "suspend_tenants"]);
+    const canSuspend = hasAnyPermission(["manage_tenants", "suspend_tenants", "toggle_tenant_status"]);
+    const canToggleAdmin = hasAnyPermission(["manage_tenants", "suspend_tenants", "toggle_tenant_admin_access"]);
     const canExport = hasAnyPermission(["manage_tenants", "export_tenants"]);
 
     const [page, setPage] = React.useState(1);
@@ -172,6 +180,31 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
     const isEdit = !!editingTenant;
     const [viewDialogOpen, setViewDialogOpen] = React.useState(false);
     const [viewTenant, setViewTenant] = React.useState<TenantRecord | null>(null);
+    const [formError, setFormError] = React.useState("");
+    const [formErrors, setFormErrors] = React.useState<Record<string, string[]>>({});
+    const formErrorRef = React.useRef<HTMLParagraphElement>(null);
+    const actionTrigger = React.useRef<HTMLElement | null>(null);
+    const overviewHeading = React.useRef<HTMLHeadingElement>(null);
+
+    const restoreActionFocus = (event: Event) => {
+        event.preventDefault();
+        requestAnimationFrame(() => {
+            const previous = actionTrigger.current;
+            const label = previous?.getAttribute("aria-label");
+            // Table rows can be replaced while a dialog is open after a refetch.
+            const target = previous?.isConnected ? previous : Array.from(document.querySelectorAll<HTMLButtonElement>("button[aria-label]"))
+                .find(button => button.getAttribute("aria-label") === label);
+            target?.focus({ preventScroll: true });
+        });
+    };
+
+    const reportFormError = (error: unknown) => {
+        const message = getErrorMessage(error, "Tenant settings could not be saved.");
+        setFormErrors((error as { response?: { data?: { errors?: Record<string, string[]> } } })?.response?.data?.errors ?? {});
+        setFormError(message);
+        toast.error(message);
+        requestAnimationFrame(() => formErrorRef.current?.focus());
+    };
 
     const [formId, setFormId] = React.useState("");
     const [formName, setFormName] = React.useState("");
@@ -208,6 +241,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
             return { rows: res?.data || [], total: res?.meta?.total || 0 };
         },
         placeholderData: (prev) => prev,
+        refetchInterval: (query) => query.state.data?.rows.some((tenant: TenantRecord) => ['queued', 'provisioning'].includes(tenant.provisioning_status ?? '')) ? 5000 : false,
     });
 
     const { data: subscriptionCatalogData } = useQuery({
@@ -256,6 +290,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
         () => subscriptionCatalogData?.data?.plan_defaults ?? EMPTY_PLAN_DEFAULTS,
         [subscriptionCatalogData]
     );
+    const planOptions = (subscriptionCatalogData?.data?.plan_pricing ?? { business: { name: "Business" }, enterprise: { name: "Enterprise" } }) as Record<string, { name?: string }>;
     const templateVariants = activeBusinessTypeDefinition.templates ?? [];
     const landingTemplateContent = landingTemplateFiles[0]?.content ?? formatLandingTemplateJson(activeBusinessTypeDefinition.default_template);
     const parsedLandingTemplateState = React.useMemo(() => {
@@ -356,7 +391,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                         ?? (formatLandingTemplateJson(originalTemplate) !== formatLandingTemplateJson(originalVariant.template)),
                 })
             ),
-            admin_name: "",
+            admin_name: String(editingTenant.admin_name ?? ""),
             admin_email: String(editingTenant.admin_email ?? ""),
             admin_password: "",
             enabled_modules: sortStringList(editingTenant.module_subscriptions?.enabled_modules || []),
@@ -492,9 +527,10 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
 
     const createTenantMut = useOfflineMutation<unknown, Error, TenantCreateOfflinePayload>({
         definition: createTenantOfflineMutationDefinition,
-        onSuccess: (_, variables) => {
+        queueWhenOffline: false,
+        onSuccess: (result, variables) => {
             queryClient.invalidateQueries({ queryKey: ["tenants"] });
-            toast.success(t('tenants.provisioned', "Node provisioned."));
+            toast.success((result as { message?: string })?.message ?? "Provisioning started. The tenant list will update when the workspace is ready.");
             triggerAudit('created', `Operator initialized new infrastructure provisioning sequence for Node ID: ${variables.id}`);
             setDialogOpen(false);
         },
@@ -502,11 +538,12 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
             toast.info(`Offline: node ${variables.id} has been queued and will provision automatically once you're back online.`);
             setDialogOpen(false);
         },
-        onError: (err: unknown) => toast.error(getErrorMessage(err, t('global.operation_failed', "Operation failed."))),
+        onError: reportFormError,
     });
 
     const updateTenantMut = useOfflineMutation<unknown, Error, TenantUpdateOfflinePayload>({
         definition: updateTenantOfflineMutationDefinition,
+        queueWhenOffline: false,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["tenants"] });
             toast.success(t('tenants.updated', "Node updated."));
@@ -523,11 +560,12 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
             }
             setDialogOpen(false);
         },
-        onError: (err: unknown) => toast.error(getErrorMessage(err, t('global.operation_failed', "Operation failed."))),
+        onError: reportFormError,
     });
 
     const deleteMut = useOfflineMutation<unknown, Error, string>({
         definition: deleteTenantOfflineMutationDefinition,
+        queueWhenOffline: false,
         onSuccess: (_, id) => {
             queryClient.invalidateQueries({ queryKey: ["tenants"] });
             triggerAudit('deleted', `Operator executed fatal purge command on Node ID: ${id}`);
@@ -537,6 +575,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
 
     const toggleStatusMut = useOfflineMutation<unknown, Error, string>({
         definition: toggleTenantStatusOfflineMutationDefinition,
+        queueWhenOffline: false,
         onSuccess: (data: unknown, id) => {
             queryClient.invalidateQueries({ queryKey: ["tenants"] });
             const message = (data as { message?: string })?.message;
@@ -551,6 +590,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
 
     const toggleAdminMut = useOfflineMutation<unknown, Error, string>({
         definition: toggleTenantAdminOfflineMutationDefinition,
+        queueWhenOffline: false,
         onSuccess: (data: unknown, id) => {
             queryClient.invalidateQueries({ queryKey: ["tenants"] });
             const message = (data as { message?: string })?.message;
@@ -609,12 +649,16 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
         }
     }, [deleteMut, triggerAudit, t]);
 
-    const openView = (tenant: TenantRecord) => {
+    const openView = (tenant: TenantRecord, trigger?: HTMLElement) => {
+        actionTrigger.current = trigger ?? document.activeElement as HTMLElement;
         setViewTenant(tenant); setViewDialogOpen(true);
         triggerAudit('viewed', `Operator performed deep metric inspection on Node ID: ${tenant.id}`);
     };
 
-    const openCreate = () => {
+    const openCreate = (trigger?: HTMLElement) => {
+        actionTrigger.current = trigger ?? document.activeElement as HTMLElement;
+        setFormError("");
+        setFormErrors({});
         setSelectedLibraryTemplate(null);
         setShowLandingPreview(true);
         const defaultBusinessType = businessTypes[0] ?? FALLBACK_TENANT_BUSINESS_TYPES[0];
@@ -631,7 +675,10 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
         triggerAudit('viewed', 'Operator accessed the Provisioning UI panel');
     };
 
-    const openEdit = (tenant: TenantRecord) => {
+    const openEdit = (tenant: TenantRecord, trigger?: HTMLElement) => {
+        actionTrigger.current = trigger ?? actionTrigger.current ?? document.activeElement as HTMLElement;
+        setFormError("");
+        setFormErrors({});
         const selectedBusinessType = businessTypeMap[tenant.business_type ?? ""] ?? businessTypes[0] ?? FALLBACK_TENANT_BUSINESS_TYPES[0];
         const existingTemplate = resolveLandingTemplate(
             tenant.landing_page_template,
@@ -655,7 +702,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
         setEditingTenant(tenant); setFormId(tenant.id); setFormName(tenant.name ?? ""); setFormPlan(tenant.plan ?? "business"); setFormDomain(tenant.domain ?? "");
         setFormBusinessType(selectedBusinessType.key);
         writeLandingTemplate(hydratedTemplate, selectedBusinessType.default_template);
-        setFormAdminEmail(tenant.admin_email || ""); setFormAdminName(""); setFormAdminPassword("");
+        setFormAdminEmail(tenant.admin_email || ""); setFormAdminName(tenant.admin_name || ""); setFormAdminPassword("");
         setFormSelectedModules(tenant.module_subscriptions?.enabled_modules || []);
         setFormCustomModules(tenant.module_subscriptions?.custom_modules || []);
         setDialogOpen(true);
@@ -664,6 +711,9 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSaving) return;
+        setFormError("");
+        setFormErrors({});
         if (parsedLandingTemplateState.error) {
             toast.error("Fix the landing template JSON before saving.");
             return;
@@ -722,7 +772,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
     const getPlanBadge = (plan?: string) => {
         const displayPlan = plan || "business";
         const p = displayPlan.toLowerCase();
-        const colorClass = p === 'startup' ? "text-emerald-500 border-emerald-200" : p === 'business' ? "text-blue-500 border-blue-200" : "text-indigo-500 border-indigo-200";
+        const colorClass = p === 'startup' ? "text-primary border-emerald-200" : p === 'business' ? "text-primary border-blue-200" : "text-primary border-indigo-200";
         return <Badge variant="outline" className={cn("uppercase text-[11px]", colorClass)}>{displayPlan}</Badge>;
     };
 
@@ -751,6 +801,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
         },
         {
             id: "modules",
+            enableSorting: false,
             accessorFn: (row) => row.subscribed_modules_count,
             header: t('nav.subscriptions', "Module Subscriptions"),
             cell: ({ row }) => (
@@ -772,11 +823,11 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
             cell: ({ row }) => <div className="flex items-center gap-1.5 text-muted-foreground font-mono text-xs"><Globe className="h-3.5 w-3.5" />{row.original.domain}</div>,
         },
         {
-            id: "status",
+            id: "is_active",
             // 🚀 THE FIX: Translate the accessor string for frontend Copy/Print
-            accessorFn: (row) => row.is_active ? t('global.online', "Online") : t('global.suspended', "Suspended"),
+            accessorFn: (row) => ['queued', 'provisioning'].includes(row.provisioning_status ?? '') ? "Preparing workspace" : row.provisioning_status === 'failed' ? "Setup failed" : row.is_active ? t('global.online', "Online") : t('global.suspended', "Suspended"),
             header: t('tenants.col_status', "Node Status"),
-            cell: ({ row }) => <Badge variant="outline" className={cn("uppercase text-[11px]", row.original.is_active ? "text-emerald-500 border-emerald-200 bg-emerald-50/50" : "text-destructive border-destructive/30 bg-destructive/10")}>{row.original.is_active ? t('global.online', "Online") : t('global.suspended', "Suspended")}</Badge>
+            cell: ({ row }) => <Badge variant="outline" className={cn("uppercase text-[11px]", row.original.is_active ? "text-primary border-emerald-200 bg-primary/10" : "text-destructive border-destructive/30 bg-destructive/10")}>{['queued', 'provisioning'].includes(row.original.provisioning_status ?? '') ? "Preparing workspace" : row.original.provisioning_status === 'failed' ? "Setup failed" : row.original.is_active ? t('global.online', "Online") : t('global.suspended', "Suspended")}</Badge>
         },
         {
             id: "created_at", accessorKey: "created_at", header: t('tenants.col_provisioned', "Provisioned"),
@@ -786,32 +837,38 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
             id: "actions", header: t('tenants.col_actions', "Actions"), enableSorting: false, size: 180,
             cell: ({ row }) => {
                 const tr = row.original;
+                const preparing = ['queued', 'provisioning'].includes(tr.provisioning_status ?? '');
                 return (
                     <div className="flex items-center justify-end gap-1">
-                        <Button id={row.index === 0 ? "tour-action-view" : undefined} variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-blue-600" onClick={() => openView(tr)} title={t('tenants.view_title', "View Details")}>
+                        <Button id={row.index === 0 ? "tour-action-view" : undefined} variant="outline" size="sm" className="min-h-11" onClick={event => openView(tr, event.currentTarget)} aria-label={`Activity and details: ${tr.name}`} title="Activity and details">
                             <Eye className="h-4 w-4" />
+                            Activity
                         </Button>
                         <div className="w-px h-4 bg-border mx-1" />
                         {canSuspend && (
                             <>
-                                <Button id={row.index === 0 ? "tour-action-status" : undefined} variant="ghost" size="icon" disabled={toggleStatusMut.isPending} className="h-8 w-8" aria-label={`${tr.is_active ? t('tenants.suspend_node', 'Suspend node') : t('tenants.activate_node', 'Activate node')}: ${tr.name}`} onClick={() => toggleStatusMut.mutate(tr.id)}>
-                                    <Power className={cn("h-4 w-4", tr.is_active ? "text-emerald-500" : "text-destructive")} />
+                                <Button id={row.index === 0 ? "tour-action-status" : undefined} variant="ghost" size="icon" disabled={toggleStatusMut.isPending || preparing} className="size-11" aria-label={`${tr.is_active ? t('tenants.suspend_node', 'Suspend node') : t('tenants.activate_node', 'Activate node')}: ${tr.name}`} onClick={() => toggleStatusMut.mutate(tr.id)}>
+                                    <Power className={cn("h-4 w-4", tr.is_active ? "text-primary" : "text-destructive")} />
                                 </Button>
-                                <Button id={row.index === 0 ? "tour-action-admin" : undefined} variant="ghost" size="icon" disabled={toggleAdminMut.isPending} className="h-8 w-8" aria-label={`${tr.admin_active === false ? t('tenants.enable_admin', 'Enable admin access') : t('tenants.disable_admin', 'Disable admin access')}: ${tr.name}`} onClick={() => toggleAdminMut.mutate(tr.id)}>
-                                    {tr.admin_active === false ? <UserX className="h-4 w-4 text-destructive" /> : <UserCheck className="h-4 w-4 text-emerald-500" />}
+                            </>
+                        )}
+                        {canToggleAdmin && (
+                            <>
+                                <Button id={row.index === 0 ? "tour-action-admin" : undefined} variant="ghost" size="icon" disabled={toggleAdminMut.isPending || tr.admin_exists === false} className="size-11" title={tr.admin_exists === false ? "Set administrator credentials in Edit tenant first" : undefined} aria-label={`${tr.admin_active === false ? t('tenants.enable_admin', 'Enable admin access') : t('tenants.disable_admin', 'Disable admin access')}: ${tr.name}`} onClick={() => toggleAdminMut.mutate(tr.id)}>
+                                    {tr.admin_active === false ? <UserX className="h-4 w-4 text-destructive" /> : <UserCheck className="h-4 w-4 text-primary" />}
                                 </Button>
                             </>
                         )}
                         <div className="w-px h-4 bg-border mx-1" />
                         {canEdit && (
-                            <Button id={row.index === 0 ? "tour-action-edit" : undefined} variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-indigo-600" aria-label={`${t('tenants.edit_node', 'Edit node')}: ${tr.name}`} onClick={() => openEdit(tr)}>
+                            <Button id={row.index === 0 ? "tour-action-edit" : undefined} variant="ghost" size="icon" disabled={preparing} className="size-11 text-muted-foreground hover:text-primary" aria-label={`${t('tenants.edit_node', 'Edit node')}: ${tr.name}`} onClick={event => openEdit(tr, event.currentTarget)}>
                                 <Pencil className="h-4 w-4" />
                             </Button>
                         )}
                         {canDelete && (
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                    <Button id={row.index === 0 ? "tour-action-purge" : undefined} variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" aria-label={`${t('tenants.purge_node', 'Purge node')}: ${tr.name}`}>
+                                    <Button id={row.index === 0 ? "tour-action-purge" : undefined} variant="ghost" size="icon" disabled={preparing} className="size-11 text-muted-foreground hover:text-destructive" aria-label={`${t('tenants.purge_node', 'Purge node')}: ${tr.name}`}>
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
                                 </AlertDialogTrigger>
@@ -825,7 +882,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                 );
             }
         }
-    ], [canEdit, canDelete, canSuspend, toggleStatusMut.isPending, toggleAdminMut.isPending, openView, openEdit, t]);
+    ], [canEdit, canDelete, canSuspend, canToggleAdmin, toggleStatusMut.isPending, toggleAdminMut.isPending, openView, openEdit, t]);
 
     const { startTour } = useTour();
 
@@ -902,21 +959,24 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
     const exportUrl = `${getBackendApiRoot()}/tenants/export?search=${encodeURIComponent(search || "")}&sortCol=${sortCol}&sortDir=${sortDir}&locale=${locale}`;
 
     return (
-        <div className="space-y-4 mt-6">
+        <div className="tenant-operations flex flex-col gap-6">
+            <TenantPlatformOverview onTenant={(id, trigger) => {
+                void fetchTenant(id).then(result => openView(result.data, trigger)).catch(error => toast.error(getErrorMessage(error, "Could not load tenant.")));
+            }} />
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-card/40 p-6 rounded-[2rem] border border-border/50 backdrop-blur-md shadow-sm gap-4 mt-2">
                 <div className="flex items-center gap-3">
                     <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
                         <Server className="h-5 w-5" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-space font-black tracking-tight">{t('tenants.title', 'Tenant Accounts')}</h2>
-                        <p className="text-xs text-muted-foreground">{t('tenants.subtitle', 'Provision, monitor, and manage isolated tenant database instances.')}</p>
+                        <h2 className="text-xl font-space font-black tracking-tight">Tenant directory</h2>
+                        <p className="text-xs text-muted-foreground">Manage access, inspect activity, and configure each workspace.</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
                     {canCreate && (
                         <div id="tour-tenant-provision">
-                            <Button onClick={openCreate} className="rounded-xl shadow-lg shadow-primary/20 h-10 px-6 font-bold tracking-wide"><PlusCircle className="mr-2 h-4 w-4" /> {t('tenants.provision_btn', 'Create Tenant Account')}</Button>
+                            <Button onClick={event => openCreate(event.currentTarget)} className="rounded-xl shadow-lg shadow-primary/20 h-10 px-6 font-bold tracking-wide"><PlusCircle className="mr-2 h-4 w-4" /> {t('tenants.provision_btn', 'Create Tenant Account')}</Button>
                         </div>
                     )}
                 </div>
@@ -940,24 +1000,26 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
 
             {/* CREATE / EDIT DIALOG */}
             <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) triggerAudit('viewed', 'Closed Provisioning/Reconfiguration Matrix'); }}>
-                <DialogContent onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} className="sm:max-w-[1180px] p-0 overflow-hidden rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl max-h-[92vh] flex flex-col">
+                <DialogContent onCloseAutoFocus={restoreActionFocus} onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} className="tenant-operations sm:max-w-[1180px] p-0 overflow-hidden rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl max-h-[92vh] flex flex-col">
                     <div className="px-6 py-5 border-b border-border/40 bg-muted/20 shrink-0"><DialogHeader><DialogTitle className="text-xl font-space font-black">{isEdit ? t('tenants.reconfigure', "Reconfigure Node") : t('tenants.provision_new', "Provision New Node")}</DialogTitle></DialogHeader></div>
+                    <DialogDescription className="sr-only">Configure this tenant workspace and its primary administrator. Leave the password blank to keep the existing password.</DialogDescription>
                     <div className="overflow-y-auto p-6 scrollbar-thin">
+                        {formError && <p ref={formErrorRef} tabIndex={-1} id="tenant-form-error" className="mb-4 rounded-xl border border-destructive p-3 text-sm text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring">{formError}</p>}
                         <form id="tenant-form" onSubmit={handleSubmit} className="space-y-6">
                             <div className="grid grid-cols-2 gap-5">
                                 <div className="col-span-2 space-y-4">
-                                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5 border-b border-border/40 pb-2"><Server className="h-3.5 w-3.5" /> {t('tenants.infra', "Node Infrastructure")}</h4>
+                                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5 border-b border-border/40 pb-2"><Server className="h-3.5 w-3.5" /> {t('tenants.infra', "Node Infrastructure")}</h3>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1.5 col-span-2"><Label className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.org_name', "Organization Name")}</Label><Input required value={formName} onChange={e => setFormName(e.target.value)} placeholder="Acme Corp" className="h-11 bg-muted/30" /></div>
-                                        <div className="space-y-1.5 col-span-2 sm:col-span-1"><Label className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.node_id', "Node ID")}</Label><Input required disabled={isEdit} value={formId} onChange={e => handleIdChange(e.target.value)} placeholder="acme" className="h-11 font-mono bg-muted/30" /></div>
+                                        <div className="space-y-1.5 col-span-2"><Label htmlFor="tenant-name" className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.org_name', "Organization Name")}</Label><Input id="tenant-name" aria-invalid={!!formErrors.name} aria-describedby={formErrors.name ? "tenant-form-error" : undefined} required value={formName} onChange={e => setFormName(e.target.value)} placeholder="Acme Corp" className="h-11 bg-muted/30" /></div>
+                                        <div className="space-y-1.5 col-span-2 sm:col-span-1"><Label htmlFor="tenant-id" className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.node_id', "Node ID")}</Label><Input id="tenant-id" aria-invalid={!!formErrors.id} aria-describedby={formErrors.id ? "tenant-form-error" : undefined} maxLength={20} required disabled={isEdit} value={formId} onChange={e => handleIdChange(e.target.value)} placeholder="acme" className="h-11 font-mono bg-muted/30" /></div>
                                         <div className="space-y-1.5 col-span-2 sm:col-span-1">
-                                            <Label className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.plan', "Capacity Plan")}</Label>
+                                            <Label htmlFor="tenant-plan" className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.plan', "Capacity Plan")}</Label>
                                             <Select value={formPlan} onValueChange={handlePlanChange}>
-                                                <SelectTrigger className="h-11 bg-muted/30"><SelectValue /></SelectTrigger>
-                                                <SelectContent className="rounded-xl border-border/50 shadow-xl"><SelectItem value="startup">Startup</SelectItem><SelectItem value="business">Business</SelectItem><SelectItem value="enterprise">Enterprise</SelectItem><SelectItem value="overlord">Overlord</SelectItem></SelectContent>
+                                                <SelectTrigger id="tenant-plan" className="h-11 bg-muted/30"><SelectValue /></SelectTrigger>
+                                                <SelectContent className="tenant-operations rounded-xl border-border/50 shadow-xl"><SelectGroup>{Object.entries(planOptions).map(([key, plan]) => <SelectItem key={key} value={key}>{plan.name || key}</SelectItem>)}</SelectGroup></SelectContent>
                                             </Select>
                                         </div>
-                                        <div className="space-y-1.5 col-span-2"><Label className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.domain', "Routing Address")}</Label><div className="relative"><Globe className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><Input required disabled={isEdit} value={formDomain} onChange={e => setFormDomain(e.target.value)} placeholder={`acme.${DEFAULT_TENANT_ROOT_DOMAIN}`} className="h-11 pl-9 font-mono bg-muted/30" /></div></div>
+                                        <div className="space-y-1.5 col-span-2"><Label htmlFor="tenant-domain" className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.domain', "Routing Address")}</Label><div className="relative"><Globe aria-hidden="true" className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><Input id="tenant-domain" aria-invalid={!!formErrors.domain} aria-describedby={formErrors.domain ? "tenant-form-error" : undefined} required disabled={isEdit} value={formDomain} onChange={e => setFormDomain(e.target.value)} placeholder={`acme.${DEFAULT_TENANT_ROOT_DOMAIN}`} className="h-11 pl-9 font-mono bg-muted/30" /></div></div>
                                         <div className="col-span-2 rounded-[1rem] border border-border/50 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
                                             Generated tenant subdomains follow <span className="font-mono text-foreground">*.{DEFAULT_TENANT_ROOT_DOMAIN}</span>. {DEFAULT_TENANT_SERVER_IP ? <>Point that wildcard record to <span className="font-mono text-foreground">{DEFAULT_TENANT_SERVER_IP}</span>.</> : <>Point that wildcard record to your VPS public IP.</>} If the root domain or VPS changes later, update the production env and redeploy; generated fallback tenant domains will sync automatically.
                                         </div>
@@ -967,20 +1029,20 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                                     </div>
                                 </div>
                                 <div className="col-span-2 space-y-4">
-                                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5 border-b border-border/40 pb-2"><LayoutTemplate className="h-3.5 w-3.5" /> {t('tenants.business_landing', "Business Landing")}</h4>
+                                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5 border-b border-border/40 pb-2"><LayoutTemplate className="h-3.5 w-3.5" /> {t('tenants.business_landing', "Business Landing")}</h3>
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.business_type', 'Business Type')}</Label>
+                                        <Label htmlFor="tenant-business-type" className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.business_type', 'Business Type')}</Label>
                                         <Select value={formBusinessType} onValueChange={handleBusinessTypeChange}>
-                                            <SelectTrigger className="h-11 bg-muted/30">
+                                            <SelectTrigger id="tenant-business-type" className="h-11 bg-muted/30">
                                                 <SelectValue />
                                             </SelectTrigger>
-                                            <SelectContent className="rounded-xl border-border/50 shadow-xl">
+                                            <SelectContent className="tenant-operations rounded-xl border-border/50 shadow-xl"><SelectGroup>
                                                 {businessTypes.map((option) => (
                                                     <SelectItem key={option.key} value={option.key}>
                                                         {option.label}
                                                     </SelectItem>
                                                 ))}
-                                            </SelectContent>
+                                            </SelectGroup></SelectContent>
                                         </Select>
                                         <p className="text-xs text-muted-foreground">
                                             {activeBusinessTypeDefinition.description}
@@ -1043,11 +1105,11 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                                     />
                                 </div>
                                 <div className="col-span-2 space-y-4 pt-2">
-                                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5 border-b border-border/40 pb-2"><UserPlus className="h-3.5 w-3.5" /> {t('tenants.super_admin', "Super Admin Settings")}</h4>
+                                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5 border-b border-border/40 pb-2"><UserPlus className="h-3.5 w-3.5" /> {t('tenants.super_admin', "Super Admin Settings")}</h3>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1.5 col-span-2"><Label className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.operator_name', "Operator Name")}</Label><Input required={!isEdit} value={formAdminName} onChange={e => setFormAdminName(e.target.value)} placeholder="Operator Name" className="h-11 bg-muted/30" /></div>
-                                        <div className="space-y-1.5 col-span-2 sm:col-span-1"><Label className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.email', "Email")}</Label><Input type="email" required={!isEdit} value={formAdminEmail} onChange={e => setFormAdminEmail(e.target.value)} placeholder="admin@acme.com" className="h-11 bg-muted/30" /></div>
-                                        <div className="space-y-1.5 col-span-2 sm:col-span-1"><Label className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.access_key', "Access Key")}</Label><Input type="password" required={!isEdit} value={formAdminPassword} onChange={e => setFormAdminPassword(e.target.value)} placeholder="********" className="h-11 bg-muted/30" /></div>
+                                        <div className="space-y-1.5 col-span-2"><Label htmlFor="tenant-admin-name" className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.operator_name', "Operator Name")}</Label><Input id="tenant-admin-name" aria-invalid={!!formErrors.admin_name} aria-describedby={formErrors.admin_name ? "tenant-form-error" : undefined} autoComplete="name" required={!isEdit || editingTenant?.admin_exists === false} value={formAdminName} onChange={e => setFormAdminName(e.target.value)} placeholder="Operator Name" className="h-11 bg-muted/30" /></div>
+                                        <div className="space-y-1.5 col-span-2 sm:col-span-1"><Label htmlFor="tenant-admin-email" className="text-xs uppercase tracking-widest text-muted-foreground">{t('tenants.email', "Email")}</Label><Input id="tenant-admin-email" aria-invalid={!!formErrors.admin_email} aria-describedby={formErrors.admin_email ? "tenant-form-error" : undefined} autoComplete="username" type="email" required value={formAdminEmail} onChange={e => setFormAdminEmail(e.target.value)} placeholder="admin@acme.com" className="h-11 bg-muted/30" /></div>
+                                        <div className="space-y-1.5 col-span-2 sm:col-span-1"><Label htmlFor="tenant-admin-password" className="text-xs uppercase tracking-widest text-muted-foreground">Administrator password</Label><Input id="tenant-admin-password" aria-invalid={!!formErrors.admin_password} autoComplete="new-password" minLength={8} aria-describedby={formErrors.admin_password ? "tenant-password-hint tenant-form-error" : "tenant-password-hint"} type="password" required={!isEdit || editingTenant?.admin_exists === false} value={formAdminPassword} onChange={e => setFormAdminPassword(e.target.value)} placeholder={isEdit ? "Leave blank to keep current password" : "At least 8 characters"} className="h-11 bg-muted/30" /><p id="tenant-password-hint" className="text-xs text-muted-foreground">{isEdit ? "Leave blank to keep the current password. If the administrator is missing, enter a new password." : "Use at least 8 characters. These credentials open the tenant workspace."}</p></div>
                                     </div>
                                 </div>
                             </div>
@@ -1055,7 +1117,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                     </div>
                     <div className="px-6 py-4 border-t border-border/40 bg-muted/20 flex flex-col gap-3 shrink-0 sm:flex-row sm:items-center">
                         <div className="text-xs text-muted-foreground sm:mr-auto">
-                            {parsedLandingTemplateState.error
+                            {isSaving ? (isEdit ? "Saving tenant settings…" : "Creating the workspace and preparing its database. This can take a few minutes; keep this dialog open.") : parsedLandingTemplateState.error
                                 ? "Fix the landing template JSON before saving."
                                 : isEdit
                                     ? (isEditDirty ? "Unsaved changes are ready to publish." : "No changes detected yet.")
@@ -1102,13 +1164,19 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
 
             {/* VIEW MODAL */}
             <Dialog open={viewDialogOpen} onOpenChange={(open) => { setViewDialogOpen(open); if (!open) triggerAudit('viewed', 'Closed Deep Metric Inspection view'); }}>
-                <DialogContent className="sm:max-w-[860px] p-0 overflow-hidden rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl max-h-[90vh] flex flex-col">
-                    <div className="px-6 py-6 border-b border-border/40 bg-muted/20 flex items-center gap-4 shrink-0"><div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-inner shrink-0"><Server className="h-7 w-7 text-primary" /></div><div><DialogTitle className="text-2xl font-black font-space tracking-tight">{viewTenant?.name}</DialogTitle><DialogDescription className="font-mono text-[11px] uppercase tracking-widest mt-1">{t('tenants.view_identity', "Node Identity")}: <span className="font-bold">{viewTenant?.id}</span></DialogDescription></div></div>
+                <DialogContent onOpenAutoFocus={(event) => { event.preventDefault(); overviewHeading.current?.focus(); }} onCloseAutoFocus={restoreActionFocus} className="tenant-operations sm:max-w-[1060px] p-0 overflow-hidden rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl max-h-[90vh] flex flex-col">
+                    <div className="px-6 py-6 border-b border-border/40 bg-muted/20 flex items-center gap-4 shrink-0"><div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-inner shrink-0"><Server aria-hidden="true" className="h-7 w-7 text-primary" /></div><div><DialogTitle ref={overviewHeading} tabIndex={-1} className="text-2xl font-black font-space tracking-tight outline-none">{viewTenant?.name}</DialogTitle><DialogDescription className="font-mono text-[11px] uppercase tracking-widest mt-1">{t('tenants.view_identity', "Node Identity")}: <span className="font-bold">{viewTenant?.id}</span></DialogDescription></div></div>
                     <div className="px-6 py-6 space-y-6 overflow-y-auto scrollbar-thin">
+                        <Tabs defaultValue="activity">
+                        <TabsList aria-label="Tenant overview" className="mb-5 h-auto w-full"><TabsTrigger className="min-h-11 whitespace-normal" value="activity">Activity & users</TabsTrigger><TabsTrigger className="min-h-11 whitespace-normal" value="configuration">Configuration & domains</TabsTrigger></TabsList>
+                        <TabsContent value="activity">
+                        {viewTenant && <TenantActivityPanel key={viewTenant.id} tenantId={viewTenant.id} domain={viewTenant.domain} onEdit={canEdit ? () => { setViewDialogOpen(false); openEdit(viewTenant); } : undefined} />}
+                        </TabsContent>
+                        <TabsContent value="configuration">
                         <div className="grid grid-cols-2 gap-y-6 gap-x-4">
                             <div>
                                 <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">{t('tenants.view_status', "Network Status")}</p>
-                                <Badge variant="outline" className={cn("uppercase text-[11px]", viewTenant?.is_active ? "text-emerald-500 bg-emerald-50/50" : "text-destructive bg-destructive/10")}>{viewTenant?.is_active ? t('global.online', "Online") : t('global.suspended', "Suspended")}</Badge>
+                                <Badge variant="outline" className={cn("uppercase text-[11px]", viewTenant?.is_active ? "text-primary bg-primary/10" : "text-destructive bg-destructive/10")}>{viewTenant?.is_active ? t('global.online', "Online") : t('global.suspended', "Suspended")}</Badge>
                             </div>
                             <div>
                                 <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">{t('tenants.view_plan', "Capacity Plan")}</p>
@@ -1122,7 +1190,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                             </div>
                             <div>
                                 <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">{t('tenants.subscription', 'Subscription')}</p>
-                                <Badge variant="outline" className={cn("uppercase text-[11px]", viewTenant?.subscription?.status === "expired" ? "text-destructive bg-destructive/10" : viewTenant?.subscription?.needs_renewal ? "text-amber-600 bg-amber-500/10" : "text-emerald-500 bg-emerald-500/10")}>
+                                <Badge variant="outline" className={cn("uppercase text-[11px]", viewTenant?.subscription?.status === "expired" ? "text-destructive bg-destructive/10" : viewTenant?.subscription?.needs_renewal ? "text-amber-600 bg-amber-500/10" : "text-primary bg-emerald-500/10")}>
                                     {String(viewTenant?.subscription?.status || "active").replaceAll("_", " ")}
                                 </Badge>
                                 <p className="mt-2 text-xs text-muted-foreground">
@@ -1131,7 +1199,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                             </div>
                             <div className="col-span-2">
                                 <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">{t('tenants.view_contact', "Super Admin Contact")}</p>
-                                <div className="flex items-center gap-2 font-mono text-sm bg-muted/30 p-3 rounded-xl border border-border/50"><Mail className="h-4 w-4 text-muted-foreground" />{viewTenant?.admin_email || t('tenants.no_email', "No email registered")}{viewTenant?.admin_email && <Badge variant="outline" className={cn("ml-auto text-[11px] uppercase border-0", viewTenant?.admin_active === false ? "text-destructive bg-destructive/10" : "text-emerald-500 bg-emerald-500/10")}>{viewTenant?.admin_active === false ? t('global.suspended', "Suspended") : t('global.active', "Active")}</Badge>}</div>
+                                <div className="flex items-center gap-2 font-mono text-sm bg-muted/30 p-3 rounded-xl border border-border/50"><Mail className="h-4 w-4 text-muted-foreground" />{viewTenant?.admin_email || t('tenants.no_email', "No email registered")}{viewTenant?.admin_email && <Badge variant="outline" className={cn("ml-auto text-[11px] uppercase border-0", viewTenant?.admin_active === false ? "text-destructive bg-destructive/10" : "text-primary bg-emerald-500/10")}>{viewTenant?.admin_active === false ? t('global.suspended', "Suspended") : t('global.active', "Active")}</Badge>}</div>
                             </div>
                             <div className="col-span-2">
                                 <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">{t('nav.subscriptions', "Module Subscriptions")}</p>
@@ -1181,6 +1249,8 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                                 ) : null}
                             </div>
                         </div>
+                        </TabsContent>
+                        </Tabs>
                     </div>
                     <div className="px-6 py-4 border-t border-border/40 bg-muted/20 flex justify-end shrink-0"><Button variant="outline" onClick={() => setViewDialogOpen(false)} className="rounded-xl px-8 shadow-sm">{t('tenants.close_view', "Close Overview")}</Button></div>
                 </DialogContent>

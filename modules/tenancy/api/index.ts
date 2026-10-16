@@ -1,6 +1,11 @@
 import api from "@/modules/shared/api/http";
+import type { TenantActivity, TenantOverview } from "../activity-types";
 
 export { api };
+
+export const fetchTenantOverview = async (): Promise<TenantOverview> => (await api.get('/tenants/overview')).data.data;
+export const fetchTenantActivity = async (id: string, page = 1): Promise<TenantActivity> =>
+  (await api.get(`/tenants/${encodeURIComponent(id)}/activity`, { params: { page } })).data.data;
 
 export const fetchTenants = async (params: any = {}) => (await api.get("/tenants", { params })).data;
 export const fetchTenant = async (id: string) => (await api.get(`/tenants/${id}`)).data;

@@ -21,6 +21,7 @@ export default function TenantsPage() {
   const [accessStatus, setAccessStatus] = useState<"checking" | "granted" | "denied">("checking");
 
   const viewLogged = useRef(false);
+  useEffect(() => { document.title = "Tenant Management | HIVE.OS"; }, []);
   const canViewTenants = hasAnyPermission(["manage_tenants", "view_tenants"]);
 
   const tenantTourSteps = [
@@ -198,7 +199,7 @@ export default function TenantsPage() {
           {/* The page title is the document's h1 — this was an h2, so the route
               had no top-level heading for screen readers to announce. */}
           <h1 className="font-space flex items-center gap-2 text-2xl font-black tracking-tight">
-            <Network className="h-6 w-6 text-primary" /> {t("tenants.title", "Tenant Management")}
+            <Network aria-hidden="true" className="h-6 w-6 text-primary" /> Tenant Management
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {t("tenants.subtitle", "Provision, monitor, and configure active tenant databases within the ecosystem.")}

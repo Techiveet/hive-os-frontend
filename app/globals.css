@@ -149,6 +149,7 @@
   /* Signup needs visible form boundaries and focus rings even when a brand's
      primary color is too light to satisfy non-text contrast on white. */
   .signup-onboarding,
+  .tenant-operations,
   .demo-lease {
     --primary: 162 94% 24%;
     --primary-foreground: 0 0% 100%;
@@ -158,12 +159,23 @@
   }
 
   .dark .signup-onboarding,
+  .dark .tenant-operations,
   .dark .demo-lease {
     --primary: 158 64% 52%;
     --primary-foreground: 240 10% 3.9%;
     --ring: 158 64% 52%;
     --border: 215 20% 65%;
     --input: 215 20% 65%;
+  }
+
+  .tenant-operations {
+    --muted-foreground: 240 5% 40%;
+  }
+
+  .dark .tenant-operations {
+    --muted-foreground: 240 5% 65%;
+    --destructive: 0 91% 71%;
+    --destructive-foreground: 240 10% 3.9%;
   }
 
   /* Meeting controls need visible boundaries and a full-opacity keyboard
