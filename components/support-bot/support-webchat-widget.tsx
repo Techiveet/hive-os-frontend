@@ -114,6 +114,7 @@ interface WidgetConfig {
     subtitle?: string;
     placeholder?: string;
     launcher_label?: string;
+    suggested_questions?: string[];
   };
 }
 
@@ -529,7 +530,7 @@ export function SupportWebchatWidget({
                 sender_type: "bot",
                 sender_name: botConfig?.name,
                 content: botConfig?.greeting_message || FALLBACK_GREETING,
-                payload: { quick_replies: STARTER_SUGGESTIONS },
+                payload: { quick_replies: botConfig?.widget_config?.suggested_questions ?? STARTER_SUGGESTIONS },
               },
             ],
       );
@@ -931,7 +932,8 @@ export function SupportWebchatWidget({
         .find((message) => message.payload?.quick_replies?.length)?.payload
         ?.quick_replies ?? [];
 
-    const merged = [...fromServer, ...STARTER_SUGGESTIONS].filter(
+    const starters = config?.widget_config?.suggested_questions ?? STARTER_SUGGESTIONS;
+    const merged = [...fromServer, ...starters].filter(
       (item, index, all) =>
         all.indexOf(item) === index && !asked.has(item.trim().toLowerCase()),
     );

@@ -55,7 +55,20 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/:path*",
+        // Public chat is intended to be framed by the approved Techive site.
+        // Keep every authenticated route under the same-origin policy below.
+        source: "/embed/support-bot/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'self' https://techiveet.com https://www.techiveet.com; base-uri 'self'; object-src 'none'",
+          },
+        ],
+      },
+      {
+        source: "/((?!embed/support-bot).*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
