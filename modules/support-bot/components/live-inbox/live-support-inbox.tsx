@@ -24,22 +24,33 @@ import { toast } from "sonner";
 import { getSupportBotInboxChannelName, initEcho } from "@/lib/echo";
 import { getAccessToken } from "@/lib/runtime-context";
 import { supportBotApi } from "../../api/support-bot-api";
-import { SupportBot, SupportBotConversation, SupportBotMessage } from "../../types";
+import {
+  SupportBot,
+  SupportBotConversation,
+  SupportBotMessage,
+} from "../../types";
 
 interface Props {
   bot: SupportBot;
 }
 
 export function LiveSupportInbox({ bot }: Props) {
-  const [conversations, setConversations] = React.useState<SupportBotConversation[]>([]);
-  const [selectedConvId, setSelectedConvId] = React.useState<number | null>(null);
-  const [activeConv, setActiveConv] = React.useState<SupportBotConversation | null>(null);
+  const [conversations, setConversations] = React.useState<
+    SupportBotConversation[]
+  >([]);
+  const [selectedConvId, setSelectedConvId] = React.useState<number | null>(
+    null,
+  );
+  const [activeConv, setActiveConv] =
+    React.useState<SupportBotConversation | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [statusFilter, setStatusFilter] = React.useState<string>("escalated");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [replyText, setReplyText] = React.useState("");
   const [visitorTyping, setVisitorTyping] = React.useState(false);
-  const [unreadByConversation, setUnreadByConversation] = React.useState<Record<number, number>>({});
+  const [unreadByConversation, setUnreadByConversation] = React.useState<
+    Record<number, number>
+  >({});
 
   const typingTimerRef = React.useRef<number | null>(null);
   const typingSentAtRef = React.useRef(0);
@@ -51,7 +62,10 @@ export function LiveSupportInbox({ bot }: Props) {
    */
   const notifyAgent = (title: string, body?: string) => {
     try {
-      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      if (
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted"
+      ) {
         new Notification(title, { body, tag: "support-bot-inbox" });
       }
     } catch {
@@ -70,38 +84,55 @@ export function LiveSupportInbox({ bot }: Props) {
   const [sending, setSending] = React.useState(false);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
-  const loadConversations = async () => {
-    if (!bot?.id) return;
-    try {
-      setLoading(true);
-      const res = await supportBotApi.getConversations(bot.id, {
-        status: statusFilter === "all" ? undefined : statusFilter,
-      });
-      const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
-      setConversations(list);
+  const loadConversations = React.useCallback(
+    async (quiet = false) => {
+      if (!bot?.id) return;
+      try {
+        if (!quiet) setLoading(true);
+        const res = await supportBotApi.getConversations(bot.id, {
+          status: statusFilter === "all" ? undefined : statusFilter,
+        });
+        const list = Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+            ? res
+            : [];
+        setConversations(list);
 
-      if (list.length > 0 && !selectedConvId) {
-        setSelectedConvId(list[0].id);
+        setSelectedConvId((current) =>
+          list.some((item: SupportBotConversation) => item.id === current)
+            ? current
+            : (list[0]?.id ?? null),
+        );
+      } catch (e) {
+        console.error("Failed to load conversations", e);
+        setConversations([]);
+      } finally {
+        if (!quiet) setLoading(false);
       }
-    } catch (e) {
-      console.error("Failed to load conversations", e);
-      setConversations([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [bot.id, statusFilter],
+  );
 
   React.useEffect(() => {
-    loadConversations();
-  }, [bot.id, statusFilter]);
+    void loadConversations();
+    const timer = window.setInterval(() => void loadConversations(true), 5000);
+    return () => window.clearInterval(timer);
+  }, [loadConversations]);
 
   // Load single conversation details
   React.useEffect(() => {
-    if (!selectedConvId) return;
+    if (!selectedConvId) {
+      setActiveConv(null);
+      return;
+    }
 
     const loadSingle = async () => {
       try {
-        const data = await supportBotApi.getConversation(bot.id, selectedConvId);
+        const data = await supportBotApi.getConversation(
+          bot.id,
+          selectedConvId,
+        );
         setActiveConv(data);
       } catch (e) {
         console.error("Failed to load conversation details", e);
@@ -161,7 +192,9 @@ export function LiveSupportInbox({ bot }: Props) {
       if (selectedConvIdRef.current !== conversationId) return;
 
       try {
-        setActiveConv(await supportBotApi.getConversation(bot.id, conversationId));
+        setActiveConv(
+          await supportBotApi.getConversation(bot.id, conversationId),
+        );
       } catch {
         // The poll will catch up.
       }
@@ -189,23 +222,29 @@ export function LiveSupportInbox({ bot }: Props) {
           },
         });
 
-        void notifyAgent(`${who} wants to talk to a person`, event.visitor_email ?? undefined);
+        void notifyAgent(
+          `${who} wants to talk to a person`,
+          event.visitor_email ?? undefined,
+        );
       },
     );
 
-    channel.listen(".support-bot.message", (event: { conversation_id: number }) => {
-      void refreshOpenConversation(event.conversation_id);
-      loadConversations();
+    channel.listen(
+      ".support-bot.message",
+      (event: { conversation_id: number }) => {
+        void refreshOpenConversation(event.conversation_id);
+        loadConversations();
 
-      // Anything arriving in a conversation the agent is not currently reading
-      // is unread until they open it.
-      if (selectedConvIdRef.current !== event.conversation_id) {
-        setUnreadByConversation((current) => ({
-          ...current,
-          [event.conversation_id]: (current[event.conversation_id] ?? 0) + 1,
-        }));
-      }
-    });
+        // Anything arriving in a conversation the agent is not currently reading
+        // is unread until they open it.
+        if (selectedConvIdRef.current !== event.conversation_id) {
+          setUnreadByConversation((current) => ({
+            ...current,
+            [event.conversation_id]: (current[event.conversation_id] ?? 0) + 1,
+          }));
+        }
+      },
+    );
 
     channel.listen(
       ".support-bot.typing",
@@ -217,7 +256,10 @@ export function LiveSupportInbox({ bot }: Props) {
 
         // Nothing announces "stopped typing", so the indicator expires itself.
         if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
-        typingTimerRef.current = window.setTimeout(() => setVisitorTyping(false), 4000);
+        typingTimerRef.current = window.setTimeout(
+          () => setVisitorTyping(false),
+          4000,
+        );
       },
     );
 
@@ -234,7 +276,10 @@ export function LiveSupportInbox({ bot }: Props) {
       await supportBotApi.sendAgentMessage(bot.id, selectedConvId, replyText);
       setReplyText("");
       // Reload conversation messages
-      const updated = await supportBotApi.getConversation(bot.id, selectedConvId);
+      const updated = await supportBotApi.getConversation(
+        bot.id,
+        selectedConvId,
+      );
       setActiveConv(updated);
     } catch (e) {
       console.error("Failed to send agent reply", e);
@@ -243,12 +288,21 @@ export function LiveSupportInbox({ bot }: Props) {
     }
   };
 
-  const handleUpdateStatus = async (status: "active" | "escalated" | "resolved" | "closed") => {
+  const handleUpdateStatus = async (
+    status: "active" | "escalated" | "resolved" | "closed",
+  ) => {
     if (!selectedConvId) return;
     try {
-      await supportBotApi.updateConversationStatus(bot.id, selectedConvId, status);
+      await supportBotApi.updateConversationStatus(
+        bot.id,
+        selectedConvId,
+        status,
+      );
       loadConversations();
-      const updated = await supportBotApi.getConversation(bot.id, selectedConvId);
+      const updated = await supportBotApi.getConversation(
+        bot.id,
+        selectedConvId,
+      );
       setActiveConv(updated);
     } catch (e) {
       console.error("Failed to update status", e);
@@ -277,7 +331,7 @@ export function LiveSupportInbox({ bot }: Props) {
             <Button
               size="sm"
               variant="ghost"
-              onClick={loadConversations}
+              onClick={() => void loadConversations()}
               className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
             >
               <RefreshCw className="h-3 w-3" />
@@ -315,7 +369,9 @@ export function LiveSupportInbox({ bot }: Props) {
         {/* Conversation List */}
         <div className="flex-1 overflow-y-auto divide-y divide-border/40">
           {loading && conversations.length === 0 ? (
-            <div className="p-6 text-center text-xs text-muted-foreground">Loading inbox...</div>
+            <div className="p-6 text-center text-xs text-muted-foreground">
+              Loading inbox...
+            </div>
           ) : filteredList.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               <Inbox className="h-7 w-7 mx-auto mb-2 opacity-40" />
@@ -331,7 +387,9 @@ export function LiveSupportInbox({ bot }: Props) {
                   key={c.id}
                   onClick={() => setSelectedConvId(c.id)}
                   className={`p-3 text-xs cursor-pointer transition-colors ${
-                    isSelected ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/40"
+                    isSelected
+                      ? "bg-primary/10 border-l-2 border-primary"
+                      : "hover:bg-muted/40"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -342,7 +400,9 @@ export function LiveSupportInbox({ bot }: Props) {
                       {/* Unread count for a thread the agent is not reading. */}
                       {(unreadByConversation[c.id] ?? 0) > 0 && (
                         <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                          {unreadByConversation[c.id] > 9 ? "9+" : unreadByConversation[c.id]}
+                          {unreadByConversation[c.id] > 9
+                            ? "9+"
+                            : unreadByConversation[c.id]}
                         </span>
                       )}
                       <Badge
@@ -360,7 +420,14 @@ export function LiveSupportInbox({ bot }: Props) {
 
                   <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
                     <span className="capitalize">{c.channel}</span>
-                    <span>{new Date(c.last_activity_at || c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>
+                      {new Date(
+                        c.last_activity_at || c.created_at,
+                      ).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
                   </div>
                 </div>
               );
@@ -381,13 +448,16 @@ export function LiveSupportInbox({ bot }: Props) {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">{activeConv.visitor_name || "Visitor"}</span>
+                    <span className="font-semibold text-sm">
+                      {activeConv.visitor_name || "Visitor"}
+                    </span>
                     <Badge variant="outline" className="text-[10px] capitalize">
                       {activeConv.status}
                     </Badge>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    {activeConv.visitor_email || "No email"} · Channel: {activeConv.channel}
+                    {activeConv.visitor_email || "No email"} · Channel:{" "}
+                    {activeConv.channel}
                   </p>
                 </div>
               </div>
@@ -431,7 +501,11 @@ export function LiveSupportInbox({ bot }: Props) {
                   >
                     <div
                       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs text-white ${
-                        isAgent ? "bg-primary" : isBot ? "bg-blue-600" : "bg-emerald-600"
+                        isAgent
+                          ? "bg-primary"
+                          : isBot
+                            ? "bg-blue-600"
+                            : "bg-emerald-600"
                       }`}
                     >
                       {isAgent ? (
@@ -443,11 +517,20 @@ export function LiveSupportInbox({ bot }: Props) {
                       )}
                     </div>
 
-                    <div className={`max-w-[75%] space-y-1 ${isAgent ? "items-end text-right" : "items-start"}`}>
+                    <div
+                      className={`max-w-[75%] space-y-1 ${isAgent ? "items-end text-right" : "items-start"}`}
+                    >
                       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground px-1">
-                        <span className="font-semibold">{msg.sender_name || msg.sender_type}</span>
+                        <span className="font-semibold">
+                          {msg.sender_name || msg.sender_type}
+                        </span>
                         <span>·</span>
-                        <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>
+                          {new Date(msg.created_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
                       </div>
 
                       <div
@@ -455,8 +538,8 @@ export function LiveSupportInbox({ bot }: Props) {
                           isAgent
                             ? "bg-primary text-primary-foreground rounded-tr-none"
                             : isBot
-                            ? "bg-muted/90 text-foreground border border-border/60 rounded-tl-none"
-                            : "bg-emerald-500/10 text-foreground border border-emerald-500/20 rounded-tl-none"
+                              ? "bg-muted/90 text-foreground border border-border/60 rounded-tl-none"
+                              : "bg-emerald-500/10 text-foreground border border-emerald-500/20 rounded-tl-none"
                         }`}
                       >
                         <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -484,7 +567,9 @@ export function LiveSupportInbox({ bot }: Props) {
             {/* Agent Reply Box */}
             <div className="border-t border-border/60 p-3 bg-muted/10">
               <div className="flex items-center gap-1.5 mb-2 overflow-x-auto pb-1">
-                <span className="text-[10px] text-muted-foreground shrink-0">Canned:</span>
+                <span className="text-[10px] text-muted-foreground shrink-0">
+                  Canned:
+                </span>
                 {[
                   "Hello, I am reviewing your request now.",
                   "Could you provide your invoice or order number?",
@@ -532,9 +617,12 @@ export function LiveSupportInbox({ bot }: Props) {
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground">
             <MessageSquare className="h-10 w-10 mb-2 opacity-30" />
-            <p className="text-sm font-semibold">Select a conversation from the left inbox</p>
+            <p className="text-sm font-semibold">
+              Select a conversation from the left inbox
+            </p>
             <p className="text-xs max-w-sm mt-1">
-              You will see live chat history and be able to reply directly to customers.
+              You will see live chat history and be able to reply directly to
+              customers.
             </p>
           </div>
         )}

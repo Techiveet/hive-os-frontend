@@ -78,7 +78,12 @@ export type WidgetCommand =
   | {
       id: number;
       type: "identify";
-      visitor: { name?: string; email?: string; external_id?: string; signature?: string };
+      visitor: {
+        name?: string;
+        email?: string;
+        external_id?: string;
+        signature?: string;
+      };
     };
 
 interface WidgetMessage {
@@ -135,7 +140,9 @@ function mergeUniqueMessages(
     return true;
   });
 
-  return uniqueIncoming.length > 0 ? [...existing, ...uniqueIncoming] : existing;
+  return uniqueIncoming.length > 0
+    ? [...existing, ...uniqueIncoming]
+    : existing;
 }
 
 /**
@@ -169,7 +176,7 @@ const FALLBACK_GREETING =
   "I am Queen Bee, your guide to Hive. Tell me what you need and I will find it — a module, a page, or an answer.";
 
 export function SupportWebchatWidget({
-  botSlug = "hive-ai-assistant",
+  botSlug = "workspace-assistant",
   primaryColor: initialColor,
   embedded = false,
   onOpenChange,
@@ -224,6 +231,16 @@ export function SupportWebchatWidget({
   const [unread, setUnread] = useState(0);
   /** Set while the agent is composing, cleared on a timer. */
   const [agentTyping, setAgentTyping] = useState(false);
+  const [connectionNotice, setConnectionNotice] = useState("");
+  const lastMessageId = useRef(0);
+  useEffect(() => {
+    lastMessageId.current = Math.max(
+      lastMessageId.current,
+      ...messages.map((message) =>
+        typeof message.id === "number" ? message.id : 0,
+      ),
+    );
+  }, [messages]);
 
   const endRef = useRef<HTMLDivElement>(null);
   const launcherButtonRef = useRef<HTMLButtonElement>(null);
@@ -342,13 +359,17 @@ export function SupportWebchatWidget({
 
     const latest = messages[messages.length - 1];
 
-    if (latest.sender_type === "visitor" || latest.sender_type === "system") return;
+    if (latest.sender_type === "visitor" || latest.sender_type === "system")
+      return;
 
     const key = getMessageKey(latest);
     if (announcedRef.current === key) return;
 
     announcedRef.current = key;
-    onBotMessage({ content: latest.content, sender: latest.sender_name ?? "assistant" });
+    onBotMessage({
+      content: latest.content,
+      sender: latest.sender_name ?? "assistant",
+    });
   }, [messages, onBotMessage]);
 
   /**
@@ -361,7 +382,10 @@ export function SupportWebchatWidget({
    */
   const notifyOfReply = (from?: string) => {
     try {
-      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      if (
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted"
+      ) {
         new Notification(from ? `${from} replied` : "New reply from support", {
           body: "Open the chat to read it.",
           tag: `support-bot-${botSlug}`,
@@ -385,12 +409,14 @@ export function SupportWebchatWidget({
     if (now - typingSentAtRef.current < 2000) return;
     typingSentAtRef.current = now;
 
-    void api.post(`/public/support-bot/${botSlug}/typing`, {
-      session_id: sessionId,
-      session_token: sessionToken,
-    }).catch(() => {
-      // Never interrupt someone's typing to report a failed typing ping.
-    });
+    void api
+      .post(`/public/support-bot/${botSlug}/typing`, {
+        session_id: sessionId,
+        session_token: sessionToken,
+      })
+      .catch(() => {
+        // Never interrupt someone's typing to report a failed typing ping.
+      });
   };
 
   // Remember who they said they were, so the details are asked for once.
@@ -448,23 +474,31 @@ export function SupportWebchatWidget({
     openingRef.current = true;
 
     try {
-      const configResponse = await api.get(`/public/support-bot/${botSlug}/config`);
-      const botConfig: WidgetConfig = configResponse.data?.data ?? configResponse.data;
+      const configResponse = await api.get(
+        `/public/support-bot/${botSlug}/config`,
+      );
+      const botConfig: WidgetConfig =
+        configResponse.data?.data ?? configResponse.data;
       setConfig(botConfig);
 
-      const sessionResponse = await api.post(`/public/support-bot/${botSlug}/session`, {
-        session_id: sessionId || undefined,
-        session_token: sessionToken || undefined,
-        // The host application's claim about who this visitor is, with the
-        // signature vouching for it. Passed through untouched: whether it is
-        // believed is the server's decision, and it is the only party that
-        // holds the token the signature was made with.
-        visitor: externalIdentityRef.current ?? undefined,
-      });
+      const sessionResponse = await api.post(
+        `/public/support-bot/${botSlug}/session`,
+        {
+          session_id: sessionId || undefined,
+          session_token: sessionToken || undefined,
+          // The host application's claim about who this visitor is, with the
+          // signature vouching for it. Passed through untouched: whether it is
+          // believed is the server's decision, and it is the only party that
+          // holds the token the signature was made with.
+          visitor: externalIdentityRef.current ?? undefined,
+        },
+      );
 
       const session = sessionResponse.data?.data ?? {};
       if (!session.session_id || !session.session_token) {
-        throw new Error("The support server did not issue session credentials.");
+        throw new Error(
+          "The support server did not issue session credentials.",
+        );
       }
 
       setSessionId(session.session_id);
@@ -543,7 +577,13 @@ export function SupportWebchatWidget({
     if (isOpen && credentialsLoaded && messages.length === 0 && !unavailable) {
       void openConversation();
     }
-  }, [credentialsLoaded, isOpen, messages.length, unavailable, openConversation]);
+  }, [
+    credentialsLoaded,
+    isOpen,
+    messages.length,
+    unavailable,
+    openConversation,
+  ]);
 
   // Live delivery of an agent's reply. The channel is public because the
   // visitor has no account to authorise a private one — its name is a
@@ -561,7 +601,9 @@ export function SupportWebchatWidget({
       // Our own turns are already on screen; echoing them would duplicate.
       if (event?.sender_type === "visitor") return;
 
-      setWithAgent(event?.status === "escalated" || event?.status === "assigned");
+      setWithAgent(
+        event?.status === "escalated" || event?.status === "assigned",
+      );
 
       // A reply ends whatever typing indicator preceded it.
       setAgentTyping(false);
@@ -598,13 +640,68 @@ export function SupportWebchatWidget({
       // so the indicator has to expire on its own or it would stick forever
       // the moment someone walked away mid-sentence.
       if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
-      typingTimerRef.current = window.setTimeout(() => setAgentTyping(false), 4000);
+      typingTimerRef.current = window.setTimeout(
+        () => setAgentTyping(false),
+        4000,
+      );
     });
 
     return () => {
       echo.leaveChannel(`${channelName}`);
     };
   }, [streamToken]);
+
+  // Realtime is the fast path; token-bound polling recovers missed replies.
+  useEffect(() => {
+    if (!isOpen || !withAgent || !sessionId || !sessionToken) return;
+    let cancelled = false;
+    let pending = false;
+    const load = async () => {
+      if (pending || document.visibilityState === "hidden") return;
+      pending = true;
+      try {
+        const response = await api.post(
+          "/public/support-bot/" + botSlug + "/history",
+          {
+            session_id: sessionId,
+            session_token: sessionToken,
+            after_id: lastMessageId.current,
+          },
+        );
+        if (cancelled) return;
+        const data = response.data?.data;
+        if (!data) return;
+        setWithAgent(Boolean(data.with_agent));
+        const incoming: WidgetMessage[] = data.messages ?? [];
+        lastMessageId.current = Math.max(
+          lastMessageId.current,
+          ...incoming.map((turn) =>
+            typeof turn.id === "number" ? turn.id : 0,
+          ),
+        );
+        setMessages((previous) =>
+          mergeUniqueMessages(
+            previous,
+            incoming.filter((turn) => turn.sender_type !== "visitor"),
+          ),
+        );
+        setConnectionNotice("");
+      } catch {
+        if (!cancelled)
+          setConnectionNotice(
+            "Support updates are delayed. Reconnecting automatically…",
+          );
+      } finally {
+        pending = false;
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isOpen, withAgent, sessionId, sessionToken, botSlug]);
 
   const requestHuman = () => {
     if (escalating || !sessionId || !sessionToken) return;
@@ -632,22 +729,28 @@ export function SupportWebchatWidget({
     setEscalating(true);
 
     try {
-      const response = await api.post(`/public/support-bot/${botSlug}/escalate`, {
-        session_id: sessionId,
-        session_token: sessionToken,
-        visitor: {
-          name: name.trim() || undefined,
-          email: email.trim() || undefined,
+      const response = await api.post(
+        `/public/support-bot/${botSlug}/escalate`,
+        {
+          session_id: sessionId,
+          session_token: sessionToken,
+          visitor: {
+            name: name.trim() || undefined,
+            email: email.trim() || undefined,
+          },
         },
-      });
+      );
 
       const data = response.data?.data ?? {};
       setWithAgent(true);
       if (data.stream_token) setStreamToken(data.stream_token);
 
-      setMessages((previous) => mergeUniqueMessages(previous, data.messages ?? []));
+      setMessages((previous) =>
+        mergeUniqueMessages(previous, data.messages ?? []),
+      );
     } catch (error: unknown) {
-      const status = (error as { response?: { status?: number } })?.response?.status;
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
 
       setMessages((previous) => [
         ...previous,
@@ -680,11 +783,14 @@ export function SupportWebchatWidget({
         {
           id: `res_${Date.now()}`,
           sender_type: "system",
-          content: "You are back with the assistant. Ask for a person again any time.",
+          content:
+            "You are back with the assistant. Ask for a person again any time.",
         },
       ]);
     } catch {
-      setWithAgent(false);
+      setConnectionNotice(
+        "Could not return to the assistant. Please try again.",
+      );
     }
   };
 
@@ -706,32 +812,42 @@ export function SupportWebchatWidget({
         message,
       });
 
-      const replies: WidgetMessage[] = response.data?.data?.messages ?? response.data?.messages ?? [];
+      const responseStatus =
+        response.data?.data?.status ?? response.data?.status;
+      const waitingForAgent = ["escalated", "assigned"].includes(
+        responseStatus,
+      );
+      setWithAgent(waitingForAgent);
+      const replies: WidgetMessage[] =
+        response.data?.data?.messages ?? response.data?.messages ?? [];
       const interactionId: number | null =
-        response.data?.data?.interaction_id ?? response.data?.interaction_id ?? null;
+        response.data?.data?.interaction_id ??
+        response.data?.interaction_id ??
+        null;
 
       // While a person has the conversation the server returns nothing here on
       // purpose — their reply arrives over the socket, and a "no answer" filler
       // would talk over them.
-      if (replies.length === 0 && withAgent) return;
+      if (replies.length === 0 && waitingForAgent) return;
 
       // Only the last reply is rateable: it is the answer, and any before it
       // are the working out.
-      const rateableId = replies.length > 0 ? getMessageKey(replies[replies.length - 1]) : null;
+      const rateableId =
+        replies.length > 0 ? getMessageKey(replies[replies.length - 1]) : null;
 
       setMessages((prev) => {
         const merged = mergeUniqueMessages(
           prev,
           replies.length > 0
-          ? replies
-          : [
-              {
-                id: `b_${Date.now()}`,
-                sender_type: "bot" as const,
-                content:
-                  "I did not find an answer for that one. Try rephrasing it, or ask to speak to a person.",
-              },
-            ],
+            ? replies
+            : [
+                {
+                  id: `b_${Date.now()}`,
+                  sender_type: "bot" as const,
+                  content:
+                    "I did not find an answer for that one. Try rephrasing it, or ask to speak to a person.",
+                },
+              ],
         );
 
         if (interactionId === null || rateableId === null) return merged;
@@ -741,11 +857,14 @@ export function SupportWebchatWidget({
         // the merge drops the later copy as a duplicate, taking the id with it.
         // Applying it to whichever copy won means the thumbs appear either way.
         return merged.map((message) =>
-          getMessageKey(message) === rateableId ? { ...message, interactionId } : message,
+          getMessageKey(message) === rateableId
+            ? { ...message, interactionId }
+            : message,
         );
       });
     } catch (error: unknown) {
-      const status = (error as { response?: { status?: number } })?.response?.status;
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
 
       setMessages((prev) => [
         ...prev,
@@ -807,7 +926,9 @@ export function SupportWebchatWidget({
     );
 
     const fromServer =
-      [...messages].reverse().find((message) => message.payload?.quick_replies?.length)?.payload
+      [...messages]
+        .reverse()
+        .find((message) => message.payload?.quick_replies?.length)?.payload
         ?.quick_replies ?? [];
 
     const merged = [...fromServer, ...STARTER_SUGGESTIONS].filter(
@@ -831,7 +952,11 @@ export function SupportWebchatWidget({
         // is now scoped to the signed-in application, where it belongs, and the
         // corner is free.
         className={`${
-          embedded ? "fixed bottom-4 right-4" : drag.position ? "fixed" : "fixed bottom-6 right-6"
+          embedded
+            ? "fixed bottom-4 right-4"
+            : drag.position
+              ? "fixed"
+              : "fixed bottom-6 right-6"
         } support-bot-accessible z-50 print:hidden ${drag.dragging ? "cursor-grabbing" : ""}`}
         style={{ ...drag.style, touchAction: embedded ? undefined : "none" }}
       >
@@ -871,7 +996,6 @@ export function SupportWebchatWidget({
             }}
           />
           <QueenBeeMark className="h-7 w-7" title="" />
-
         </button>
 
         {/* Outside the button, not inside it.
@@ -937,7 +1061,12 @@ export function SupportWebchatWidget({
             <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400" />
           </div>
           <div className="leading-tight">
-            <h2 id="support-widget-title" className="text-sm font-semibold tracking-tight">{title}</h2>
+            <h2
+              id="support-widget-title"
+              className="text-sm font-semibold tracking-tight"
+            >
+              {title}
+            </h2>
             <p className="text-[11px] opacity-80">{subtitle}</p>
           </div>
         </div>
@@ -966,11 +1095,16 @@ export function SupportWebchatWidget({
       {/* min-h-0 is what makes this scroll: a flex child will not shrink below
           its content height without it, so the list grew past the panel and
           overflow-y-auto had nothing to overflow. */}
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3" role="log" aria-live="polite" aria-relevant="additions text">
+      <div
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+      >
         {unavailable && (
           <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
-            Our assistant is offline at the moment. Please use the contact form and we will
-            get back to you.
+            Our assistant is offline at the moment. Please use the contact form
+            and we will get back to you.
           </div>
         )}
 
@@ -982,7 +1116,10 @@ export function SupportWebchatWidget({
             >
               <div
                 className="max-w-[85%] rounded-2xl rounded-br-sm px-3 py-2 text-xs shadow-sm"
-                style={{ backgroundColor: primaryColor, color: primaryForeground }}
+                style={{
+                  backgroundColor: primaryColor,
+                  color: primaryForeground,
+                }}
               >
                 {message.content}
               </div>
@@ -1012,18 +1149,20 @@ export function SupportWebchatWidget({
 
                 {message.payload?.escalated && (
                   <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <Headphones className="h-3 w-3" /> A member of our team has joined.
+                    <Headphones className="h-3 w-3" /> A member of our team has
+                    joined.
                   </p>
                 )}
 
-                {message.sender_type === "bot" && typeof message.interactionId === "number" && (
-                  <VisitorVerdict
-                    botSlug={botSlug}
-                    sessionId={sessionId}
-                    sessionToken={sessionToken}
-                    interactionId={message.interactionId}
-                  />
-                )}
+                {message.sender_type === "bot" &&
+                  typeof message.interactionId === "number" && (
+                    <VisitorVerdict
+                      botSlug={botSlug}
+                      sessionId={sessionId}
+                      sessionToken={sessionToken}
+                      interactionId={message.interactionId}
+                    />
+                  )}
               </div>
             </div>
           ),
@@ -1031,7 +1170,10 @@ export function SupportWebchatWidget({
 
         {loading && (
           <div className="flex items-center gap-1.5">
-            <QueenBeeAvatar color={primaryColor} foreground={primaryForeground} />
+            <QueenBeeAvatar
+              color={primaryColor}
+              foreground={primaryForeground}
+            />
             {/* Three bouncing dots read as "someone is composing a reply" at a
                 glance, where "Typing…" text is easy to skim past — and with a
                 self-hosted model sometimes taking tens of seconds, that glance
@@ -1045,6 +1187,11 @@ export function SupportWebchatWidget({
           </div>
         )}
 
+        {connectionNotice && (
+          <p className="px-4 py-2 text-xs text-muted-foreground">
+            {connectionNotice}
+          </p>
+        )}
         {/* The agent is composing. Distinct from the bot's own thinking
             indicator above, and labelled, so it is obvious a person is there. */}
         {agentTyping && (
@@ -1071,8 +1218,14 @@ export function SupportWebchatWidget({
             <p className="text-[11px] text-muted-foreground">
               Before I connect you — who should the team ask for?
             </p>
-            <label htmlFor="support-visitor-name" className="block text-[11px] font-medium">
-              Your name <span className="font-normal text-muted-foreground">(optional)</span>
+            <label
+              htmlFor="support-visitor-name"
+              className="block text-[11px] font-medium"
+            >
+              Your name{" "}
+              <span className="font-normal text-muted-foreground">
+                (optional)
+              </span>
             </label>
             <Input
               id="support-visitor-name"
@@ -1081,8 +1234,14 @@ export function SupportWebchatWidget({
               placeholder="Your name"
               className="h-8 text-xs"
             />
-            <label htmlFor="support-visitor-email" className="block text-[11px] font-medium">
-              Email <span className="font-normal text-muted-foreground">(optional)</span>
+            <label
+              htmlFor="support-visitor-email"
+              className="block text-[11px] font-medium"
+            >
+              Email{" "}
+              <span className="font-normal text-muted-foreground">
+                (optional)
+              </span>
             </label>
             <Input
               id="support-visitor-email"
@@ -1100,7 +1259,10 @@ export function SupportWebchatWidget({
                   try {
                     localStorage.setItem(
                       `support_bot_visitor_${botSlug}`,
-                      JSON.stringify({ name: visitorName, email: visitorEmail }),
+                      JSON.stringify({
+                        name: visitorName,
+                        email: visitorEmail,
+                      }),
                     );
                   } catch {
                     // Not remembering them is survivable.
@@ -1134,7 +1296,8 @@ export function SupportWebchatWidget({
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-2 text-[11px] text-emerald-700 dark:text-emerald-400">
               <Headphones className="h-3.5 w-3.5 shrink-0" />
-              You are connected to our support team. Replies appear here as they are sent.
+              You are connected to our support team. Replies appear here as they
+              are sent.
             </div>
             {/* Without a way back, asking for a person was a one-way door. */}
             <button
@@ -1187,14 +1350,17 @@ export function SupportWebchatWidget({
       {(voice.notice || voice.listening) && (
         <div
           className={`flex items-center justify-between gap-2 border-t px-3 py-2 text-[11px] ${
-            voice.notice ? "bg-amber-500/10 text-amber-700 dark:text-amber-400" : "bg-destructive/5 text-destructive"
+            voice.notice
+              ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+              : "bg-destructive/5 text-destructive"
           }`}
         >
           <span className="flex items-center gap-1.5">
             {voice.listening && !voice.notice && (
               <span className="flex h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
             )}
-            {voice.notice ?? `Listening in ${voice.lang === "am-ET" ? "Amharic" : "English"} — speak now.`}
+            {voice.notice ??
+              `Listening in ${voice.lang === "am-ET" ? "Amharic" : "English"} — speak now.`}
           </span>
 
           {voice.notice && (
@@ -1216,7 +1382,10 @@ export function SupportWebchatWidget({
           void send();
         }}
       >
-        <label htmlFor="support-widget-message" className="shrink-0 text-[10px] font-medium text-muted-foreground">
+        <label
+          htmlFor="support-widget-message"
+          className="shrink-0 text-[10px] font-medium text-muted-foreground"
+        >
           Message
         </label>
         <Input
@@ -1227,7 +1396,9 @@ export function SupportWebchatWidget({
             setInputValue(event.target.value);
             pingTyping();
           }}
-          placeholder={config?.widget_config?.placeholder || "Type your message…"}
+          placeholder={
+            config?.widget_config?.placeholder || "Type your message…"
+          }
           className="h-11 min-w-0 flex-1 rounded-full bg-muted/40 px-4 text-xs shadow-none"
           disabled={loading || unavailable}
         />
@@ -1254,14 +1425,22 @@ export function SupportWebchatWidget({
             voice.listening ? "bg-destructive/10 text-destructive" : ""
           }`}
           onClick={voice.toggle}
-          title={voice.listening ? "Stop dictation" : `Dictate (${voice.lang === "am-ET" ? "Amharic" : "English"})`}
+          title={
+            voice.listening
+              ? "Stop dictation"
+              : `Dictate (${voice.lang === "am-ET" ? "Amharic" : "English"})`
+          }
           aria-pressed={voice.listening}
           aria-label={voice.listening ? "Stop dictation" : "Start dictation"}
         >
           {voice.listening && (
             <span className="absolute inset-0 animate-ping rounded-full bg-destructive/20" />
           )}
-          {voice.listening ? <MicOff className="relative h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          {voice.listening ? (
+            <MicOff className="relative h-4 w-4" />
+          ) : (
+            <Mic className="h-4 w-4" />
+          )}
         </Button>
         <Button
           type="submit"

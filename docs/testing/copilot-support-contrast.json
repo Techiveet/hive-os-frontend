@@ -1,0 +1,88 @@
+{
+  "checks": [
+    {
+      "id": "light-queue-label",
+      "foreground": "#09090b",
+      "background": "#f4f4f5",
+      "type": "text-normal"
+    },
+    {
+      "id": "light-return-button-label",
+      "foreground": "#09090b",
+      "background": "#ffffff",
+      "type": "text-normal"
+    },
+    {
+      "id": "light-connection-notice",
+      "foreground": "#71717a",
+      "background": "#ffffff",
+      "type": "text-normal"
+    },
+    {
+      "id": "light-control-border",
+      "foreground": "#65758b",
+      "background": "#ffffff",
+      "type": "ui"
+    },
+    {
+      "id": "light-queue-border",
+      "foreground": "#65758b",
+      "background": "#f4f4f5",
+      "type": "ui"
+    },
+    {
+      "id": "light-control-focus",
+      "foreground": "#0c885f",
+      "background": "#ffffff",
+      "type": "ui"
+    },
+    {
+      "id": "light-queue-focus",
+      "foreground": "#0c885f",
+      "background": "#f4f4f5",
+      "type": "ui"
+    },
+    {
+      "id": "dark-queue-label",
+      "foreground": "#fafafa",
+      "background": "#27272a",
+      "type": "text-normal"
+    },
+    {
+      "id": "dark-return-button-label",
+      "foreground": "#fafafa",
+      "background": "#09090b",
+      "type": "text-normal"
+    },
+    {
+      "id": "dark-connection-notice",
+      "foreground": "#a1a1aa",
+      "background": "#09090b",
+      "type": "text-normal"
+    },
+    {
+      "id": "dark-control-border",
+      "foreground": "#94a3b8",
+      "background": "#09090b",
+      "type": "ui"
+    },
+    {
+      "id": "dark-queue-border",
+      "foreground": "#94a3b8",
+      "background": "#27272a",
+      "type": "ui"
+    },
+    {
+      "id": "dark-control-focus",
+      "foreground": "#36d399",
+      "background": "#09090b",
+      "type": "ui"
+    },
+    {
+      "id": "dark-queue-focus",
+      "foreground": "#36d399",
+      "background": "#27272a",
+      "type": "ui"
+    }
+  ]
+}

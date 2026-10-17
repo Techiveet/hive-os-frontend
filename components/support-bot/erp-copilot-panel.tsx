@@ -64,12 +64,20 @@ interface PanelMessage {
   failed?: boolean;
 }
 
-interface SupportSessionCredentials {
-  session_id: string;
-  session_token: string;
+interface SupportTurn {
+  id: number;
+  sender_type: "visitor" | "agent" | "bot" | "system";
+  sender_name?: string;
+  content: string;
+  payload?: { shared_transcript?: boolean };
 }
-
-const SUPPORT_SESSION_STORAGE_KEY = "hive_copilot_support_session";
+interface SupportSession {
+  conversation_id: number;
+  status: string;
+  with_agent: boolean;
+  stream_token: string | null;
+  messages: SupportTurn[];
+}
 
 const GREETING =
   "I know every corner of this hive. Ask me to explain a module, take you to the right page, look something up, or carry it out for you when you have the permission.";
@@ -91,8 +99,91 @@ export function ErpCopilotPanel() {
   const [withAgent, setWithAgent] = React.useState(false);
   const [escalating, setEscalating] = React.useState(false);
   const [streamToken, setStreamToken] = React.useState<string | null>(null);
-  const [supportCredentials, setSupportCredentials] =
-    React.useState<SupportSessionCredentials | null>(null);
+  const [supportConversationId, setSupportConversationId] = React.useState<
+    number | null
+  >(null);
+  const [supportNotice, setSupportNotice] = React.useState("");
+  const [supportAgentName, setSupportAgentName] = React.useState("");
+  const supportCursor = React.useRef(0);
+  const messageInput = React.useRef<HTMLInputElement>(null);
+  const launcher = React.useRef<HTMLButtonElement>(null);
+  const applySupport = React.useCallback((session: SupportSession) => {
+    setSupportConversationId(session.conversation_id);
+    setWithAgent(session.with_agent);
+    const agent = session.messages
+      .filter((turn) => turn.sender_type === "agent")
+      .at(-1);
+    if (agent) setSupportAgentName(agent.sender_name || "Support");
+    setStreamToken(session.stream_token);
+    supportCursor.current = Math.max(
+      supportCursor.current,
+      ...session.messages.map((turn) => turn.id),
+    );
+    setMessages((previous) => {
+      const seen = new Set(previous.map((turn) => turn.id));
+      const restoring = previous.length === 0;
+      const incoming = session.messages
+        .filter((turn) => !seen.has("support_" + turn.id))
+        .filter(
+          (turn) =>
+            restoring ||
+            (turn.sender_type !== "visitor" &&
+              !turn.payload?.shared_transcript),
+        )
+        .map((turn): PanelMessage => ({
+          id: "support_" + turn.id,
+          role: turn.sender_type === "visitor" ? "user" : "assistant",
+          content:
+            turn.sender_type === "agent"
+              ? "**" + (turn.sender_name || "Support") + ":** " + turn.content
+              : turn.content,
+        }));
+      return incoming.length ? [...previous, ...incoming] : previous;
+    });
+  }, []);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    let pending = false;
+    const load = async () => {
+      if (pending || document.visibilityState === "hidden") return;
+      pending = true;
+      try {
+        const response = await api.get<{ data: SupportSession | null }>(
+          "/copilot/support",
+          {
+            params: {
+              conversation_id: supportConversationId ?? undefined,
+              after_id: supportCursor.current,
+            },
+          },
+        );
+        if (!cancelled && response.data.data) {
+          applySupport(response.data.data);
+          setSupportNotice("");
+        }
+      } catch {
+        if (!cancelled && supportConversationId) {
+          setSupportNotice(
+            "Support updates are delayed. Reconnecting automatically…",
+          );
+        }
+      } finally {
+        pending = false;
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isOpen, supportConversationId, applySupport]);
+
+  React.useEffect(() => {
+    if (isOpen) messageInput.current?.focus();
+  }, [isOpen]);
 
   const endRef = React.useRef<HTMLDivElement>(null);
 
@@ -140,12 +231,14 @@ export function ErpCopilotPanel() {
 
     try {
       if (withAgent) {
-        if (!supportCredentials) {
-          throw new Error("The live-support session has expired. Reconnect and try again.");
+        if (!supportConversationId) {
+          throw new Error(
+            "The live-support session has expired. Reconnect and try again.",
+          );
         }
 
-        await api.post("/public/support-bot/hive-ai-assistant/chat", {
-          ...supportCredentials,
+        await api.post("/copilot/support/messages", {
+          conversation_id: supportConversationId,
           message: trimmed,
         });
 
@@ -189,7 +282,12 @@ export function ErpCopilotPanel() {
         : await cancelCopilotAction(token);
 
       setState(reply.payload.state);
-      append({ id: `a_${Date.now()}`, role: "assistant", content: reply.content, reply });
+      append({
+        id: `a_${Date.now()}`,
+        role: "assistant",
+        content: reply.content,
+        reply,
+      });
     } catch (error: unknown) {
       append({
         id: `e_${Date.now()}`,
@@ -202,104 +300,113 @@ export function ErpCopilotPanel() {
     }
   };
 
-
   const requestHuman = async () => {
-    if (escalating) return;
-
+    if (escalating || sending) return;
     setEscalating(true);
-
     try {
-      let existing = supportCredentials;
-
-      if (!existing) {
-        try {
-          const saved = window.localStorage.getItem(SUPPORT_SESSION_STORAGE_KEY);
-          const parsed = saved ? JSON.parse(saved) : null;
-          if (
-            typeof parsed?.session_id === "string" &&
-            typeof parsed?.session_token === "string"
-          ) {
-            existing = parsed;
-          }
-        } catch {
-          // The server will issue a fresh session below.
-        }
-      }
-
-      const startedResponse = await api.post(
-        "/public/support-bot/hive-ai-assistant/session",
+      const response = await api.post<{ data: SupportSession }>(
+        "/copilot/support",
         {
-          session_id: existing?.session_id,
-          session_token: existing?.session_token,
+          transcript: messages
+            .filter((turn) => !turn.failed)
+            .slice(-40)
+            .map(({ role, content }) => ({
+              role,
+              content: content.slice(0, 4000),
+            })),
         },
       );
-      const started = startedResponse.data?.data ?? {};
-      if (
-        typeof started.session_id !== "string" ||
-        typeof started.session_token !== "string"
-      ) {
-        throw new Error("The support server did not issue session credentials.");
-      }
-
-      const credentials: SupportSessionCredentials = {
-        session_id: started.session_id,
-        session_token: started.session_token,
-      };
-      setSupportCredentials(credentials);
-      try {
-        window.localStorage.setItem(SUPPORT_SESSION_STORAGE_KEY, JSON.stringify(credentials));
-      } catch {
-        // The live page session remains usable when storage is unavailable.
-      }
-
-      const response = await api.post("/public/support-bot/hive-ai-assistant/escalate", {
-        ...credentials,
-      });
-
-      const data = response.data?.data ?? {};
-      setWithAgent(true);
-      setStreamToken(data.stream_token ?? null);
-
-      append({
-        id: `esc_${Date.now()}`,
-        role: "assistant",
-        content:
-          "I have put you in the queue for a member of the team. Stay on this page — their reply will appear here.",
-      });
+      supportCursor.current = 0;
+      applySupport(response.data.data);
+      setSupportNotice("");
     } catch (error: unknown) {
       append({
-        id: `escfail_${Date.now()}`,
+        id: "escfail_" + Date.now(),
         role: "assistant",
         content: describeError(error),
         failed: true,
       });
     } finally {
       setEscalating(false);
+      messageInput.current?.focus();
     }
   };
 
-  // An agent's reply, delivered live on the conversation's own channel.
+  const resumeAssistant = async (): Promise<boolean> => {
+    if (!supportConversationId || escalating) return false;
+    setEscalating(true);
+    try {
+      await api.post("/copilot/support/resume", {
+        conversation_id: supportConversationId,
+      });
+      setWithAgent(false);
+      setSupportAgentName("");
+      setStreamToken(null);
+      setSupportConversationId(null);
+      supportCursor.current = 0;
+      setSupportNotice("");
+      append({
+        id: "resume_" + Date.now(),
+        role: "assistant",
+        content:
+          "You are back with Queen Bee. Your support transcript is saved.",
+      });
+      return true;
+    } catch (error: unknown) {
+      append({
+        id: "resume_error_" + Date.now(),
+        role: "assistant",
+        content: describeError(error),
+        failed: true,
+      });
+      return false;
+    } finally {
+      setEscalating(false);
+      messageInput.current?.focus();
+    }
+  };
+
   React.useEffect(() => {
     if (!streamToken) return;
-
-    const echo = initPublicEcho();
+    let echo: ReturnType<typeof initPublicEcho>;
+    try {
+      echo = initPublicEcho();
+    } catch {
+      return;
+    }
     if (!echo) return;
-
     const channelName = getSupportBotThreadChannelName(streamToken);
     const channel = echo.channel(channelName);
-
-    channel.listen(".support-bot.message", (event: any) => {
-      if (event?.sender_type === "visitor") return;
-
-      append({
-        id: `agent_${event.id}`,
-        role: "assistant",
-        content: `**${event.sender_name || "Support"}:** ${event.content}`,
-      });
-    });
-
+    channel.listen(
+      ".support-bot.message",
+      (event: SupportTurn & { status?: string }) => {
+        if (event.sender_type === "visitor") return;
+        if (event.sender_type === "agent")
+          setSupportAgentName(event.sender_name || "Support");
+        setMessages((previous) =>
+          previous.some((turn) => turn.id === "support_" + event.id)
+            ? previous
+            : [
+                ...previous,
+                {
+                  id: "support_" + event.id,
+                  role: "assistant",
+                  content:
+                    event.sender_type === "agent"
+                      ? "**" +
+                        (event.sender_name || "Support") +
+                        ":** " +
+                        event.content
+                      : event.content,
+                },
+              ],
+        );
+        if (event.status)
+          setWithAgent(["escalated", "assigned"].includes(event.status));
+      },
+    );
     return () => {
-      echo.leaveChannel(channelName);
+      echo?.leaveChannel(channelName);
     };
   }, [streamToken]);
 
@@ -322,9 +429,11 @@ export function ErpCopilotPanel() {
     return suggestions.filter((item) => !asked.has(item.trim().toLowerCase()));
   }, [messages, suggestions]);
 
-  const reset = () => {
+  const reset = async () => {
+    if (withAgent && !(await resumeAssistant())) return;
     setMessages([]);
     setState(undefined);
+    messageInput.current?.focus();
   };
 
   if (!isOpen) {
@@ -340,6 +449,7 @@ export function ErpCopilotPanel() {
         style={{ ...drag.style, touchAction: "none" }}
       >
         <button
+          ref={launcher}
           type="button"
           onClick={() => {
             // A drag that ends over the button must not also open the panel.
@@ -368,7 +478,8 @@ export function ErpCopilotPanel() {
   return (
     <aside
       aria-labelledby="erp-copilot-title"
-      className="support-bot-accessible fixed bottom-6 right-6 z-50 flex h-[min(640px,calc(100vh-6rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl print:hidden">
+      className="support-bot-accessible fixed bottom-6 right-6 z-50 flex h-[min(640px,calc(100vh-6rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl print:hidden"
+    >
       <header className="flex items-center justify-between border-b bg-muted/40 px-4 py-3">
         <div className="flex items-center gap-2">
           <QueenBeeAvatar
@@ -377,21 +488,33 @@ export function ErpCopilotPanel() {
             className="h-8 w-8 rounded-lg"
           />
           <div className="leading-tight">
-            <h2 id="erp-copilot-title" className="text-sm font-semibold">Queen Bee</h2>
+            <h2 id="erp-copilot-title" className="text-sm font-semibold">
+              Queen Bee
+            </h2>
             <p className="text-[11px] text-muted-foreground">
               Permission-aware · every action audited
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-11 w-11" onClick={reset} title="Start over" aria-label="Start a new Copilot conversation">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11"
+            onClick={reset}
+            title="Start over"
+            aria-label="Start a new Copilot conversation"
+          >
             <RotateCcw className="h-4 w-4" aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
             className="h-11 w-11"
-            onClick={() => setIsOpen(false)}
+            onClick={() => {
+              setIsOpen(false);
+              requestAnimationFrame(() => launcher.current?.focus());
+            }}
             title="Close"
             aria-label="Close Copilot"
           >
@@ -403,10 +526,17 @@ export function ErpCopilotPanel() {
       {/* min-h-0: without it this flex child grows to fit its content and the
           scroll viewport never becomes shorter than the conversation. */}
       <ScrollArea className="min-h-0 flex-1 px-4 py-3">
-        <div className="space-y-3" role="log" aria-live="polite" aria-relevant="additions text">
+        <div
+          className="space-y-3"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions text"
+        >
           {messages.length === 0 && (
             <div className="rounded-lg bg-muted/50 p-3">
-              <p className="text-xs leading-relaxed text-muted-foreground">{GREETING}</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {GREETING}
+              </p>
             </div>
           )}
 
@@ -470,15 +600,28 @@ export function ErpCopilotPanel() {
           )}
 
           {withAgent ? (
-            <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-2 text-[11px] text-emerald-700 dark:text-emerald-400">
-              <Headphones className="h-3.5 w-3.5 shrink-0" />
-              You are in the queue for the support team.
+            <div className="flex flex-col gap-2 rounded-lg border bg-muted p-3">
+              <p className="flex items-center gap-2 text-xs text-foreground">
+                <Headphones aria-hidden="true" />
+                Support request #{supportConversationId} ·{" "}
+                {supportAgentName
+                  ? "connected to " + supportAgentName
+                  : "waiting for a team reply"}
+              </p>
+              <Button
+                variant="outline"
+                className="min-h-11"
+                disabled={escalating || sending}
+                onClick={() => void resumeAssistant()}
+              >
+                Return to Queen Bee
+              </Button>
             </div>
           ) : (
             <button
               type="button"
               onClick={requestHuman}
-              disabled={escalating}
+              disabled={escalating || sending}
               className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed px-2.5 py-2 text-[11px] text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {escalating ? (
@@ -490,6 +633,9 @@ export function ErpCopilotPanel() {
             </button>
           )}
 
+          {supportNotice && (
+            <p className="text-xs text-muted-foreground">{supportNotice}</p>
+          )}
           <div ref={endRef} />
         </div>
       </ScrollArea>
@@ -532,24 +678,33 @@ export function ErpCopilotPanel() {
           void send(input);
         }}
       >
-        <label htmlFor="erp-copilot-message" className="shrink-0 text-[10px] font-medium text-muted-foreground">
+        <label
+          htmlFor="erp-copilot-message"
+          className="shrink-0 text-[10px] font-medium text-muted-foreground"
+        >
           Message
         </label>
         <Input
           id="erp-copilot-message"
+          ref={messageInput}
+          maxLength={4000}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder={
-            state?.awaiting_input?.length
-              ? `Enter ${state.awaiting_input[0].replace(/_/g, " ")}…`
-              : "Ask about anything in Hive…"
+            withAgent
+              ? "Message the support team…"
+              : state?.awaiting_input?.length
+                ? `Enter ${state.awaiting_input[0].replace(/_/g, " ")}…`
+                : "Ask about anything in Hive…"
           }
           className="h-11 min-w-0 flex-1 text-xs"
           disabled={sending}
         />
         <button
           type="button"
-          onClick={() => voice.setLang(voice.lang === "en-US" ? "am-ET" : "en-US")}
+          onClick={() =>
+            voice.setLang(voice.lang === "en-US" ? "am-ET" : "en-US")
+          }
           title={`Dictation language: ${voice.lang === "am-ET" ? "Amharic" : "English"} — tap to switch`}
           aria-label={`Dictation language: ${voice.lang === "am-ET" ? "Amharic" : "English"}. Activate to switch.`}
           className="h-11 min-w-11 shrink-0 rounded-full px-2 text-[10px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -577,7 +732,13 @@ export function ErpCopilotPanel() {
             <Mic className="h-4 w-4" />
           )}
         </Button>
-        <Button type="submit" size="icon" className="h-11 w-11 shrink-0" disabled={sending || !input.trim()} aria-label="Send message">
+        <Button
+          type="submit"
+          size="icon"
+          className="h-11 w-11 shrink-0"
+          disabled={sending || !input.trim()}
+          aria-label="Send message"
+        >
           <Send className="h-4 w-4" aria-hidden="true" />
         </Button>
       </form>
@@ -606,7 +767,9 @@ function AnswerVerdict({ reply }: { reply: CopilotReply }) {
 
   const interactionId = reply.interaction_id;
   const rateable =
-    interactionId !== null && !reply.payload.greeting && !reply.payload.confirmation;
+    interactionId !== null &&
+    !reply.payload.greeting &&
+    !reply.payload.confirmation;
 
   if (!rateable) return null;
 
@@ -657,7 +820,11 @@ function AnswerVerdict({ reply }: { reply: CopilotReply }) {
       >
         <ThumbsDown className="h-3 w-3" />
       </Button>
-      {failed && <span className="text-[11px] text-destructive">Could not record that.</span>}
+      {failed && (
+        <span className="text-[11px] text-destructive">
+          Could not record that.
+        </span>
+      )}
     </div>
   );
 }
@@ -698,8 +865,13 @@ function ReplyExtras({
           {Object.keys(confirmation.parameters ?? {}).length > 0 && (
             <dl className="mt-2 space-y-0.5 rounded-md bg-background/60 p-2">
               {Object.entries(confirmation.parameters).map(([key, value]) => (
-                <div key={key} className="flex justify-between gap-3 text-[11px]">
-                  <dt className="text-muted-foreground">{key.replace(/_/g, " ")}</dt>
+                <div
+                  key={key}
+                  className="flex justify-between gap-3 text-[11px]"
+                >
+                  <dt className="text-muted-foreground">
+                    {key.replace(/_/g, " ")}
+                  </dt>
                   <dd className="truncate font-medium">{String(value)}</dd>
                 </div>
               ))}
@@ -758,24 +930,26 @@ function ReplyExtras({
               {summariseRecord(record)}
             </div>
           ))}
-          {typeof payload.total === "number" && payload.total > payload.records.length && (
-            <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground">
-              {payload.total - payload.records.length} more not shown.
-            </p>
-          )}
+          {typeof payload.total === "number" &&
+            payload.total > payload.records.length && (
+              <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                {payload.total - payload.records.length} more not shown.
+              </p>
+            )}
         </div>
       )}
 
-      {payload.required_permissions && payload.required_permissions.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="text-[11px] text-muted-foreground">Needs:</span>
-          {payload.required_permissions.slice(0, 4).map((permission) => (
-            <Badge key={permission} variant="outline" className="text-[10px]">
-              {permission.replace(/_/g, " ")}
-            </Badge>
-          ))}
-        </div>
-      )}
+      {payload.required_permissions &&
+        payload.required_permissions.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-[11px] text-muted-foreground">Needs:</span>
+            {payload.required_permissions.slice(0, 4).map((permission) => (
+              <Badge key={permission} variant="outline" className="text-[10px]">
+                {permission.replace(/_/g, " ")}
+              </Badge>
+            ))}
+          </div>
+        )}
 
       {payload.follow_ups && payload.follow_ups.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -824,8 +998,9 @@ function summariseRecord(record: Record<string, unknown>): string {
  * is worse than no answer at all.
  */
 function describeError(error: unknown): string {
-  const response = (error as { response?: { status?: number; data?: { message?: string } } })
-    ?.response;
+  const response = (
+    error as { response?: { status?: number; data?: { message?: string } } }
+  )?.response;
 
   if (response?.status === 401) {
     return "Your session has expired. Sign in again and I will pick this up.";
