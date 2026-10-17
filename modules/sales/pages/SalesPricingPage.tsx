@@ -120,6 +120,8 @@ export default function SalesPricingPage() {
 
   const [itemForm, setItemForm] = React.useState<ItemForm>(DEFAULT_ITEM_FORM);
   const [editingItemKey, setEditingItemKey] = React.useState<string | null>(null);
+  const itemFormRef = React.useRef<HTMLDivElement>(null);
+  const unitPriceInputRef = React.useRef<HTMLInputElement>(null);
 
   const [check, setCheck] = React.useState({
     product_id: "",
@@ -328,6 +330,12 @@ export default function SalesPricingPage() {
       unit_price: String(item.unit_price),
       min_quantity: String(item.min_quantity),
       discount_percent: String(item.discount_percent ?? 0),
+    });
+    // Pencil only loads the form under the table — scroll/focus so it is obvious.
+    requestAnimationFrame(() => {
+      itemFormRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      unitPriceInputRef.current?.focus();
+      unitPriceInputRef.current?.select();
     });
   }, []);
 
@@ -648,7 +656,7 @@ export default function SalesPricingPage() {
             )}
 
             {activeId !== null ? (
-              <div className="mt-4 space-y-3 border-t border-border/40 pt-4">
+              <div ref={itemFormRef} className="mt-4 space-y-3 border-t border-border/40 pt-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {editingItemKey
                     ? t("sales.pricing.edit_tier", "Edit tier")
@@ -659,6 +667,7 @@ export default function SalesPricingPage() {
                     <Label>{t("sales.pricing.product", "Product")}</Label>
                     <Select
                       value={itemForm.product_id || "none"}
+                      disabled={!!editingItemKey}
                       onOpenChange={handlePickerOpenChange}
                       onValueChange={(v) => setItemForm({ ...itemForm, product_id: v === "none" ? "" : v })}
                     >
@@ -681,19 +690,23 @@ export default function SalesPricingPage() {
                       type="number"
                       min={0}
                       value={itemForm.min_quantity}
+                      disabled={!!editingItemKey}
                       onChange={(e) => setItemForm({ ...itemForm, min_quantity: e.target.value })}
                       className="h-9 w-28"
                     />
-                    <p className="text-[11px] text-muted-foreground">
-                      {t(
-                        "sales.pricing.from_qty_hint",
-                        "0 = all quantities. A tier only applies when the order qty is at least this amount.",
-                      )}
-                    </p>
+                    {!editingItemKey ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        {t(
+                          "sales.pricing.from_qty_hint",
+                          "0 = all quantities. A tier only applies when the order qty is at least this amount.",
+                        )}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="space-y-1.5">
                     <Label>{t("sales.pricing.unit_price", "Unit price")}</Label>
                     <Input
+                      ref={unitPriceInputRef}
                       type="number"
                       min={0}
                       value={itemForm.unit_price}

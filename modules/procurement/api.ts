@@ -88,6 +88,8 @@ export const procurementApi = {
     action<GoodsReceipt>(`/procurement/goods-receipts/${id}/inspect`, payload),
   postReceipt: (id: number) =>
     action<GoodsReceipt>(`/procurement/goods-receipts/${id}/post`),
+  cancelReceipt: (id: number) =>
+    action<GoodsReceipt>(`/procurement/goods-receipts/${id}/cancel`),
   invoices: (params: Params = {}) =>
     getPage<SupplierInvoice>("/procurement/supplier-invoices", params),
   createInvoice: (payload: Payload) =>

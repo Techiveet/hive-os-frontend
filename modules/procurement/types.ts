@@ -255,6 +255,8 @@ export interface ProcurementReferences {
     unit: string;
     current_stock: string;
     cost_price: string;
+    good_id?: number | null;
+    is_receivable?: boolean;
     track_batches?: boolean;
     track_expiry?: boolean;
     track_serials?: boolean;
@@ -270,6 +272,7 @@ export interface ProcurementReferences {
   agreements: Agreement[];
   projects: Array<{ id: number; name: string; status: string }>;
   cost_centers: Array<{ id: number; code: string; name: string; is_active?: boolean }>;
+  departments: Array<{ id: number; code: string; name: string }>;
   methods: Array<{ value: string; label: string }>;
 }
 export interface ProcurementDashboard {

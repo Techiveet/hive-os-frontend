@@ -53,6 +53,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { productionApi } from "@/modules/production/api";
 import type {
   ProductionBom,
+  ProductionBomItem,
   ProductionLine,
   ProductionMaterialConsumption,
   ProductionOrder,
@@ -226,6 +227,35 @@ function editPayloadFromForm(form: ReturnType<typeof emptyOrderForm>) {
   };
 }
 
+/** Portaled Select menus sit outside DialogContent; dismiss them without closing the dialog. */
+function isSelectPortalTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest('[data-slot="select-content"]') ||
+      target.closest("[data-radix-select-content]") ||
+      target.closest("[data-radix-popper-content-wrapper]") ||
+      target.closest('[role="listbox"]'),
+  );
+}
+
+function preventDialogDismissForSelect(event: {
+  preventDefault: () => void;
+  target: EventTarget | null;
+}) {
+  if (isSelectPortalTarget(event.target)) event.preventDefault();
+}
+
+/** Keep form dialogs open while interacting with portaled Selects (Cancel / X still close). */
+const blockOutsideDismiss = (event: { preventDefault: () => void }) => {
+  event.preventDefault();
+};
+
+const dialogSelectDismissProps = {
+  onPointerDownOutside: blockOutsideDismiss,
+  onInteractOutside: blockOutsideDismiss,
+  onFocusOutside: preventDialogDismissForSelect,
+} as const;
+
 type TableQueryState = {
   page: number;
   pageSize: number;
@@ -248,6 +278,7 @@ type MaterialForm = {
   component_product_id: string;
   actual_quantity: string;
   supplier_batch_number: string;
+  from_warehouse_id: string;
   from_location_id: string;
 };
 
@@ -255,6 +286,7 @@ const DEFAULT_MATERIAL_FORM: MaterialForm = {
   component_product_id: "",
   actual_quantity: "",
   supplier_batch_number: "",
+  from_warehouse_id: "",
   from_location_id: "",
 };
 
@@ -359,11 +391,14 @@ export default function WorkOrdersPage() {
     placeholderData: (previous) => previous,
   });
 
+  // Prefer the Issue modal's order when both inspect + issue are somehow set.
+  const detailOrderId = materialOrderId ?? inspectOrderId;
   const detailQuery = useQuery({
-    queryKey: ["production", "order", inspectOrderId ?? materialOrderId],
-    queryFn: () =>
-      productionApi.getOrder((inspectOrderId ?? materialOrderId)!).then((res) => res.data.data),
-    enabled: inspectOrderId !== null || materialOrderId !== null,
+    queryKey: ["production", "order", detailOrderId],
+    queryFn: () => productionApi.getOrder(detailOrderId!).then((res) => res.data.data as ProductionOrder),
+    enabled: detailOrderId !== null,
+    // Always re-fetch when opening Issue so planMaterials repair on show is picked up.
+    refetchOnMount: materialOrderId !== null ? "always" : true,
   });
 
   const linesQuery = useQuery({
@@ -379,7 +414,45 @@ export default function WorkOrdersPage() {
   const lines: ProductionLine[] = linesQuery.data?.data ?? [];
   const boms: ProductionBom[] = bomsQuery.data?.data ?? [];
   const overview = overviewQuery.data?.data;
-  const materialOrder = materialOrderId ? detailQuery.data : null;
+  const ordersList = (ordersQuery.data?.data ?? []) as ProductionOrder[];
+  const listMaterialOrder = materialOrderId
+    ? (ordersList.find((order) => order.id === materialOrderId) ?? null)
+    : null;
+  const materialOrder: ProductionOrder | null = materialOrderId
+    ? (detailQuery.data ?? listMaterialOrder)
+    : null;
+
+  const issueBomId = materialOrder?.bom_id ?? null;
+  const needsBomFallback =
+    materialOrderId !== null &&
+    !!issueBomId &&
+    (materialOrder?.consumptions?.length ?? 0) === 0 &&
+    (materialOrder?.bom?.items?.length ?? 0) === 0;
+
+  const issueBomQuery = useQuery({
+    queryKey: ["production", "bom", "issue-fallback", issueBomId],
+    queryFn: () => productionApi.getBom(issueBomId!).then((res) => res.data.data as ProductionBom),
+    enabled: needsBomFallback,
+  });
+
+  const plannedIssueComponents = React.useMemo(() => {
+    const fromConsumptions = (materialOrder?.consumptions ?? []).map(
+      (consumption: ProductionMaterialConsumption) => ({
+        key: `c-${consumption.id}`,
+        productId: String(consumption.component_product_id),
+        label: `${consumption.component?.name ?? `#${consumption.component_product_id}`} (${consumption.component_type})`,
+      }),
+    );
+    if (fromConsumptions.length > 0) return fromConsumptions;
+
+    const bomItems: ProductionBomItem[] =
+      materialOrder?.bom?.items ?? issueBomQuery.data?.items ?? [];
+    return bomItems.map((item) => ({
+      key: `b-${item.id}`,
+      productId: String(item.component_product_id),
+      label: `${item.component?.name ?? `#${item.component_product_id}`} (${item.component_type})`,
+    }));
+  }, [materialOrder, issueBomQuery.data]);
 
   const invalidateOrders = React.useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["production", "orders"] });
@@ -1154,7 +1227,7 @@ export default function WorkOrdersPage() {
       </Dialog>
 
       <Dialog open={materialOrderId !== null} onOpenChange={(open) => !open && setMaterialOrderId(null)}>
-        <DialogContent className="sm:max-w-xl rounded-[2rem]">
+        <DialogContent className="sm:max-w-xl rounded-[2rem]" {...dialogSelectDismissProps}>
           <DialogHeader>
             <DialogTitle>{t("production.orders.issue_title", "Issue Material to the Line")}</DialogTitle>
             <DialogDescription>
@@ -1164,7 +1237,7 @@ export default function WorkOrdersPage() {
               )}
             </DialogDescription>
           </DialogHeader>
-          {detailQuery.isLoading && materialOrderId ? (
+          {(detailQuery.isLoading || issueBomQuery.isLoading) && materialOrderId && !materialOrder ? (
             <div className="flex items-center gap-2 py-4 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               {t("production.common.loading", "Loading...")}
@@ -1174,23 +1247,36 @@ export default function WorkOrdersPage() {
               <div className="space-y-2">
                 <Label>{t("production.orders.component", "Component")}</Label>
                 <Select
-                  value={materialForm.component_product_id}
+                  value={materialForm.component_product_id || undefined}
                   onValueChange={(value) =>
                     setMaterialForm((prev) => ({ ...prev, component_product_id: value }))
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue
-                      placeholder={t("production.orders.select_component", "Select a planned component")}
+                      placeholder={
+                        detailQuery.isFetching || issueBomQuery.isFetching
+                          ? t("production.common.loading", "Loading...")
+                          : t("production.orders.select_component", "Select a planned component")
+                      }
                     />
                   </SelectTrigger>
-                  <SelectContent>
-                    {(materialOrder?.consumptions ?? []).map((consumption: ProductionMaterialConsumption) => (
-                      <SelectItem key={consumption.id} value={String(consumption.component_product_id)}>
-                        {consumption.component?.name ?? `#${consumption.component_product_id}`} (
-                        {consumption.component_type})
+                  <SelectContent className="z-[100]">
+                    {plannedIssueComponents.map((component) => (
+                      <SelectItem key={component.key} value={component.productId}>
+                        {component.label}
                       </SelectItem>
                     ))}
+                    {!detailQuery.isLoading &&
+                    !issueBomQuery.isLoading &&
+                    plannedIssueComponents.length === 0 ? (
+                      <div className="px-2 py-3 text-xs text-muted-foreground">
+                        {t(
+                          "production.orders.no_planned_components",
+                          "No planned components on this order. Search any product below, or attach a BOM when creating the order.",
+                        )}
+                      </div>
+                    ) : null}
                   </SelectContent>
                 </Select>
                 <ProductSearchPicker
@@ -1228,6 +1314,28 @@ export default function WorkOrdersPage() {
                   }
                 />
               </div>
+              <WarehouseSearchPicker
+                id="issue-warehouse"
+                label={t("production.orders.from_warehouse", "From warehouse")}
+                value={materialForm.from_warehouse_id}
+                onChange={(value) =>
+                  setMaterialForm((prev) => ({
+                    ...prev,
+                    from_warehouse_id: value,
+                    from_location_id:
+                      prev.from_location_id && value !== prev.from_warehouse_id
+                        ? ""
+                        : prev.from_location_id,
+                  }))
+                }
+                enabled={materialOrderId !== null}
+                allowClear
+                placeholder={t("production.orders.pick_from_warehouse", "Select source warehouse")}
+                emptyText={t(
+                  "production.orders.no_warehouses",
+                  "No warehouses found. Create one in Warehouse → Sites.",
+                )}
+              />
               <LocationSearchPicker
                 id="issue-location"
                 label={t("production.orders.from_location", "From store location")}
@@ -1235,6 +1343,7 @@ export default function WorkOrdersPage() {
                 onChange={(value) =>
                   setMaterialForm((prev) => ({ ...prev, from_location_id: value }))
                 }
+                warehouseId={materialForm.from_warehouse_id || undefined}
                 enabled={materialOrderId !== null}
                 allowClear
                 placeholder={t("production.orders.pick_from_location", "Select source location")}
@@ -1267,7 +1376,7 @@ export default function WorkOrdersPage() {
       </Dialog>
 
       <Dialog open={qaOrder !== null} onOpenChange={(open) => !open && setQaOrder(null)}>
-        <DialogContent className="sm:max-w-lg rounded-[2rem]">
+        <DialogContent className="sm:max-w-lg rounded-[2rem]" {...dialogSelectDismissProps}>
           <DialogHeader>
             <DialogTitle>{t("production.orders.qa_title", "QA Decision")}</DialogTitle>
             <DialogDescription>
@@ -1373,7 +1482,10 @@ function OrderFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl rounded-[2rem] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-2xl rounded-[2rem] max-h-[90vh] overflow-y-auto"
+        {...dialogSelectDismissProps}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

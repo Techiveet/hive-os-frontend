@@ -18,6 +18,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -163,26 +173,51 @@ export default function DemandPlanningPage() {
   const [profileForm, setProfileForm] = React.useState<ProfileForm>(DEFAULT_PROFILE);
   const [forecastOpen, setForecastOpen] = React.useState(false);
   const [forecastForm, setForecastForm] = React.useState<ForecastForm>(DEFAULT_FORECAST);
-  const pickerOpenRef = React.useRef(false);
-  const pickerCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Delete confirmation states
+  const [deleteProfileOpen, setDeleteProfileOpen] = React.useState(false);
+  const [deleteForecastOpen, setDeleteForecastOpen] = React.useState(false);
+  const [deleteId, setDeleteId] = React.useState<number | null>(null);
+  
+  // Separate picker refs for each dialog
+  const profilePickerOpenRef = React.useRef(false);
+  const profilePickerCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const forecastPickerOpenRef = React.useRef(false);
+  const forecastPickerCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handlePickerOpenChange = React.useCallback((open: boolean) => {
-    if (pickerCloseTimerRef.current) {
-      clearTimeout(pickerCloseTimerRef.current);
-      pickerCloseTimerRef.current = null;
+  const handleProfilePickerOpenChange = React.useCallback((open: boolean) => {
+    if (profilePickerCloseTimerRef.current) {
+      clearTimeout(profilePickerCloseTimerRef.current);
+      profilePickerCloseTimerRef.current = null;
     }
     if (open) {
-      pickerOpenRef.current = true;
+      profilePickerOpenRef.current = true;
       return;
     }
-    pickerOpenRef.current = true;
-    pickerCloseTimerRef.current = setTimeout(() => {
-      pickerOpenRef.current = false;
-      pickerCloseTimerRef.current = null;
+    profilePickerOpenRef.current = true;
+    profilePickerCloseTimerRef.current = setTimeout(() => {
+      profilePickerOpenRef.current = false;
+      profilePickerCloseTimerRef.current = null;
     }, 150);
   }, []);
 
-  const preventDialogDismissForPicker = React.useCallback(
+  const handleForecastPickerOpenChange = React.useCallback((open: boolean) => {
+    if (forecastPickerCloseTimerRef.current) {
+      clearTimeout(forecastPickerCloseTimerRef.current);
+      forecastPickerCloseTimerRef.current = null;
+    }
+    if (open) {
+      forecastPickerOpenRef.current = true;
+      return;
+    }
+    forecastPickerOpenRef.current = true;
+    forecastPickerCloseTimerRef.current = setTimeout(() => {
+      forecastPickerOpenRef.current = false;
+      forecastPickerCloseTimerRef.current = null;
+    }, 150);
+  }, []);
+
+  const preventProfileDialogDismissForPicker = React.useCallback(
     (event: { preventDefault: () => void; target: EventTarget | null }) => {
       const target = event.target;
       if (target instanceof Element) {
@@ -195,7 +230,25 @@ export default function DemandPlanningPage() {
           return;
         }
       }
-      if (pickerOpenRef.current) event.preventDefault();
+      if (profilePickerOpenRef.current) event.preventDefault();
+    },
+    [],
+  );
+
+  const preventForecastDialogDismissForPicker = React.useCallback(
+    (event: { preventDefault: () => void; target: EventTarget | null }) => {
+      const target = event.target;
+      if (target instanceof Element) {
+        if (
+          target.closest("[data-radix-select-content]") ||
+          target.closest("[data-radix-popper-content-wrapper]") ||
+          target.closest("[role='listbox']")
+        ) {
+          event.preventDefault();
+          return;
+        }
+      }
+      if (forecastPickerOpenRef.current) event.preventDefault();
     },
     [],
   );
@@ -324,6 +377,8 @@ export default function DemandPlanningPage() {
     onSuccess: () => {
       toast.success(t("supply_chain.planning.profile_deleted", "Planning profile deleted."));
       invalidate();
+      setDeleteProfileOpen(false);
+      setDeleteId(null);
     },
     onError: (e: any) => toast.error(e?.response?.data?.message || "Could not delete it."),
   });
@@ -361,6 +416,8 @@ export default function DemandPlanningPage() {
     onSuccess: () => {
       toast.success(t("supply_chain.planning.forecast_deleted", "Forecast deleted."));
       invalidate();
+      setDeleteForecastOpen(false);
+      setDeleteId(null);
     },
     onError: (e: any) => toast.error(e?.response?.data?.message || "Could not delete it."),
   });
@@ -483,7 +540,10 @@ export default function DemandPlanningPage() {
               variant="outline"
               size="sm"
               className="h-8 w-8 p-0 text-destructive"
-              onClick={() => deleteProfile.mutate(row.original.id)}
+              onClick={() => {
+                setDeleteId(row.original.id);
+                setDeleteProfileOpen(true);
+              }}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -590,7 +650,10 @@ export default function DemandPlanningPage() {
               variant="outline"
               size="sm"
               className="h-8 w-8 p-0 text-destructive"
-              onClick={() => deleteForecast.mutate(row.original.id)}
+              onClick={() => {
+                setDeleteId(row.original.id);
+                setDeleteForecastOpen(true);
+              }}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -785,15 +848,15 @@ export default function DemandPlanningPage() {
       <Dialog
         open={profileOpen}
         onOpenChange={(open) => {
-          if (!open && pickerOpenRef.current) return;
+          if (!open && profilePickerOpenRef.current) return;
           setProfileOpen(open);
         }}
       >
         <DialogContent
           className="sm:max-w-2xl rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl"
-          onPointerDownOutside={preventDialogDismissForPicker}
-          onInteractOutside={preventDialogDismissForPicker}
-          onFocusOutside={preventDialogDismissForPicker}
+          onPointerDownOutside={preventProfileDialogDismissForPicker}
+          onInteractOutside={preventProfileDialogDismissForPicker}
+          onFocusOutside={preventProfileDialogDismissForPicker}
         >
           <div className="border-b border-border/40 px-6 py-5">
             <DialogHeader>
@@ -816,7 +879,7 @@ export default function DemandPlanningPage() {
               <Label htmlFor="pp-product">{t("supply_chain.common.product", "Product")}</Label>
               <Select
                 value={profileForm.product_id || undefined}
-                onOpenChange={handlePickerOpenChange}
+                onOpenChange={handleProfilePickerOpenChange}
                 onValueChange={(v) => setProfileForm((p) => ({ ...p, product_id: v }))}
               >
                 <SelectTrigger id="pp-product">
@@ -842,7 +905,7 @@ export default function DemandPlanningPage() {
               <Label htmlFor="pp-warehouse">{t("supply_chain.common.warehouse", "Warehouse")}</Label>
               <Select
                 value={profileForm.warehouse_id || "network"}
-                onOpenChange={handlePickerOpenChange}
+                onOpenChange={handleProfilePickerOpenChange}
                 onValueChange={(v) => setProfileForm((p) => ({ ...p, warehouse_id: v === "network" ? "" : v }))}
               >
                 <SelectTrigger id="pp-warehouse">
@@ -866,7 +929,7 @@ export default function DemandPlanningPage() {
               <Label>{t("supply_chain.planning.policy", "Policy")}</Label>
               <Select
                 value={profileForm.policy}
-                onOpenChange={handlePickerOpenChange}
+                onOpenChange={handleProfilePickerOpenChange}
                 onValueChange={(v) => setProfileForm((p) => ({ ...p, policy: v }))}
               >
                 <SelectTrigger>
@@ -897,7 +960,7 @@ export default function DemandPlanningPage() {
               <Label>{t("supply_chain.planning.active", "Status")}</Label>
               <Select
                 value={profileForm.is_active ? "active" : "inactive"}
-                onOpenChange={handlePickerOpenChange}
+                onOpenChange={handleProfilePickerOpenChange}
                 onValueChange={(v) => setProfileForm((p) => ({ ...p, is_active: v === "active" }))}
               >
                 <SelectTrigger>
@@ -914,7 +977,7 @@ export default function DemandPlanningPage() {
               <Label>{t("supply_chain.planning.preferred_supplier", "Preferred supplier")}</Label>
               <Select
                 value={profileForm.preferred_supplier_id || "none"}
-                onOpenChange={handlePickerOpenChange}
+                onOpenChange={handleProfilePickerOpenChange}
                 onValueChange={(v) =>
                   setProfileForm((p) => ({ ...p, preferred_supplier_id: v === "none" ? "" : v }))
                 }
@@ -1073,7 +1136,7 @@ export default function DemandPlanningPage() {
               <Label>{t("supply_chain.planning.abc", "ABC class")}</Label>
               <Select
                 value={profileForm.abc_class || "none"}
-                onOpenChange={handlePickerOpenChange}
+                onOpenChange={handleProfilePickerOpenChange}
                 onValueChange={(v) => setProfileForm((p) => ({ ...p, abc_class: v === "none" ? "" : v }))}
               >
                 <SelectTrigger>
@@ -1159,15 +1222,15 @@ export default function DemandPlanningPage() {
       <Dialog
         open={forecastOpen}
         onOpenChange={(open) => {
-          if (!open && pickerOpenRef.current) return;
+          if (!open && forecastPickerOpenRef.current) return;
           setForecastOpen(open);
         }}
       >
         <DialogContent
           className="sm:max-w-2xl rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl"
-          onPointerDownOutside={preventDialogDismissForPicker}
-          onInteractOutside={preventDialogDismissForPicker}
-          onFocusOutside={preventDialogDismissForPicker}
+          onPointerDownOutside={preventForecastDialogDismissForPicker}
+          onInteractOutside={preventForecastDialogDismissForPicker}
+          onFocusOutside={preventForecastDialogDismissForPicker}
         >
           <div className="border-b border-border/40 px-6 py-5">
             <DialogHeader>
@@ -1190,7 +1253,7 @@ export default function DemandPlanningPage() {
               <Label htmlFor="fc-product">{t("supply_chain.common.product", "Product")}</Label>
               <Select
                 value={forecastForm.product_id || undefined}
-                onOpenChange={handlePickerOpenChange}
+                onOpenChange={handleForecastPickerOpenChange}
                 onValueChange={(v) => setForecastForm((f) => ({ ...f, product_id: v }))}
               >
                 <SelectTrigger id="fc-product">
@@ -1216,7 +1279,7 @@ export default function DemandPlanningPage() {
               <Label htmlFor="fc-warehouse">{t("supply_chain.common.warehouse", "Warehouse")}</Label>
               <Select
                 value={forecastForm.warehouse_id || "network"}
-                onOpenChange={handlePickerOpenChange}
+                onOpenChange={handleForecastPickerOpenChange}
                 onValueChange={(v) => setForecastForm((f) => ({ ...f, warehouse_id: v === "network" ? "" : v }))}
               >
                 <SelectTrigger id="fc-warehouse">
@@ -1271,7 +1334,7 @@ export default function DemandPlanningPage() {
               <Label>{t("supply_chain.planning.source", "Source")}</Label>
               <Select
                 value={forecastForm.source}
-                onOpenChange={handlePickerOpenChange}
+                onOpenChange={handleForecastPickerOpenChange}
                 onValueChange={(v) => setForecastForm((f) => ({ ...f, source: v }))}
               >
                 <SelectTrigger>
@@ -1333,6 +1396,74 @@ export default function DemandPlanningPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Profile Confirmation Dialog */}
+      <AlertDialog open={deleteProfileOpen} onOpenChange={setDeleteProfileOpen}>
+        <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("supply_chain.planning.delete_profile_title", "Delete Planning Profile")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                "supply_chain.planning.delete_profile_desc",
+                "Are you sure you want to delete this planning profile? This action cannot be undone.",
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">
+              {t("supply_chain.common.cancel", "Cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteId !== null) {
+                  deleteProfile.mutate(deleteId);
+                }
+              }}
+              disabled={deleteProfile.isPending}
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteProfile.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t("supply_chain.common.delete", "Delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Forecast Confirmation Dialog */}
+      <AlertDialog open={deleteForecastOpen} onOpenChange={setDeleteForecastOpen}>
+        <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("supply_chain.planning.delete_forecast_title", "Delete Demand Forecast")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                "supply_chain.planning.delete_forecast_desc",
+                "Are you sure you want to delete this demand forecast? This action cannot be undone.",
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">
+              {t("supply_chain.common.cancel", "Cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteId !== null) {
+                  deleteForecast.mutate(deleteId);
+                }
+              }}
+              disabled={deleteForecast.isPending}
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteForecast.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t("supply_chain.common.delete", "Delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
