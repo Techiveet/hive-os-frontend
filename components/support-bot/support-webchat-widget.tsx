@@ -11,6 +11,8 @@ import {
   Send,
   ThumbsDown,
   ThumbsUp,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 
@@ -25,6 +27,7 @@ import {
 } from "@/components/support-bot/queen-bee";
 import api from "@/modules/shared/api/http";
 import { getSupportBotThreadChannelName, initPublicEcho } from "@/lib/echo";
+import { useMessageSound } from "@/hooks/use-message-sound";
 import { useDictation } from "@/hooks/use-dictation";
 import { useWidgetDrag } from "@/hooks/use-widget-drag";
 
@@ -186,6 +189,8 @@ export function SupportWebchatWidget({
   onReady,
 }: SupportWebchatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const messageSound = useMessageSound(`visitor:${botSlug}`);
+  const receivedIds = useRef(new Set<string>());
   const [config, setConfig] = useState<WidgetConfig | null>(null);
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<WidgetMessage[]>([]);
@@ -520,6 +525,8 @@ export function SupportWebchatWidget({
       setUnavailable(false);
 
       const history: WidgetMessage[] = session.messages ?? [];
+      receivedIds.current = new Set(history.map(getMessageKey));
+      receivedIds.current.add("bot:greeting");
 
       setMessages(
         history.length > 0
@@ -586,6 +593,24 @@ export function SupportWebchatWidget({
     openConversation,
   ]);
 
+  // History is seeded before rendering; only newly received stored replies alert.
+  // Merging by stable IDs also prevents a socket/poll race from playing twice.
+  useEffect(() => {
+    let unseen = 0;
+    for (const message of messages) {
+      const key = getMessageKey(message);
+      if (receivedIds.current.has(key)) continue;
+      receivedIds.current.add(key);
+      if (!/^\d+$/.test(String(message.id)) || !["bot", "agent"].includes(message.sender_type)) continue;
+      messageSound.play(String(message.id));
+      if (!isOpenRef.current) {
+        unseen++;
+        notifyOfReply(message.sender_name);
+      }
+    }
+    if (unseen) setUnread((count) => count + unseen);
+  }, [messages, messageSound.play]);
+
   // Live delivery of an agent's reply. The channel is public because the
   // visitor has no account to authorise a private one — its name is a
   // server-issued secret, and only this browser and the server hold it.
@@ -621,13 +646,6 @@ export function SupportWebchatWidget({
         ]),
       );
 
-      // Announce it if they are not looking. `isOpenRef` rather than `isOpen`
-      // because this closure is created once per stream token and would
-      // otherwise keep testing whatever the panel state was at subscribe time.
-      if (!isOpenRef.current) {
-        setUnread((count) => count + 1);
-        notifyOfReply(event?.sender_name);
-      }
     });
 
     channel.listen(".support-bot.escalated", () => setWithAgent(true));
@@ -654,11 +672,11 @@ export function SupportWebchatWidget({
 
   // Realtime is the fast path; token-bound polling recovers missed replies.
   useEffect(() => {
-    if (!isOpen || !withAgent || !sessionId || !sessionToken) return;
+    if (!withAgent || !sessionId || !sessionToken) return;
     let cancelled = false;
     let pending = false;
     const load = async () => {
-      if (pending || document.visibilityState === "hidden") return;
+      if (pending) return;
       pending = true;
       try {
         const response = await api.post(
@@ -702,7 +720,7 @@ export function SupportWebchatWidget({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [isOpen, withAgent, sessionId, sessionToken, botSlug]);
+  }, [withAgent, sessionId, sessionToken, botSlug]);
 
   const requestHuman = () => {
     if (escalating || !sessionId || !sessionToken) return;
@@ -901,7 +919,9 @@ export function SupportWebchatWidget({
     setSessionToken("");
     setStreamToken(null);
     setWithAgent(false);
+    receivedIds.current.clear();
     setMessages([]);
+    setUnread(0);
     setUnavailable(false);
     try {
       localStorage.removeItem(sessionStorageKey);
@@ -1073,6 +1093,15 @@ export function SupportWebchatWidget({
           </div>
         </div>
         <div className="relative flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={messageSound.toggle}
+            title={messageSound.enabled ? "Mute message sounds" : "Enable message sounds"}
+            aria-label={messageSound.enabled ? "Mute message sounds" : "Enable message sounds"}
+            className="flex h-11 w-11 items-center justify-center rounded-lg transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+          >
+            {messageSound.enabled ? <Volume2 className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
+          </button>
           <button
             type="button"
             onClick={reset}

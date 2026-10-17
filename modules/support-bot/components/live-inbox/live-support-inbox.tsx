@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Headphones,
   User,
@@ -35,16 +36,23 @@ interface Props {
 }
 
 export function LiveSupportInbox({ bot }: Props) {
+  const requestedConversation = Number(useSearchParams().get("conversation")) || null;
   const [conversations, setConversations] = React.useState<
     SupportBotConversation[]
   >([]);
   const [selectedConvId, setSelectedConvId] = React.useState<number | null>(
-    null,
+    requestedConversation,
   );
   const [activeConv, setActiveConv] =
     React.useState<SupportBotConversation | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [statusFilter, setStatusFilter] = React.useState<string>("escalated");
+  const [statusFilter, setStatusFilter] = React.useState<string>(requestedConversation ? "all" : "escalated");
+  React.useEffect(() => {
+    if (requestedConversation) {
+      setSelectedConvId(requestedConversation);
+      setStatusFilter("all");
+    }
+  }, [requestedConversation]);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [replyText, setReplyText] = React.useState("");
   const [visitorTyping, setVisitorTyping] = React.useState(false);
@@ -54,24 +62,6 @@ export function LiveSupportInbox({ bot }: Props) {
 
   const typingTimerRef = React.useRef<number | null>(null);
   const typingSentAtRef = React.useRef(0);
-
-  /**
-   * A desktop notification, only if the agent has already granted permission.
-   * Never prompts: an inbox that demands notification access the first time a
-   * visitor appears is one agents turn off.
-   */
-  const notifyAgent = (title: string, body?: string) => {
-    try {
-      if (
-        typeof Notification !== "undefined" &&
-        Notification.permission === "granted"
-      ) {
-        new Notification(title, { body, tag: "support-bot-inbox" });
-      }
-    } catch {
-      // The toast already carried the message.
-    }
-  };
 
   /** Lets the visitor see that a person is composing. Throttled. */
   const pingTyping = (conversationId: number) => {
@@ -100,7 +90,7 @@ export function LiveSupportInbox({ bot }: Props) {
         setConversations(list);
 
         setSelectedConvId((current) =>
-          list.some((item: SupportBotConversation) => item.id === current)
+          current === requestedConversation || list.some((item: SupportBotConversation) => item.id === current)
             ? current
             : (list[0]?.id ?? null),
         );
@@ -111,7 +101,7 @@ export function LiveSupportInbox({ bot }: Props) {
         if (!quiet) setLoading(false);
       }
     },
-    [bot.id, statusFilter],
+    [bot.id, statusFilter, requestedConversation],
   );
 
   React.useEffect(() => {
@@ -209,35 +199,19 @@ export function LiveSupportInbox({ bot }: Props) {
       }) => {
         loadConversations();
 
-        // Someone is waiting *now*. Naming them turns a generic ping into
-        // something an agent can act on without opening anything first.
-        const who = event.visitor_name || event.visitor_email || "A visitor";
 
-        toast.info(`${who} would like to talk to a person`, {
-          description: event.visitor_email ?? "Waiting in the support queue",
-          duration: 10000,
-          action: {
-            label: "Open",
-            onClick: () => setSelectedConvId(event.conversation_id),
-          },
-        });
-
-        void notifyAgent(
-          `${who} wants to talk to a person`,
-          event.visitor_email ?? undefined,
-        );
       },
     );
 
     channel.listen(
       ".support-bot.message",
-      (event: { conversation_id: number }) => {
+      (event: { conversation_id: number; sender_type?: string }) => {
         void refreshOpenConversation(event.conversation_id);
         loadConversations();
 
         // Anything arriving in a conversation the agent is not currently reading
         // is unread until they open it.
-        if (selectedConvIdRef.current !== event.conversation_id) {
+        if (event.sender_type === "visitor" && selectedConvIdRef.current !== event.conversation_id) {
           setUnreadByConversation((current) => ({
             ...current,
             [event.conversation_id]: (current[event.conversation_id] ?? 0) + 1,
@@ -264,7 +238,9 @@ export function LiveSupportInbox({ bot }: Props) {
     );
 
     return () => {
-      echo?.leave(channelName);
+      channel.stopListening(".support-bot.escalated");
+      channel.stopListening(".support-bot.message");
+      channel.stopListening(".support-bot.typing");
     };
   }, [bot.id]);
 

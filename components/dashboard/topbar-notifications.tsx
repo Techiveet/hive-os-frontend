@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,9 +14,12 @@ import {
   AlertCircle,
   ClipboardCheck,
   Database,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import { useMessageSound } from "@/hooks/use-message-sound";
 import { cn } from "@/lib/utils";
 import { getAccessToken } from "@/lib/runtime-context";
 import { getUserNotificationChannelNames, initEcho } from "@/lib/echo";
@@ -100,6 +103,7 @@ function normalizeIncomingNotification(
 
 function categoryIcon(category: string) {
   switch (category) {
+    case "support_chat":
     case "chat":
       return MessageSquare;
     case "mail":
@@ -117,6 +121,7 @@ function categoryIcon(category: string) {
 
 function categoryTone(category: string) {
   switch (category) {
+    case "support_chat":
     case "chat":
       return "bg-blue-50 border-blue-100 text-blue-600";
     case "mail":
@@ -142,6 +147,9 @@ export function TopbarNotificationsIcon({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
+  const messageSound = useMessageSound(`staff:${activeUser?.id ?? "guest"}`);
+  const observed = useRef<Set<string> | null>(null);
+  useEffect(() => { observed.current = null; }, [activeUser?.id]);
 
   const {
     data: notificationCenter,
@@ -162,6 +170,19 @@ export function TopbarNotificationsIcon({
     (item) => !item.read_at,
   );
   const pathname = usePathname();
+  useEffect(() => {
+    if (!isFetched) return;
+    const items = notificationCenter?.data?.notifications ?? [];
+    if (observed.current === null) {
+      observed.current = new Set(items.map((item) => item.id));
+      return;
+    }
+    for (const item of items) {
+      if (observed.current.has(item.id)) continue;
+      observed.current.add(item.id);
+      if (item.category === "support_chat" && !item.read_at) messageSound.play(item.id);
+    }
+  }, [isFetched, notificationCenter, messageSound.play]);
 
   useEffect(() => {
     if (!activeUser?.id) return;
@@ -188,6 +209,7 @@ export function TopbarNotificationsIcon({
           return;
         }
         seenNotificationIds.add(incoming.id);
+        if (incoming.category === "support_chat") messageSound.play(incoming.id);
 
         // Only patch the cache after the first server fetch so login badge stays accurate.
         queryClient.setQueryData<NotificationCenterResponse | undefined>(
@@ -270,7 +292,7 @@ export function TopbarNotificationsIcon({
     } catch (error) {
       console.log("Echo notification initialization failed", error);
     }
-  }, [activeUser?.id, queryClient, pathname, router]);
+  }, [activeUser?.id, queryClient, pathname, router, messageSound.play]);
 
   const applyReadState = (unread_count: number, removedIds: string[]) => {
     queryClient.setQueryData<NotificationCenterResponse | undefined>(
@@ -317,7 +339,9 @@ export function TopbarNotificationsIcon({
     setIsOpen(false);
     // Navigate first; detail page also marks read. Still remove from panel immediately.
     void markAsRead(notification.id);
-    router.push(notificationDetailPath(notification.id));
+    router.push(notification.category === "support_chat" && notification.url
+      ? notification.url
+      : notificationDetailPath(notification.id));
   };
 
   const badgeCount = isFetched ? unreadCount : null;
@@ -328,9 +352,10 @@ export function TopbarNotificationsIcon({
         <Button
           id="tour-topbar-notifications"
           variant="ghost"
-          className="relative h-10 w-10 rounded-xl p-0 shrink-0 text-muted-foreground hover:text-foreground"
+          aria-label={`Notifications, ${unreadCount} unread`}
+          className="relative h-11 w-11 rounded-xl p-0 shrink-0 text-muted-foreground hover:text-foreground"
         >
-          <Bell className="h-5 w-5" />
+          <Bell className="h-5 w-5" aria-hidden="true" />
           {badgeCount !== null ? (
             <span
               className={`absolute -top-1 -right-1 flex min-w-[18px] h-[18px] items-center justify-center rounded-full px-1 text-[11px] font-black text-white shadow-sm transition-colors ${
@@ -372,6 +397,18 @@ export function TopbarNotificationsIcon({
           </div>
         </div>
 
+        <div className="flex items-center justify-between gap-2 border-b px-4 py-1">
+          <span className="text-xs text-muted-foreground">Support message sounds</span>
+          <button
+            type="button"
+            onClick={messageSound.toggle}
+            aria-label={messageSound.enabled ? "Mute support message sounds" : "Enable support message sounds"}
+            title={messageSound.enabled ? "Mute support message sounds" : "Enable support message sounds"}
+            className="flex h-11 w-11 items-center justify-center rounded-md bg-white text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:outline-sky-300"
+          >
+            {messageSound.enabled ? <Volume2 className="h-5 w-5" aria-hidden="true" /> : <VolumeX className="h-5 w-5" aria-hidden="true" />}
+          </button>
+        </div>
         <div className="flex max-h-[360px] flex-col overflow-y-auto">
           {isLoading ? (
             <div className="flex justify-center items-center py-8 text-muted-foreground">
