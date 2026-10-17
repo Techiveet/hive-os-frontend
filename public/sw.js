@@ -33,6 +33,12 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // Public chat must use its own live page, never the ERP's cached sign-in
+  // fallback. The cached shell can carry a same-origin framing policy.
+  if (url.pathname === "/embed/support-bot" || url.pathname.startsWith("/embed/support-bot/")) {
+    return;
+  }
+
   // 1. Skip non-GET requests (handled by Axios/Fetch mutation queue)
   if (request.method !== "GET") {
     return;
