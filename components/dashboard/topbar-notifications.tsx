@@ -149,7 +149,11 @@ export function TopbarNotificationsIcon({
   const [isOpen, setIsOpen] = useState(false);
   const messageSound = useMessageSound(`staff:${activeUser?.id ?? "guest"}`);
   const observed = useRef<Set<string> | null>(null);
-  useEffect(() => { observed.current = null; }, [activeUser?.id]);
+  const listeningSince = useRef(Date.now());
+  useEffect(() => {
+    observed.current = null;
+    listeningSince.current = Date.now();
+  }, [activeUser?.id]);
 
   const {
     data: notificationCenter,
@@ -180,7 +184,8 @@ export function TopbarNotificationsIcon({
     for (const item of items) {
       if (observed.current.has(item.id)) continue;
       observed.current.add(item.id);
-      if (item.category === "support_chat" && !item.read_at) messageSound.play(item.id);
+      if (item.category === "support_chat" && !item.read_at &&
+          Date.parse(item.created_at ?? "") >= listeningSince.current) messageSound.play(item.id);
     }
   }, [isFetched, notificationCenter, messageSound.play]);
 
