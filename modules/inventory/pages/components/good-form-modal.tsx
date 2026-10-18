@@ -117,6 +117,7 @@ type FormState = {
   max_stock_capacity: string;
   track_batches: boolean;
   track_expiry: boolean;
+  track_serials: boolean;
   shelf_life_days: string;
   expiry_alert_days: string;
   msds_sheet_path: string;
@@ -162,6 +163,7 @@ const DEFAULT_FORM: FormState = {
   max_stock_capacity: "",
   track_batches: true,
   track_expiry: false,
+  track_serials: false,
   shelf_life_days: "",
   expiry_alert_days: "30",
   msds_sheet_path: "",
@@ -203,6 +205,19 @@ export function GoodFormModal({ open, mode, goodId, onClose, onSaved }: Props) {
   const [form, setForm] = React.useState<FormState>(DEFAULT_FORM);
   const [assetPickerTarget, setAssetPickerTarget] = React.useState<"image" | "model" | "msds" | null>(null);
   const [isFileManagerOpen, setIsFileManagerOpen] = React.useState(false);
+  // Timestamp of the last picker close. Radix fires a focus/pointer "outside" event
+  // on the main dialog right after the picker closes (when state is already false),
+  // so we keep guarding for a short window afterwards.
+  const pickerClosedAtRef = React.useRef(0);
+
+  const isPickerActive = () =>
+    isFileManagerOpen || Date.now() - pickerClosedAtRef.current < 500;
+
+  const closePicker = () => {
+    pickerClosedAtRef.current = Date.now();
+    setIsFileManagerOpen(false);
+    setAssetPickerTarget(null);
+  };
 
   // Fetch Options
   const { data: options } = useQuery({
@@ -264,6 +279,7 @@ export function GoodFormModal({ open, mode, goodId, onClose, onSaved }: Props) {
         max_stock_capacity: g.max_stock_capacity ? String(g.max_stock_capacity) : "",
         track_batches: Boolean(g.track_batches),
         track_expiry: Boolean(g.track_expiry),
+        track_serials: Boolean(g.track_serials),
         shelf_life_days: g.shelf_life_days ? String(g.shelf_life_days) : "",
         expiry_alert_days: g.expiry_alert_days ? String(g.expiry_alert_days) : "30",
         msds_sheet_path: g.msds_sheet_path || "",
@@ -343,6 +359,7 @@ export function GoodFormModal({ open, mode, goodId, onClose, onSaved }: Props) {
         max_stock_capacity: state.max_stock_capacity ? Number(state.max_stock_capacity) : null,
         track_batches: state.track_batches,
         track_expiry: state.track_expiry,
+        track_serials: state.track_serials,
         shelf_life_days: state.shelf_life_days ? Number(state.shelf_life_days) : null,
         expiry_alert_days: state.expiry_alert_days ? Number(state.expiry_alert_days) : 30,
         msds_file_path: state.msds_sheet_path || null,
@@ -425,10 +442,27 @@ export function GoodFormModal({ open, mode, goodId, onClose, onSaved }: Props) {
     return options.locations.filter((loc: { warehouse_id?: number | null }) => loc.warehouse_id === whId);
   }, [options?.locations, form.primary_warehouse_id]);
 
+  // FIX: don't close the main dialog while the file manager picker is open
+  const handleDialogOpenChange = (isOpen: boolean) => {
+    if (!isOpen && !isPickerActive()) {
+      onClose();
+    }
+  };
+
   return (
     <>
-      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-        <DialogContent className="flex h-[92vh] max-h-[92vh] flex-col overflow-hidden rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl sm:max-w-[1050px]">
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+        <DialogContent
+          // Never close the form from outside clicks/focus changes (dropdowns, popovers,
+          // the nested file picker all trigger these). Close via X, Cancel or Escape.
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => {
+            if (isPickerActive()) e.preventDefault();
+          }}
+          className="flex h-[92vh] max-h-[92vh] flex-col overflow-hidden rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl sm:max-w-[1050px]"
+        >
           {/* Header */}
           <div className="border-b border-border/40 px-6 py-4 bg-muted/10">
             <DialogHeader>
@@ -1160,7 +1194,7 @@ export function GoodFormModal({ open, mode, goodId, onClose, onSaved }: Props) {
                     <div className="flex items-center gap-2 pb-2 border-b border-border/30">
                       <Calendar className="h-4 w-4 text-primary" />
                       <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
-                        Batch, Lot & Expiry Compliance
+                        Batch, Lot, Expiry & Serial Tracking
                       </h4>
                     </div>
 
@@ -1193,6 +1227,23 @@ export function GoodFormModal({ open, mode, goodId, onClose, onSaved }: Props) {
                           </Label>
                           <p className="text-[11px] text-muted-foreground">
                             Enables FIFO/FEFO picking and expiration alert notifications.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start space-x-3 rounded-xl border border-border/40 p-3.5 bg-background/40 md:col-span-2">
+                        <Switch
+                          checked={form.track_serials}
+                          onCheckedChange={(val) => setForm((prev) => ({ ...prev, track_serials: val }))}
+                          id="track_serials"
+                        />
+                        <div className="space-y-0.5">
+                          <Label htmlFor="track_serials" className="text-xs font-bold cursor-pointer">
+                            Track Serial Numbers
+                          </Label>
+                          <p className="text-[11px] text-muted-foreground">
+                            Requires one unique serial per unit on goods receipt. Units then appear under
+                            Inventory → Serial Numbers.
                           </p>
                         </div>
                       </div>
@@ -1386,34 +1437,45 @@ export function GoodFormModal({ open, mode, goodId, onClose, onSaved }: Props) {
               </Button>
             </div>
           </div>
+          {/* Asset Library File Manager (nested so Radix treats it as a child layer) */}
+          <Dialog
+            open={isFileManagerOpen}
+            onOpenChange={(o) => {
+              if (o) {
+                setIsFileManagerOpen(true);
+              } else {
+                closePicker();
+              }
+            }}
+          >
+            <DialogContent
+              onInteractOutside={(e) => e.stopPropagation()}
+              className="flex h-[85vh] max-h-[90vh] w-[min(96vw,72rem)] max-w-[72rem] flex-col overflow-hidden rounded-[2rem] p-0"
+            >
+              <div className="shrink-0 border-b px-4 py-3 flex justify-between items-center">
+                <DialogTitle className="text-sm font-bold">Select Media / Asset</DialogTitle>
+              </div>
+              <div className="min-h-0 flex-1 overflow-hidden p-3">
+                <FileManagerClient
+                  isPickerMode={true}
+                  onFileSelect={(file: any) => {
+                    const path = file?.relative_path || file?.path || file?.url || "";
+                    if (assetPickerTarget === "image") {
+                      setForm((prev) => ({ ...prev, image: path }));
+                    } else if (assetPickerTarget === "model") {
+                      setForm((prev) => ({ ...prev, model_3d_path: path }));
+                    } else if (assetPickerTarget === "msds") {
+                      setForm((prev) => ({ ...prev, msds_sheet_path: path }));
+                    }
+                    closePicker();
+                  }}
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
         </DialogContent>
       </Dialog>
 
-      {/* Asset Library File Manager */}
-      <Dialog open={isFileManagerOpen} onOpenChange={setIsFileManagerOpen}>
-        <DialogContent className="max-w-5xl h-[85vh] p-0 overflow-hidden rounded-[2rem]">
-          <div className="p-4 border-b flex justify-between items-center">
-            <DialogTitle className="text-sm font-bold">Select Media / Asset</DialogTitle>
-          </div>
-          <div className="flex-1 h-full overflow-hidden p-2">
-            <FileManagerClient
-              isPickerMode={true}
-              onFileSelect={(file: any) => {
-                const path = file?.relative_path || file?.path || file?.url || "";
-                if (assetPickerTarget === "image") {
-                  setForm((prev) => ({ ...prev, image: path }));
-                } else if (assetPickerTarget === "model") {
-                  setForm((prev) => ({ ...prev, model_3d_path: path }));
-                } else if (assetPickerTarget === "msds") {
-                  setForm((prev) => ({ ...prev, msds_sheet_path: path }));
-                }
-                setIsFileManagerOpen(false);
-                setAssetPickerTarget(null);
-              }}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

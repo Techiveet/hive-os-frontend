@@ -19,6 +19,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -136,6 +146,11 @@ export default function SuccessionPage() {
   });
   const [aspirationOpen, setAspirationOpen] = React.useState(false);
   const [aspirationForm, setAspirationForm] = React.useState<AspirationForm>(DEFAULT_ASPIRATION);
+
+  const [roleToDelete, setRoleToDelete] = React.useState<CriticalRole | null>(null);
+  const [deleteRoleOpen, setDeleteRoleOpen] = React.useState(false);
+  const [candidateToDelete, setCandidateToDelete] = React.useState<SuccessionCandidate | null>(null);
+  const [deleteCandidateOpen, setDeleteCandidateOpen] = React.useState(false);
 
   const [gapEmployee, setGapEmployee] = React.useState("");
   const [gapPosition, setGapPosition] = React.useState("");
@@ -577,16 +592,8 @@ export default function SuccessionPage() {
                       className="text-destructive"
                       disabled={deleteRole.isPending}
                       onClick={() => {
-                        if (
-                          window.confirm(
-                            t(
-                              "hr_talent.succession.confirm_delete_role",
-                              "Remove this critical role and its nominees?",
-                            ),
-                          )
-                        ) {
-                          deleteRole.mutate(role.id);
-                        }
+                        setRoleToDelete(role);
+                        setDeleteRoleOpen(true);
                       }}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -631,16 +638,8 @@ export default function SuccessionPage() {
                                   className="text-destructive"
                                   disabled={deleteCandidate.isPending}
                                   onClick={() => {
-                                    if (
-                                      window.confirm(
-                                        t(
-                                          "hr_talent.succession.confirm_withdraw",
-                                          "Withdraw this successor?",
-                                        ),
-                                      )
-                                    ) {
-                                      deleteCandidate.mutate(candidate.id);
-                                    }
+                                    setCandidateToDelete(candidate);
+                                    setDeleteCandidateOpen(true);
                                   }}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
@@ -1278,6 +1277,100 @@ export default function SuccessionPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={deleteRoleOpen}
+        onOpenChange={(open) => {
+          setDeleteRoleOpen(open);
+          if (!open) setRoleToDelete(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("hr_talent.succession.delete_role_title", "Remove critical role?")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {roleToDelete
+                ? t(
+                    "hr_talent.succession.confirm_delete_role_named",
+                    "Remove “{name}” and its nominees?",
+                  ).replace(
+                    "{name}",
+                    roleToDelete.position?.title ?? `Position #${roleToDelete.position_id}`,
+                  )
+                : t(
+                    "hr_talent.succession.confirm_delete_role",
+                    "Remove this critical role and its nominees?",
+                  )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">
+              {t("hr_talent.common.cancel", "Cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteRole.isPending}
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (roleToDelete) {
+                  deleteRole.mutate(roleToDelete.id);
+                  setDeleteRoleOpen(false);
+                  setRoleToDelete(null);
+                }
+              }}
+            >
+              {t("hr_talent.common.remove", "Remove")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={deleteCandidateOpen}
+        onOpenChange={(open) => {
+          setDeleteCandidateOpen(open);
+          if (!open) setCandidateToDelete(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("hr_talent.succession.withdraw_title", "Withdraw successor?")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {candidateToDelete
+                ? t(
+                    "hr_talent.succession.confirm_withdraw_named",
+                    "Withdraw “{name}” from this succession plan?",
+                  ).replace(
+                    "{name}",
+                    candidateToDelete.employee?.primary_name ??
+                      `#${candidateToDelete.employee_id}`,
+                  )
+                : t("hr_talent.succession.confirm_withdraw", "Withdraw this successor?")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">
+              {t("hr_talent.common.cancel", "Cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteCandidate.isPending}
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (candidateToDelete) {
+                  deleteCandidate.mutate(candidateToDelete.id);
+                  setDeleteCandidateOpen(false);
+                  setCandidateToDelete(null);
+                }
+              }}
+            >
+              {t("hr_talent.common.remove", "Remove")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

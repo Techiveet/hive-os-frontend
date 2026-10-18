@@ -81,8 +81,11 @@ export type EligibleIdentityEmployee = {
   id: number;
   employee_number: string;
   primary_name: string;
+  preferred_name: string | null;
   work_email: string | null;
+  phone: string | null;
   profile_photo_path: string | null;
+  user_id?: number | null;
   employment_status: string;
   organization_unit: string | null;
   position: string | null;
@@ -192,9 +195,22 @@ export function renewIdentityCard(
 }
 
 export function verifyIdentityCard(
-  publicId: string,
+  identifier: string,
 ): Promise<{ data: IdentityCardVerification }> {
-  return hrFetch(`/identity-cards/verify/${encodeURIComponent(publicId)}`);
+  const trimmed = identifier.trim();
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      trimmed,
+    );
+
+  // UUIDs stay on the path (QR links). Card numbers use a query param so hyphens
+  // cannot be captured by the `{identityCard}` show route.
+  if (isUuid) {
+    return hrFetch(`/identity-cards/verify/${encodeURIComponent(trimmed)}`);
+  }
+
+  const query = new URLSearchParams({ q: trimmed });
+  return hrFetch(`/identity-cards/verify?${query.toString()}`);
 }
 
 export function fetchIdentityCardTemplates(): Promise<{

@@ -11,6 +11,7 @@ import {
   Loader2,
   Plus,
   XCircle,
+  XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/store/use-translation";
@@ -19,12 +20,13 @@ import { DataTable, type DataTableQuery } from "@/components/datatable/data-tabl
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -309,11 +311,11 @@ export default function InventoryDocumentsPage() {
           const actions = waiting ? [] : availableActions(doc.type, doc.status);
 
           return (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-nowrap items-center justify-start gap-2 whitespace-nowrap">
               <Button
                 size="sm"
                 variant="outline"
-                className="rounded-full"
+                className="shrink-0 rounded-full"
                 onClick={() => setSelectedId(doc.id)}
               >
                 <Eye className="mr-1 h-3.5 w-3.5" />
@@ -321,7 +323,7 @@ export default function InventoryDocumentsPage() {
               </Button>
 
               {waiting ? (
-                <span className="inline-flex items-center rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-sm font-medium text-amber-700">
+                <span className="inline-flex shrink-0 items-center rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-sm font-medium text-amber-700">
                   <Clock className="mr-1 h-3.5 w-3.5" />
                   {t("inventory.docs.waiting_approval", "Waiting for approval")}
                 </span>
@@ -331,7 +333,7 @@ export default function InventoryDocumentsPage() {
                     key={entry.action}
                     size="sm"
                     variant={entry.variant}
-                    className="rounded-full"
+                    className="shrink-0 rounded-full"
                     disabled={actionMutation.isPending}
                     onClick={() =>
                       setConfirmAction({ id: doc.id, action: entry.action, label: entry.label })
@@ -347,13 +349,15 @@ export default function InventoryDocumentsPage() {
                 ))
               )}
 
-              <WorkflowTrigger
-                type="Modules\\Inventory\\Models\\InventoryDocument"
-                id={Number(doc.id)}
-                name={`${doc.document_number} - ${doc.title || doc.type}`}
-                onSuccess={() => queryClient.invalidateQueries({ queryKey: ["inventory", "documents"] })}
-                showStatusBadge={false}
-              />
+              <div className="shrink-0">
+                <WorkflowTrigger
+                  type="Modules\\Inventory\\Models\\InventoryDocument"
+                  id={Number(doc.id)}
+                  name={`${doc.document_number} - ${doc.title || doc.type}`}
+                  onSuccess={() => queryClient.invalidateQueries({ queryKey: ["inventory", "documents"] })}
+                  showStatusBadge={false}
+                />
+              </div>
             </div>
           );
         },
@@ -406,126 +410,224 @@ export default function InventoryDocumentsPage() {
 
       <InventoryDocumentFormModal open={modalOpen} onClose={() => setModalOpen(false)} />
 
-      <Sheet open={selectedId != null} onOpenChange={(open) => !open && setSelectedId(null)}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl ml-4">
-          <SheetHeader className="ml-4">
-            <SheetTitle>
-              {detail?.document_number || t("inventory.docs.detail_title", "Document details")}
-            </SheetTitle>
-            <SheetDescription>
+      <Dialog open={selectedId != null} onOpenChange={(open) => !open && setSelectedId(null)}>
+        <DialogContent
+          showCloseButton={false}
+          className="max-h-[92vh] w-[95vw] max-w-4xl sm:max-w-4xl overflow-y-auto rounded-[2.5rem] border border-border/50 bg-background/95 p-0 shadow-2xl backdrop-blur-3xl !outline-none"
+        >
+          <DialogClose className="ring-offset-background focus:ring-ring absolute top-4 right-4 z-30 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4">
+            <XIcon />
+            <span className="sr-only">{t("inventory.common.close", "Close")}</span>
+          </DialogClose>
+
+          <DialogHeader className="sticky top-0 z-20 border-b border-border/40 bg-background/70 px-8 py-6 pr-14 backdrop-blur-2xl">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <DialogTitle className="flex items-center gap-4 text-left">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/30 to-primary/5 shadow-lg">
+                  <ClipboardList className="h-7 w-7 text-primary" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-2xl font-black tracking-tight">
+                    {detail?.document_number || t("inventory.docs.detail_title", "Document details")}
+                  </div>
+                  {detail ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className="border-primary/30 bg-primary/5 px-2 py-0.5 text-[11px] font-black uppercase tracking-widest"
+                      >
+                        {formatTypeLabel(detail.type)}
+                      </Badge>
+                      <Badge
+                        variant={
+                          detail.status === "approved" ||
+                          detail.status === "completed" ||
+                          detail.status === "fulfilled"
+                            ? "default"
+                            : detail.status === "rejected" || detail.status === "cancelled"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                        className="rounded-full px-3 font-bold capitalize"
+                      >
+                        {detail.status}
+                      </Badge>
+                    </div>
+                  ) : null}
+                </div>
+              </DialogTitle>
+
+              {detail ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  {detailWaiting ? (
+                    <span className="inline-flex items-center rounded-full border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-700">
+                      <Clock className="mr-1.5 h-4 w-4" />
+                      {t("inventory.docs.waiting_approval", "Waiting for approval")}
+                    </span>
+                  ) : (
+                    detailActions.map((entry) => (
+                      <Button
+                        key={entry.action}
+                        variant={entry.variant}
+                        className="h-11 rounded-2xl px-5 font-bold shadow-lg transition-all hover:scale-105 active:scale-95"
+                        disabled={actionMutation.isPending}
+                        onClick={() =>
+                          setConfirmAction({
+                            id: detail.id,
+                            action: entry.action,
+                            label: entry.label,
+                          })
+                        }
+                      >
+                        {entry.action === "approve" ? (
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                        ) : entry.action === "reject" || entry.action === "cancel" ? (
+                          <XCircle className="mr-2 h-4 w-4" />
+                        ) : null}
+                        {entry.label}
+                      </Button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
+            <DialogDescription className="sr-only">
               {detail
                 ? `${formatTypeLabel(detail.type)} · ${detail.status}`
                 : t("inventory.docs.loading", "Loading document...")}
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
 
           {detailQuery.isLoading ? (
-            <div className="flex h-40 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <div className="flex min-h-[320px] items-center justify-center">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-10 w-10 animate-spin text-primary/40" />
+                <p className="animate-pulse text-sm font-medium text-muted-foreground">
+                  {t("inventory.docs.loading", "Loading document...")}
+                </p>
+              </div>
             </div>
           ) : detail ? (
-            <div className="mt-6 space-y-6 ml-2 mr-2">
-              <div className="grid gap-3 rounded-2xl border border-border/40 bg-muted/20 p-4 text-sm">
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">Title</span>
-                  <span className="font-medium text-right">{detail.title || "-"}</span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">Type</span>
-                  <span className="font-medium capitalize">{formatTypeLabel(detail.type)}</span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">Status</span>
-                  <span className="font-medium capitalize">{detail.status}</span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">Created</span>
-                  <span className="font-medium">
-                    {new Date(detail.created_at).toLocaleString()}
-                  </span>
-                </div>
-                {STATUS_HELP[detail.status] ? (
-                  <p className="border-t border-border/30 pt-3 text-xs text-muted-foreground">
-                    {STATUS_HELP[detail.status]}
-                  </p>
-                ) : null}
-                {detail.notes ? (
-                  <div className="border-t border-border/30 pt-3">
-                    <p className="mb-1 text-muted-foreground">Notes</p>
-                    <p className="whitespace-pre-wrap">{detail.notes}</p>
-                  </div>
-                ) : null}
-              </div>
-
-              <div>
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                  Line items
-                </h3>
-                <div className="space-y-2">
-                  {(detail.items ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No line items.</p>
-                  ) : (
-                    (detail.items ?? []).map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-xl border border-border/40 bg-background/60 p-3 text-sm"
-                      >
-                        <div className="font-semibold">
-                          {item.inventory_item?.name || item.description || `Item #${item.id}`}
-                        </div>
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          {item.inventory_item?.sku ? <span>SKU: {item.inventory_item.sku}</span> : null}
-                          <span>
-                            Qty: {item.quantity} {item.unit || ""}
-                          </span>
-                          {item.unit_price != null ? <span>Unit: {item.unit_price}</span> : null}
-                          {item.total_price != null ? <span>Total: {item.total_price}</span> : null}
-                        </div>
+            <div className="p-8">
+              <div className="grid grid-cols-12 gap-8">
+                {/* Left: document info */}
+                <div className="col-span-12 space-y-4 lg:col-span-5">
+                  <div className="rounded-[2rem] border border-border/50 bg-card/50 p-6 shadow-xl backdrop-blur-sm">
+                    <div className="mb-4 flex items-center gap-3">
+                      <div className="rounded-xl bg-primary/10 p-2 text-primary">
+                        <ClipboardList className="h-4 w-4" />
                       </div>
-                    ))
-                  )}
+                      <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground/80">
+                        {t("inventory.docs.info", "Document Info")}
+                      </h3>
+                    </div>
+                    <div className="space-y-3 text-sm">
+                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/40 bg-muted/20 p-3">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                          {t("inventory.docs.col_title", "Title")}
+                        </span>
+                        <span className="text-right font-medium">{detail.title || "-"}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/40 bg-muted/20 p-3">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                          {t("inventory.docs.col_type", "Type")}
+                        </span>
+                        <span className="font-medium capitalize">{formatTypeLabel(detail.type)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/40 bg-muted/20 p-3">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                          {t("inventory.common.status", "Status")}
+                        </span>
+                        <span className="font-medium capitalize">{detail.status}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/40 bg-muted/20 p-3">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                          {t("inventory.docs.created", "Created")}
+                        </span>
+                        <span className="font-medium">
+                          {new Date(detail.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    {STATUS_HELP[detail.status] ? (
+                      <p className="mt-4 border-t border-border/30 pt-3 text-xs text-muted-foreground">
+                        {STATUS_HELP[detail.status]}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {detail.notes ? (
+                    <div className="rounded-[2rem] border border-border/50 bg-card/50 p-6 shadow-xl backdrop-blur-sm">
+                      <h3 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground/80">
+                        {t("inventory.docs.notes", "Notes")}
+                      </h3>
+                      <p className="whitespace-pre-wrap text-sm">{detail.notes}</p>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Right: line items */}
+                <div className="col-span-12 lg:col-span-7">
+                  <div className="rounded-[2rem] border border-border/50 bg-card/50 p-6 shadow-xl backdrop-blur-sm">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground/80">
+                        {t("inventory.docs.line_items", "Line items")}
+                      </h3>
+                      <Badge variant="secondary" className="rounded-full px-3">
+                        {(detail.items ?? []).length}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {(detail.items ?? []).length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          {t("inventory.docs.no_items", "No line items.")}
+                        </p>
+                      ) : (
+                        (detail.items ?? []).map((item) => (
+                          <div
+                            key={item.id}
+                            className="rounded-2xl border border-border/40 bg-background/60 p-4 text-sm transition-colors hover:border-primary/20"
+                          >
+                            <div className="font-semibold">
+                              {item.inventory_item?.name || item.description || `Item #${item.id}`}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                              {item.inventory_item?.sku ? (
+                                <span>SKU: {item.inventory_item.sku}</span>
+                              ) : null}
+                              <span>
+                                Qty: {item.quantity} {item.unit || ""}
+                              </span>
+                              {item.unit_price != null ? <span>Unit: {item.unit_price}</span> : null}
+                              {item.total_price != null ? <span>Total: {item.total_price}</span> : null}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {detailWaiting ? (
-                <div className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-700">
+                <div className="mt-8 flex items-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-700">
                   <Clock className="h-4 w-4" />
                   {t(
                     "inventory.docs.waiting_approval_detail",
                     "Waiting for approval — document actions are locked until this is approved or rejected."
                   )}
                 </div>
-              ) : detailActions.length > 0 ? (
-                <div className="flex flex-wrap gap-2 border-t border-border/30 pt-4">
-                  {detailActions.map((entry) => (
-                    <Button
-                      key={entry.action}
-                      variant={entry.variant}
-                      className="rounded-full"
-                      disabled={actionMutation.isPending}
-                      onClick={() =>
-                        setConfirmAction({
-                          id: detail.id,
-                          action: entry.action,
-                          label: entry.label,
-                        })
-                      }
-                    >
-                      {entry.label}
-                    </Button>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
+              ) : detailActions.length === 0 ? (
+                <p className="mt-8 text-sm text-muted-foreground">
                   No further document actions for status “{detail.status}”.
                 </p>
-              )}
+              ) : null}
             </div>
           ) : (
-            <p className="mt-6 text-sm text-muted-foreground">Document not found.</p>
+            <p className="p-8 text-sm text-muted-foreground">Document not found.</p>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
         <AlertDialogContent className="rounded-[2rem]">

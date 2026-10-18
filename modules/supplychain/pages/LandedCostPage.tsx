@@ -18,6 +18,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -184,6 +194,9 @@ export default function LandedCostPage() {
   const [allocatingId, setAllocatingId] = React.useState<number | null>(null);
   const [postingId, setPostingId] = React.useState<number | null>(null);
 
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
+  const [deleteId, setDeleteId] = React.useState<number | null>(null);
+
   const pickerOpenRef = React.useRef(false);
   const pickerCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [openPickerCount, setOpenPickerCount] = React.useState(0);
@@ -311,6 +324,8 @@ export default function LandedCostPage() {
     onSuccess: () => {
       toast.success(t("supply_chain.landed.deleted", "Consignment deleted."));
       invalidate();
+      setDeleteConfirmOpen(false);
+      setDeleteId(null);
     },
     onError: (e: any) =>
       toast.error(e?.response?.data?.message || t("supply_chain.landed.delete_failed", "Could not delete.")),
@@ -552,9 +567,8 @@ export default function LandedCostPage() {
                   className="h-8 w-8 p-0 text-destructive"
                   disabled={deleteMutation.isPending}
                   onClick={() => {
-                    if (window.confirm(t("supply_chain.landed.delete_confirm", "Delete this consignment?"))) {
-                      deleteMutation.mutate(cost.id);
-                    }
+                    setDeleteId(cost.id);
+                    setDeleteConfirmOpen(true);
                   }}
                   aria-label={t("supply_chain.common.delete", "Delete")}
                 >
@@ -1207,6 +1221,40 @@ export default function LandedCostPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("supply_chain.landed.delete_title", "Delete Consignment")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                "supply_chain.landed.delete_desc",
+                "Are you sure you want to delete this consignment? This action cannot be undone.",
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">
+              {t("supply_chain.common.cancel", "Cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteId !== null) {
+                  deleteMutation.mutate(deleteId);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t("supply_chain.common.delete", "Delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

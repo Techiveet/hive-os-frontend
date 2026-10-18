@@ -128,6 +128,7 @@ export default function SalesTargetsPage() {
 
   const [deletingRuleId, setDeletingRuleId] = React.useState<number | null>(null);
   const [decidingId, setDecidingId] = React.useState<number | null>(null);
+  const [cancellingCommissionId, setCancellingCommissionId] = React.useState<number | null>(null);
 
   const pickerOpenRef = React.useRef(false);
   const pickerCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -325,6 +326,7 @@ export default function SalesTargetsPage() {
     },
     onSuccess: () => {
       toast.success(t("sales.targets.rule_deleted", "Rule removed."));
+      closeConfirm();
       invalidate();
     },
     onError: (error: any) => toast.error(errorText(error, t("sales.targets.rule_delete_failed", "Could not remove it."))),
@@ -338,11 +340,15 @@ export default function SalesTargetsPage() {
     },
     onSuccess: () => {
       toast.success(t("sales.targets.commission_updated", "Commission updated."));
+      closeConfirm();
       invalidate();
     },
     onError: (error: any) =>
       toast.error(errorText(error, t("sales.targets.decide_failed", "Could not update it."))),
-    onSettled: () => setDecidingId(null),
+    onSettled: () => {
+      setDecidingId(null);
+      setCancellingCommissionId(null);
+    },
   });
 
   const startEditTarget = React.useCallback((target: SalesTarget) => {
@@ -727,8 +733,12 @@ export default function SalesTargetsPage() {
                         className="text-destructive"
                         disabled={isDeleting}
                         onClick={() => {
-                          if (!window.confirm(t("sales.targets.rule_delete_confirm", "Remove this rule?"))) return;
-                          deleteRule.mutate(rule.id);
+                          requestConfirm({
+                            title: t("sales.targets.delete_title", "Delete Rule"),
+                            description: t("sales.targets.rule_delete_confirm", "Remove this rule?"),
+                            confirmLabel: t("sales.common.delete", "Delete"),
+                            onConfirm: () => deleteRule.mutate(rule.id),
+                          });
                         }}
                         aria-label={t("sales.common.delete", "Delete")}
                       >
@@ -810,6 +820,7 @@ export default function SalesTargetsPage() {
                 <tbody>
                   {commissions.map((commission) => {
                     const isDeciding = decidingId === commission.id;
+                    const isCancelling = cancellingCommissionId === commission.id;
                     return (
                       <tr key={commission.id} className="border-b border-border/40 last:border-0">
                         <td className="py-2 font-mono text-xs">{commission.period}</td>
@@ -863,13 +874,18 @@ export default function SalesTargetsPage() {
                                 size="sm"
                                 variant="ghost"
                                 className="text-[11px] text-destructive"
-                                disabled={isDeciding}
+                                disabled={isCancelling}
                                 onClick={() => {
-                                  if (!window.confirm(t("sales.targets.cancel_confirm", "Cancel this commission?"))) return;
-                                  decide.mutate({ id: commission.id, status: "cancelled" });
+                                  setCancellingCommissionId(commission.id);
+                                  requestConfirm({
+                                    title: t("sales.targets.cancel_title", "Cancel Commission"),
+                                    description: t("sales.targets.cancel_confirm", "Cancel this commission?"),
+                                    confirmLabel: t("sales.common.cancel", "Cancel"),
+                                    onConfirm: () => decide.mutate({ id: commission.id, status: "cancelled" }),
+                                  });
                                 }}
                               >
-                                {t("sales.common.cancel", "Cancel")}
+                                {isCancelling ? <Loader2 className="h-3 w-3 animate-spin" /> : t("sales.common.cancel", "Cancel")}
                               </Button>
                             ) : null}
                           </div>
@@ -1175,7 +1191,7 @@ export default function SalesTargetsPage() {
 
       <SalesConfirmDialog
         {...confirmDialogProps}
-        pending={deleteTarget.isPending}
+        pending={deleteTarget.isPending || deleteRule.isPending || decide.isPending}
       />
     </div>
   );

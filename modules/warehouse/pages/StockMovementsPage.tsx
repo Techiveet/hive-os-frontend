@@ -110,42 +110,6 @@ export default function StockMovementsPage() {
   const [tableQuery, setTableQuery] = React.useState<TableQueryState>(DEFAULT_QUERY);
   const [movementDialogOpen, setMovementDialogOpen] = React.useState(false);
   const [movementForm, setMovementForm] = React.useState<MovementForm>(DEFAULT_MOVEMENT_FORM);
-  const pickerOpenRef = React.useRef(false);
-  const pickerCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handlePickerOpenChange = React.useCallback((open: boolean) => {
-    if (pickerCloseTimerRef.current) {
-      clearTimeout(pickerCloseTimerRef.current);
-      pickerCloseTimerRef.current = null;
-    }
-    if (open) {
-      pickerOpenRef.current = true;
-      return;
-    }
-    // Same click that dismisses Select also hits Dialog's dismiss layer — guard briefly.
-    pickerOpenRef.current = true;
-    pickerCloseTimerRef.current = setTimeout(() => {
-      pickerOpenRef.current = false;
-      pickerCloseTimerRef.current = null;
-    }, 150);
-  }, []);
-
-  const preventDialogDismissForPicker = React.useCallback((event: { preventDefault: () => void; target: EventTarget }) => {
-    const target = event.target;
-    if (target instanceof Element) {
-      if (
-        target.closest("[data-radix-select-content]") ||
-        target.closest("[data-radix-popper-content-wrapper]") ||
-        target.closest("[role='listbox']")
-      ) {
-        event.preventDefault();
-        return;
-      }
-    }
-    if (pickerOpenRef.current) {
-      event.preventDefault();
-    }
-  }, []);
 
   const movementsQuery = useQuery({
     queryKey: ["warehouse", "movements", tableQuery],
@@ -311,7 +275,13 @@ export default function StockMovementsPage() {
       />
 
       <Dialog open={movementDialogOpen} onOpenChange={setMovementDialogOpen}>
-        <DialogContent className="sm:max-w-2xl rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl">
+        <DialogContent
+          // FIX: dropdowns (Select) trigger "outside" events that would close the modal
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+          className="sm:max-w-2xl rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl"
+        >
           <div className="border-b border-border/40 px-6 py-5">
             <DialogHeader>
               <DialogTitle className="text-xl font-black tracking-tight">

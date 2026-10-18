@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/use-permissions";
 import { productionApi } from "@/modules/production/api";
+import { dialogSelectDismissProps } from "@/modules/production/dialog-select-dismiss";
 import type {
   ProductionLine,
   ProductionOrder,
@@ -1184,7 +1185,7 @@ export default function QualityLogsPage() {
       </Dialog>
 
       <Dialog open={verifyLog !== null} onOpenChange={(open) => !open && setVerifyLog(null)}>
-        <DialogContent className="sm:max-w-md rounded-[2rem]">
+        <DialogContent className="sm:max-w-md rounded-[2rem]" {...dialogSelectDismissProps}>
           <DialogHeader>
             <DialogTitle>{t("production.quality.verify_title", "Verify final rinse")}</DialogTitle>
             <DialogDescription>
@@ -1537,7 +1538,10 @@ function TreatmentFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl rounded-[2rem] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-3xl rounded-[2rem] max-h-[90vh] overflow-y-auto"
+        {...dialogSelectDismissProps}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -1720,7 +1724,10 @@ function SanitationFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl rounded-[2rem] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-2xl rounded-[2rem] max-h-[90vh] overflow-y-auto"
+        {...dialogSelectDismissProps}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

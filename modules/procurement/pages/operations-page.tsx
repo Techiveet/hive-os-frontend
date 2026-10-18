@@ -126,6 +126,82 @@ function selectableCostCenters(
   return centers.filter((center) => isCostCenterActive(center) || center.id === selectedId);
 }
 
+function receivableInventoryItems(
+  items: ProcurementReferences["inventory_items"],
+) {
+  // References API only returns Good-mapped items; still guard for stale payloads.
+  return items.filter((item) => {
+    if (item.is_receivable === false) return false;
+    if (Object.prototype.hasOwnProperty.call(item, "good_id") && item.good_id == null) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function defaultReceivingLocationId(
+  references: ProcurementReferences,
+): number | null {
+  return references.warehouse_locations?.[0]?.id ?? null;
+}
+
+function receiptStockBlockers(
+  lines: Array<{
+    inventory_item_id?: number | null;
+    warehouse_location_id?: number | null;
+    accepted_quantity?: number | string | null;
+    received_quantity?: number | string | null;
+    quantity?: number | string | null;
+    serial_numbers?: string[] | null;
+    lot_number?: string | null;
+    batch_number?: string | null;
+    expiry_date?: string | null;
+  }>,
+  references: ProcurementReferences,
+): string | null {
+  const receivableById = new Map(
+    receivableInventoryItems(references.inventory_items).map((item) => [
+      item.id,
+      item,
+    ]),
+  );
+  const hasLocations = (references.warehouse_locations?.length ?? 0) > 0;
+  for (const line of lines) {
+    if (!line.inventory_item_id) continue;
+    const item = receivableById.get(line.inventory_item_id);
+    if (!item) {
+      return "One or more lines use an inventory item that is not mapped to a Good. Pick a receivable item (or leave stock unlinked).";
+    }
+    if (!line.warehouse_location_id) {
+      return "Select a warehouse location for every inventory-tracked line before posting stock.";
+    }
+    if (!hasLocations) {
+      return "No receivable warehouse locations are configured. Add an active storage location in Warehouse first.";
+    }
+    const qty = Math.round(
+      Number(
+        line.accepted_quantity ??
+          line.received_quantity ??
+          line.quantity ??
+          0,
+      ),
+    );
+    if (item.track_serials) {
+      const serials = (line.serial_numbers ?? []).filter(Boolean);
+      if (serials.length !== qty) {
+        return `Serial-tracked item ${item.sku} needs exactly ${qty} serial number(s); ${serials.length} supplied.`;
+      }
+    }
+    if (item.track_batches && !String(line.lot_number || line.batch_number || "").trim()) {
+      return `Batch-tracked item ${item.sku} needs a lot or batch number before posting stock.`;
+    }
+    if (item.track_expiry && !line.expiry_date) {
+      return `Expiry-tracked item ${item.sku} needs an expiry date before posting stock.`;
+    }
+  }
+  return null;
+}
+
 export default function ProcurementOperationsPage({
   section,
 }: {
@@ -1133,6 +1209,7 @@ function Receiving({ references }: { references: ProcurementReferences }) {
               <option value="inspected">Inspected</option>
               <option value="rejected">Rejected (failed inspection)</option>
               <option value="posted">Posted to stock</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </Field>
         </div>
@@ -1205,11 +1282,13 @@ function Receiving({ references }: { references: ProcurementReferences }) {
                 <ActionGroup stack>
                   {canInspect &&
                   !row.stock_posted_at &&
+                  row.status !== "cancelled" &&
                   row.inspection_status === "pending" ? (
                   <ReceiptInspectionForm receipt={row} />
                 ) : null}
                   {canReceive &&
                   !row.stock_posted_at &&
+                  row.status !== "cancelled" &&
                 ["passed", "accepted_with_exception"].includes(
                   row.inspection_status,
                 ) ? (
@@ -1219,9 +1298,31 @@ function Receiving({ references }: { references: ProcurementReferences }) {
                       invalidateKeys={["orders"]}
                       successText={`${row.number} posted to stock.`}
                       errorFallback="Stock could not be posted."
-                    run={() => procurementApi.postReceipt(row.id)}
+                    run={() => {
+                      const blocker = receiptStockBlockers(
+                        row.items ?? [],
+                        references,
+                      );
+                      if (blocker) {
+                        return Promise.reject(new Error(blocker));
+                      }
+                      return procurementApi.postReceipt(row.id);
+                    }}
                   />
                 ) : null}
+                  {canReceive &&
+                  !row.stock_posted_at &&
+                  row.status !== "cancelled" &&
+                  row.status !== "rejected" ? (
+                    <ActionButton
+                      label="Cancel receipt"
+                      queryKey="receipts"
+                      invalidateKeys={["orders"]}
+                      successText={`${row.number} cancelled. Open quantity is available again.`}
+                      errorFallback="Receipt could not be cancelled."
+                      run={() => procurementApi.cancelReceipt(row.id)}
+                    />
+                  ) : null}
               </ActionGroup>
             ),
           },
@@ -3537,12 +3638,15 @@ function RequisitionForm({
             ))}
           </select>
         </Field>
-        <Field
-          id="pr-department"
-          label="Department ID"
-          hint="Use only if your tenant maps departments by numeric ID."
-        >
-          <Input id="pr-department" name="department_id" type="number" min="1" />
+        <Field id="pr-department" label="Department">
+          <select id="pr-department" name="department_id" className={fieldClass}>
+            <option value="">No department</option>
+            {(references.departments ?? []).map((department) => (
+              <option key={department.id} value={department.id}>
+                {department.code} · {department.name}
+              </option>
+            ))}
+          </select>
         </Field>
         <div className="md:col-span-2">
           <Field id="pr-justification" label="Business justification">
@@ -3707,14 +3811,20 @@ function RequisitionEditForm({
                 ))}
               </select>
             </Field>
-            <Field id={`req-${requisition.id}-department`} label="Department ID">
-              <Input
+            <Field id={`req-${requisition.id}-department`} label="Department">
+              <select
                 id={`req-${requisition.id}-department`}
                 name="department_id"
-                type="number"
-                min="1"
+                className={fieldClass}
                 defaultValue={requisition.department_id ?? ""}
-              />
+              >
+                <option value="">No department</option>
+                {(references.departments ?? []).map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.code} · {department.name}
+                  </option>
+                ))}
+              </select>
             </Field>
             <div className="sm:col-span-2">
               <Field id={`req-${requisition.id}-justification`} label="Business justification">
@@ -4839,19 +4949,43 @@ function ReceiptForm({
   const selectOrder = (value: string) => {
     setOrderId(value);
     const order = orders.find((row) => row.id === Number(value));
-    setLines(
-      order?.items.map((line) => ({
-        ...line,
-        received_quantity: Number(line.quantity),
-        accepted_quantity: Number(line.quantity),
-        rejected_quantity: 0,
-        lot_number: "",
-        batch_number: "",
-        serial_numbers: [],
-        expiry_date: "",
-      })) ?? [],
+    const defaultLocationId = defaultReceivingLocationId(references);
+    const receivableIds = new Set(
+      receivableInventoryItems(references.inventory_items).map((item) => item.id),
     );
+    let clearedUnmapped = 0;
+    setLines(
+      order?.items.map((line) => {
+        const mapped =
+          line.inventory_item_id && receivableIds.has(line.inventory_item_id)
+            ? line.inventory_item_id
+            : null;
+        if (line.inventory_item_id && !mapped) clearedUnmapped += 1;
+        return {
+          ...line,
+          inventory_item_id: mapped,
+          received_quantity: Number(line.quantity),
+          accepted_quantity: Number(line.quantity),
+          rejected_quantity: 0,
+          lot_number: "",
+          batch_number: "",
+          serial_numbers: [],
+          expiry_date: "",
+          warehouse_location_id: mapped
+            ? (line.warehouse_location_id ?? defaultLocationId)
+            : (line.warehouse_location_id ?? null),
+        };
+      }) ?? [],
+    );
+    if (clearedUnmapped > 0) {
+      toast.message(
+        `${clearedUnmapped} order line(s) used inventory items that are not mapped to a Good. Relink a receivable item or leave stock unlinked.`,
+      );
+    }
   };
+  const receivableItems = receivableInventoryItems(references.inventory_items);
+  const hasReceivingLocations =
+    (references.warehouse_locations?.length ?? 0) > 0;
   return (
     <Card key={formKey}>
       <CardHeader>
@@ -4877,6 +5011,11 @@ function ReceiptForm({
               toast.error("The selected order has no lines to receive.");
               return;
             }
+            const stockBlocker = receiptStockBlockers(lines, references);
+            if (stockBlocker) {
+              toast.error(stockBlocker);
+              return;
+            }
         const form = new FormData(event.currentTarget);
         mutation.mutate({
           purchase_order_id: Number(orderId),
@@ -4894,6 +5033,7 @@ function ReceiptForm({
                   unit: line.unit,
                   unit_price: line.unit_price,
                   inventory_item_id: line.inventory_item_id || undefined,
+                  warehouse_location_id: line.warehouse_location_id || undefined,
                   received_quantity: received,
                   accepted_quantity: accepted,
                   rejected_quantity: Number(
@@ -4972,6 +5112,28 @@ function ReceiptForm({
               <AlertDescription>
                 Draft and approved orders do not appear here. On Orders, submit
                 → approve → issue the PO, then return to capture the receipt.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {!hasReceivingLocations ? (
+            <Alert>
+              <Send aria-hidden="true" />
+              <AlertTitle>No receiving locations</AlertTitle>
+              <AlertDescription>
+                Add an active storage location in Warehouse before posting
+                inventory-tracked stock. Service-only lines can still omit an
+                inventory item.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {!receivableItems.length ? (
+            <Alert>
+              <Send aria-hidden="true" />
+              <AlertTitle>No receivable inventory items</AlertTitle>
+              <AlertDescription>
+                Only inventory items linked to a canonical Good appear here.
+                Map items in Inventory, or leave the inventory link empty for
+                non-stock lines.
               </AlertDescription>
             </Alert>
           ) : null}
@@ -5596,11 +5758,12 @@ function LineItemsEditor({
         lineIndex === index ? { ...line, [field]: value } : line,
       ),
     );
+  const receivableItems = receivableInventoryItems(references.inventory_items);
   return (
     <fieldset className="space-y-3">
       <legend className="text-sm font-semibold">Line items</legend>
       {lines.map((line, index) => {
-        const selectedItem = references.inventory_items.find(
+        const selectedItem = receivableItems.find(
           (item) => item.id === line.inventory_item_id,
         );
         const selectedLabel = selectedItem
@@ -5630,11 +5793,16 @@ function LineItemsEditor({
             <Label
               htmlFor={`line-${line.line_key}-item`}
               className="mb-1 block min-w-0 truncate"
-              title="Inventory item"
+              title="Inventory item (Good-mapped only)"
             >Inventory item</Label>
             <select
               id={`line-${line.line_key}-item`}
-              value={line.inventory_item_id ?? ""}
+              value={
+                line.inventory_item_id &&
+                receivableItems.some((item) => item.id === line.inventory_item_id)
+                  ? line.inventory_item_id
+                  : ""
+              }
               title={selectedLabel}
               onChange={(e) =>
                 update(
@@ -5646,7 +5814,7 @@ function LineItemsEditor({
               className={fieldClass}
             >
               <option value="">Unlinked</option>
-              {references.inventory_items.map((item) => {
+              {receivableItems.map((item) => {
                 const label = `${item.sku} · ${item.name}`;
                 return (
                   <option key={item.id} value={item.id} title={label}>
@@ -5752,6 +5920,8 @@ function ReceiptLines({
         lineIndex === index ? { ...line, ...patch } : line,
       ),
     );
+  const receivableItems = receivableInventoryItems(references.inventory_items);
+  const defaultLocationId = defaultReceivingLocationId(references);
   if (!lines.length)
     return (
       <Alert>
@@ -5769,6 +5939,14 @@ function ReceiptLines({
       {lines.map((line, index) => {
         const received = Number(line.received_quantity ?? line.quantity ?? 0);
         const accepted = Number(line.accepted_quantity ?? received);
+        const selectedItem = receivableItems.find(
+          (item) => item.id === line.inventory_item_id,
+        );
+        const itemValue = selectedItem ? selectedItem.id : "";
+        const needsSerials = Boolean(selectedItem?.track_serials);
+        const needsBatch = Boolean(selectedItem?.track_batches);
+        const needsExpiry = Boolean(selectedItem?.track_expiry);
+        const serialCountNeeded = Math.max(1, Math.round(accepted || received || 0));
         return (
         <div
           key={line.line_key}
@@ -5779,6 +5957,9 @@ function ReceiptLines({
             <span className="block text-xs text-muted-foreground">
               Ordered {Number(line.quantity).toFixed(3)} {line.unit}
                 {line.line_key ? ` · ${line.line_key}` : ""}
+                {needsSerials ? " · serial-tracked" : ""}
+                {needsBatch ? " · batch-tracked" : ""}
+                {needsExpiry ? " · expiry-tracked" : ""}
             </span>
           </div>
           <Field
@@ -5842,47 +6023,118 @@ function ReceiptLines({
               }
             />
           </Field>
-          <Field id={`receipt-${line.line_key}-item`} label="Inventory item">
+          <Field
+            id={`receipt-${line.line_key}-item`}
+            label="Inventory item"
+            hint="Only Good-mapped items can post to stock"
+          >
             <select
               id={`receipt-${line.line_key}-item`}
-              value={line.inventory_item_id ?? ""}
-              onChange={(e) =>
-                  update(index, {
-                    inventory_item_id: e.target.value
-                      ? Number(e.target.value)
-                      : null,
-                  })
-              }
+              value={itemValue}
+              onChange={(e) => {
+                const nextItemId = e.target.value
+                  ? Number(e.target.value)
+                  : null;
+                update(index, {
+                  inventory_item_id: nextItemId,
+                  warehouse_location_id: nextItemId
+                    ? (line.warehouse_location_id ?? defaultLocationId)
+                    : null,
+                });
+              }}
               className={fieldClass}
             >
               <option value="">Do not post to stock</option>
-              {references.inventory_items.map((item) => (
+              {receivableItems.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.sku} · {item.name}
+                  {item.track_serials ? " (serial)" : ""}
+                  {item.track_batches ? " (batch)" : ""}
                 </option>
               ))}
             </select>
           </Field>
-            <Field id={`receipt-${line.line_key}-lot`} label="Lot number">
-              <Input
+          <Field
+            id={`receipt-${line.line_key}-location`}
+            label="Warehouse location"
+            hint={
+              line.inventory_item_id
+                ? "Required for inventory-tracked lines"
+                : "Needed only when an inventory item is linked"
+            }
+          >
+            <select
+              id={`receipt-${line.line_key}-location`}
+              value={line.warehouse_location_id ?? ""}
+              onChange={(e) =>
+                update(index, {
+                  warehouse_location_id: e.target.value
+                    ? Number(e.target.value)
+                    : null,
+                })
+              }
+              className={fieldClass}
+              required={Boolean(line.inventory_item_id)}
+              disabled={!line.inventory_item_id}
+            >
+              <option value="">
+                {line.inventory_item_id
+                  ? "Select bin / location"
+                  : "Link an inventory item first"}
+              </option>
+              {(references.warehouse_locations ?? []).map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {(loc.warehouse_name ? `${loc.warehouse_name} · ` : "") +
+                    (loc.code ? `[${loc.code}] ` : "") +
+                    loc.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {selectedItem && !needsBatch && !needsSerials && !needsExpiry ? (
+            <div className="md:col-span-3 text-xs text-muted-foreground">
+              This item is not batch/serial/expiry tracked — lot fields are optional.
+            </div>
+          ) : null}
+          {(needsBatch || !selectedItem) && (
+            <>
+              <Field
                 id={`receipt-${line.line_key}-lot`}
-                value={line.lot_number ?? ""}
-                onChange={(e) => update(index, { lot_number: e.target.value })}
-              />
-            </Field>
-            <Field id={`receipt-${line.line_key}-batch`} label="Batch number">
-              <Input
+                label="Lot number"
+                hint={needsBatch ? "Required for batch-tracked items" : undefined}
+              >
+                <Input
+                  id={`receipt-${line.line_key}-lot`}
+                  value={line.lot_number ?? ""}
+                  onChange={(e) => update(index, { lot_number: e.target.value })}
+                  required={needsBatch && !line.batch_number}
+                />
+              </Field>
+              <Field
                 id={`receipt-${line.line_key}-batch`}
-                value={line.batch_number ?? ""}
-                onChange={(e) =>
-                  update(index, { batch_number: e.target.value })
-                }
-              />
-            </Field>
+                label="Batch number"
+                hint={needsBatch ? "Required if lot is empty" : undefined}
+              >
+                <Input
+                  id={`receipt-${line.line_key}-batch`}
+                  value={line.batch_number ?? ""}
+                  onChange={(e) =>
+                    update(index, { batch_number: e.target.value })
+                  }
+                  required={needsBatch && !line.lot_number}
+                />
+              </Field>
+            </>
+          )}
+          {(needsSerials || !selectedItem) && (
             <Field
               id={`receipt-${line.line_key}-serials`}
               label="Serial numbers"
-              hint="Comma-separated"
+              hint={
+                needsSerials
+                  ? `Required: exactly ${serialCountNeeded} comma-separated serial(s)`
+                  : "Comma-separated"
+              }
             >
               <Input
                 id={`receipt-${line.line_key}-serials`}
@@ -5895,9 +6147,24 @@ function ReceiptLines({
                       .filter(Boolean),
                   })
                 }
+                required={needsSerials}
+                placeholder={
+                  needsSerials
+                    ? Array.from(
+                        { length: Math.min(serialCountNeeded, 5) },
+                        (_, i) => `SN-${i + 1}`,
+                      ).join(", ")
+                    : undefined
+                }
               />
             </Field>
-            <Field id={`receipt-${line.line_key}-expiry`} label="Expiry date">
+          )}
+          {(needsExpiry || !selectedItem) && (
+            <Field
+              id={`receipt-${line.line_key}-expiry`}
+              label="Expiry date"
+              hint={needsExpiry ? "Required for expiry-tracked items" : undefined}
+            >
               <Input
                 id={`receipt-${line.line_key}-expiry`}
                 type="date"
@@ -5905,8 +6172,10 @@ function ReceiptLines({
                 onChange={(e) =>
                   update(index, { expiry_date: e.target.value || null })
                 }
+                required={needsExpiry}
               />
             </Field>
+          )}
         </div>
         );
       })}

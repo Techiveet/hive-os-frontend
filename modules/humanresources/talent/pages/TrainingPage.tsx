@@ -396,7 +396,7 @@ export default function TrainingPage() {
       setEnrolOpen(false);
     },
     onError: (error: any) =>
-      toast.error(errorText(error, t("hr_talent.training.enrol_failed", "Could not enrol that employee."))),
+      toast.error(errorText(error, t("hr_talent.training.enrol_failed", "Could not enroll that employee."))),
   });
 
   const savePlan = useMutation({
@@ -739,7 +739,7 @@ export default function TrainingPage() {
                   setEnrolOpen(true);
                 }}
               >
-                {t("hr_talent.training.enrol", "Enrol")}
+                {t("hr_talent.training.enrol", "Enroll")}
               </Button>
             ) : null}
             {canManage ? (
@@ -1588,7 +1588,7 @@ export default function TrainingPage() {
           <div className="border-b border-border/40 px-6 py-5">
             <DialogHeader>
               <DialogTitle className="text-xl font-black tracking-tight">
-                {t("hr_talent.training.enrol", "Enrol")}
+                {t("hr_talent.training.enrol", "Enroll")}
               </DialogTitle>
               <DialogDescription>
                 {t("hr_talent.training.enrol_desc", "Seats are limited by the session capacity.")}
@@ -1651,7 +1651,7 @@ export default function TrainingPage() {
               onClick={() => enrol.mutate()}
               disabled={enrol.isPending || !enrolForm.session_id || !enrolForm.employee_id}
             >
-              {t("hr_talent.training.enrol", "Enrol")}
+              {t("hr_talent.training.enrol", "Enroll")}
             </Button>
           </DialogFooter>
         </DialogContent>

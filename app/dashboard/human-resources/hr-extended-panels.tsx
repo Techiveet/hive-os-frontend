@@ -818,7 +818,11 @@ export function HrFormsPanel() {
   }, [sealMaxX, sealMaxY]);
 
   // Fetch Public Branding Settings for Logo & Company Details
-  const { data: brandData, isLoading: isBrandLoading } = useQuery<{ data: PublicBrandSettings }>({
+  const {
+    data: brandData,
+    isPending: isBrandPending,
+    isError: isBrandError,
+  } = useQuery<{ data: PublicBrandSettings }>({
     queryKey: ["publicBrandSettings", "hr-forms", scope],
     queryFn: async () => {
       const res = await fetch(`${getBackendApiRoot()}/settings/brand/public`, {
@@ -853,17 +857,20 @@ export function HrFormsPanel() {
         if (!configuredUrl) return null;
         if (configuredUrl.startsWith("data:image/")) return configuredUrl;
 
-        const response = await fetch(`${getBackendApiRoot()}/settings/brand/assets/${asset}`, {
-          headers: {
-            Accept: "image/*",
-            ...getTenantHeaders(),
-          },
-        });
-        if (!response.ok) {
-          throw new Error(`Unable to load the configured ${asset.replaceAll("-", " ")}.`);
-        }
+        try {
+          const response = await fetch(`${getBackendApiRoot()}/settings/brand/assets/${asset}`, {
+            headers: {
+              Accept: "image/*",
+              ...getTenantHeaders(),
+            },
+          });
+          if (!response.ok) return null;
 
-        return blobToDataUrl(await response.blob());
+          return blobToDataUrl(await response.blob());
+        } catch {
+          // Print/PDF still work with the text letterhead fallback.
+          return null;
+        }
       };
 
       const [header, footer, logo] = await Promise.all([
@@ -876,12 +883,14 @@ export function HrFormsPanel() {
     },
   });
 
+  // Do not keep Print locked on background refetches or a missing letterhead image.
+  // The preview already falls back to the typed organization header.
   const brandAssetsReady =
-    !isBrandLoading &&
-    !brandAssetsQuery.isFetching &&
-    (!configuredHeaderUrl || Boolean(brandAssetsQuery.data?.header)) &&
-    (!configuredFooterUrl || Boolean(brandAssetsQuery.data?.footer)) &&
-    (!configuredLogoUrl || Boolean(brandAssetsQuery.data?.logo));
+    (!isBrandPending || isBrandError) &&
+    (!brand || brandAssetsQuery.isSuccess || brandAssetsQuery.isError);
+  const printBlockedReason = !brandAssetsReady
+    ? "Organization letterhead is still loading…"
+    : null;
   const headerImageSrc =
     brandAssetsQuery.data?.header || getBackendStorageUrl(configuredHeaderUrl) || null;
   const footerImageSrc =
@@ -1322,7 +1331,7 @@ export function HrFormsPanel() {
     const element = document.getElementById("hr-printable-letter");
     if (!element) throw new Error("The letter preview is not available.");
     if (!brandAssetsReady) {
-      throw new Error("The organization letterhead is still loading. Please try again.");
+      throw new Error("Organization branding is still loading. Try Print again in a moment.");
     }
 
     element.classList.add("letter-exporting");
@@ -1464,11 +1473,18 @@ export function HrFormsPanel() {
               type="button"
               onClick={handlePrint}
               disabled={isDocumentBusy || !brandAssetsReady}
-              className="bg-amber-400 font-bold text-slate-950 hover:bg-amber-300"
+              title={printBlockedReason ?? undefined}
+              aria-describedby={printBlockedReason ? "hr-print-blocked-reason" : undefined}
+              className="bg-amber-400 font-bold text-slate-950 hover:bg-amber-300 disabled:opacity-60"
             >
               <Printer aria-hidden="true" className="mr-2 h-4 w-4" />
-              Print Letter (A4)
+              {printBlockedReason ? "Preparing print…" : "Print Letter (A4)"}
             </Button>
+            {printBlockedReason ? (
+              <p id="hr-print-blocked-reason" className="basis-full text-xs font-medium text-amber-700 dark:text-amber-300">
+                {printBlockedReason}
+              </p>
+            ) : null}
             {generatedPdf ? (
               <Button asChild type="button" variant="outline">
                 <a
@@ -1484,9 +1500,9 @@ export function HrFormsPanel() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
           {/* TEMPLATE & PARAMETER SIDEBAR */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <div className="space-y-2">
               <h3 className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                 Available HR templates
@@ -1746,9 +1762,9 @@ export function HrFormsPanel() {
                   </p>
                 </div>
                 {sealImage ? (
-                  <div className="space-y-3">
-                    <div className="grid gap-3 rounded-xl border border-slate-500 bg-white p-3 sm:grid-cols-[128px_1fr] sm:items-center dark:border-slate-600">
-                      <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-xl border border-slate-500 bg-slate-100 p-3">
+                  <div className="space-y-3 overflow-hidden">
+                    <div className="space-y-3 rounded-xl border border-slate-500 bg-white p-3 dark:border-slate-600 dark:bg-slate-950">
+                      <div className="mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded-xl border border-slate-500 bg-slate-100 p-3 dark:border-slate-600 dark:bg-slate-900">
                         <img
                           src={sealImage}
                           alt="Selected organization seal preview"
@@ -1757,15 +1773,17 @@ export function HrFormsPanel() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <p className="text-xs font-bold text-slate-800">Output preview</p>
-                        <p className="text-xs text-slate-600">
-                          {sealSizeMm} mm at {sealRotationDeg} degrees. The seal is normalized
-                          to PNG for reliable printing and PDF generation.
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                          Output preview
+                        </p>
+                        <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                          {sealSizeMm} mm at {sealRotationDeg} degrees. Normalized to PNG for
+                          reliable printing and PDF generation.
                         </p>
                         <Button
                           type="button"
                           variant="outline"
-                          className="min-h-11 w-full border-red-700 text-xs font-bold text-red-700 hover:bg-red-50"
+                          className="min-h-11 w-full border-red-700 text-xs font-bold text-red-700 hover:bg-red-50 dark:border-red-400 dark:text-red-300 dark:hover:bg-red-950"
                           onClick={() => {
                             setSealImage(null);
                             setSealPosition(null);
@@ -1776,24 +1794,24 @@ export function HrFormsPanel() {
                       </div>
                     </div>
 
-                    <div className="space-y-4 rounded-xl border border-slate-500 bg-slate-100 p-3 dark:border-slate-400 dark:bg-slate-950">
+                    <div className="space-y-4 overflow-hidden rounded-xl border border-slate-500 bg-slate-100 p-3 dark:border-slate-400 dark:bg-slate-950">
                       <div className="flex items-center justify-between gap-3">
                         <Label htmlFor="seal-size" className="text-xs font-bold">
                           Seal size
                         </Label>
                         <output
                           htmlFor="seal-size"
-                          className="rounded-md bg-slate-800 px-2 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-950"
+                          className="shrink-0 rounded-md bg-slate-800 px-2 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-950"
                         >
                           {sealSizeMm} mm
                         </output>
                       </div>
-                      <div className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
+                      <div className="grid grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-2">
                         <Button
                           type="button"
                           variant="outline"
                           size="icon"
-                          className="h-11 w-11 border-slate-600 focus-visible:ring-slate-700 dark:border-slate-300 dark:focus-visible:ring-amber-300"
+                          className="h-10 w-10 border-slate-600 focus-visible:ring-slate-700 dark:border-slate-300 dark:focus-visible:ring-amber-300"
                           onClick={() => changeSealSize(sealSizeMm - 5)}
                           disabled={sealSizeMm <= MIN_SEAL_SIZE_MM}
                           aria-label="Make seal smaller"
@@ -1810,13 +1828,13 @@ export function HrFormsPanel() {
                           onChange={(event) => changeSealSize(Number(event.target.value))}
                           aria-describedby="seal-position-help"
                           aria-valuetext={`${sealSizeMm} millimetres`}
-                          className="h-11 w-full cursor-pointer accent-cyan-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 dark:accent-cyan-300 dark:focus-visible:ring-amber-300"
+                          className="h-10 w-full min-w-0 cursor-pointer accent-cyan-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 dark:accent-cyan-300 dark:focus-visible:ring-amber-300"
                         />
                         <Button
                           type="button"
                           variant="outline"
                           size="icon"
-                          className="h-11 w-11 border-slate-600 focus-visible:ring-slate-700 dark:border-slate-300 dark:focus-visible:ring-amber-300"
+                          className="h-10 w-10 border-slate-600 focus-visible:ring-slate-700 dark:border-slate-300 dark:focus-visible:ring-amber-300"
                           onClick={() => changeSealSize(sealSizeMm + 5)}
                           disabled={sealSizeMm >= MAX_SEAL_SIZE_MM}
                           aria-label="Make seal bigger"
@@ -1835,17 +1853,17 @@ export function HrFormsPanel() {
                           </Label>
                           <output
                             htmlFor="seal-rotation"
-                            className="rounded-md bg-slate-800 px-2 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-950"
+                            className="shrink-0 rounded-md bg-slate-800 px-2 py-1 font-mono text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-950"
                           >
                             {sealRotationDeg}°
                           </output>
                         </div>
-                        <div className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
+                        <div className="grid grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-2">
                           <Button
                             type="button"
                             variant="outline"
                             size="icon"
-                            className="h-11 w-11 border-slate-600 focus-visible:ring-slate-700 dark:border-slate-300 dark:focus-visible:ring-amber-300"
+                            className="h-10 w-10 border-slate-600 focus-visible:ring-slate-700 dark:border-slate-300 dark:focus-visible:ring-amber-300"
                             onClick={() => setSealRotationDeg((current) => normalizeDegrees(current - 15))}
                             aria-label="Rotate seal 15 degrees counter-clockwise"
                           >
@@ -1863,13 +1881,13 @@ export function HrFormsPanel() {
                             }
                             aria-describedby="seal-position-help"
                             aria-valuetext={`${sealRotationDeg} degrees`}
-                            className="h-11 w-full cursor-pointer accent-cyan-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 dark:accent-cyan-300 dark:focus-visible:ring-amber-300"
+                            className="h-10 w-full min-w-0 cursor-pointer accent-cyan-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 dark:accent-cyan-300 dark:focus-visible:ring-amber-300"
                           />
                           <Button
                             type="button"
                             variant="outline"
                             size="icon"
-                            className="h-11 w-11 border-slate-600 focus-visible:ring-slate-700 dark:border-slate-300 dark:focus-visible:ring-amber-300"
+                            className="h-10 w-10 border-slate-600 focus-visible:ring-slate-700 dark:border-slate-300 dark:focus-visible:ring-amber-300"
                             onClick={() => setSealRotationDeg((current) => normalizeDegrees(current + 15))}
                             aria-label="Rotate seal 15 degrees clockwise"
                           >
@@ -1878,7 +1896,7 @@ export function HrFormsPanel() {
                         </div>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-3">
                         <div className="space-y-1">
                           <Label htmlFor="seal-horizontal" className="text-xs font-bold">
                             Horizontal position
@@ -1897,7 +1915,7 @@ export function HrFormsPanel() {
                               }))
                             }
                             aria-describedby="seal-position-help"
-                            className="h-11 w-full cursor-pointer accent-cyan-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 dark:accent-cyan-300 dark:focus-visible:ring-amber-300"
+                            className="h-10 w-full min-w-0 cursor-pointer accent-cyan-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 dark:accent-cyan-300 dark:focus-visible:ring-amber-300"
                           />
                         </div>
                         <div className="space-y-1">
@@ -1918,42 +1936,40 @@ export function HrFormsPanel() {
                               }))
                             }
                             aria-describedby="seal-position-help"
-                            className="h-11 w-full cursor-pointer accent-cyan-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 dark:accent-cyan-300 dark:focus-visible:ring-amber-300"
+                            className="h-10 w-full min-w-0 cursor-pointer accent-cyan-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 dark:accent-cyan-300 dark:focus-visible:ring-amber-300"
                           />
                         </div>
                       </div>
 
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="flex flex-col gap-2">
                         <Button
                           type="button"
                           variant="outline"
-                          className="min-h-11 border-slate-600 text-xs font-bold dark:border-slate-300"
+                          className="h-auto min-h-11 w-full whitespace-normal border-slate-600 px-3 py-2 text-xs font-bold dark:border-slate-300"
                           onClick={() => setSealPosition(null)}
                         >
-                          <Move aria-hidden="true" className="mr-2 h-4 w-4" />
+                          <Move aria-hidden="true" className="mr-2 h-4 w-4 shrink-0" />
                           Reset position
                         </Button>
                         <Button
                           type="button"
                           variant="outline"
-                          className="min-h-11 border-slate-600 text-xs font-bold dark:border-slate-300"
+                          className="h-auto min-h-11 w-full whitespace-normal border-slate-600 px-3 py-2 text-xs font-bold dark:border-slate-300"
                           onClick={() => {
                             setSealSizeMm(DEFAULT_SEAL_SIZE_MM);
                             setSealRotationDeg(0);
                           }}
                         >
-                          <RotateCcw aria-hidden="true" className="mr-2 h-4 w-4" />
+                          <RotateCcw aria-hidden="true" className="mr-2 h-4 w-4 shrink-0" />
                           Reset size & rotation
                         </Button>
                       </div>
                       <p
                         id="seal-position-help"
-                        className="flex items-start gap-2 text-xs font-medium text-slate-700 dark:text-slate-200"
+                        className="text-xs font-medium leading-relaxed text-slate-700 dark:text-slate-200"
                       >
-                        <Move aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                        Resize and rotate the seal with these pre-fill controls or the handles
-                        inside the letter preview. Use the position sliders or drag the seal
-                        itself to move it. Print and PDF output use these exact values.
+                        Use these controls or the handles in the letter preview. Print and PDF
+                        use the same size, rotation, and position.
                       </p>
                     </div>
                   </div>
@@ -2143,7 +2159,7 @@ export function HrFormsPanel() {
             ref={letterCanvasRef}
             id="hr-printable-letter"
             aria-label={`${templates.find((template) => template.id === selectedTemplate)?.name || "HR letter"} preview`}
-            className="relative mx-auto flex h-[297mm] w-full max-w-[210mm] flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white text-slate-950 shadow-2xl"
+            className="relative mx-auto flex h-[297mm] w-full min-w-0 max-w-[210mm] flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white text-slate-950 shadow-2xl"
           >
             {includeSeal && sealImage && sealPosition ? (
               <div

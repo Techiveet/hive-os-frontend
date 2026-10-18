@@ -74,8 +74,12 @@ export type InventoryItem = {
   sku: string;
   name: string;
   unit: string;
+  category_id?: number | null;
+  good_id?: number | null;
+  good?: { id: number; sku?: string; name?: string; track_serials?: boolean } | null;
   current_stock: string;
   reorder_level: string;
+  cost_price?: string;
   selling_price: string;
   is_active: boolean;
 };
@@ -511,6 +515,7 @@ export type GoodRecord = {
   suppliers?: GoodSupplierRecord[];
   track_batches: boolean;
   track_expiry: boolean;
+  track_serials?: boolean;
   shelf_life_days?: number | null;
   expiry_alert_days?: number | null;
   msds_file_path?: string | null;

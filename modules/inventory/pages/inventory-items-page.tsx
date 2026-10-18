@@ -41,6 +41,7 @@ import {
   adjustInventoryItemStock,
   fetchInventoryCategories,
 } from "@/modules/inventory/api";
+import { fetchInventoryGoods } from "@/modules/inventory/api/goods";
 import type { InventoryItem, PaginatedResponse } from "@/modules/inventory/types";
 import { WorkflowTrigger } from "@/modules/workflow/components/workflow-trigger";
 import { notifyBulkDeleteOutcomes, notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
@@ -59,6 +60,7 @@ type InventoryItemForm = {
   name: string;
   unit: string;
   category_id?: number | null;
+  good_id?: number | null;
   current_stock: string;
   reorder_level: string;
   cost_price: string;
@@ -85,6 +87,7 @@ const DEFAULT_FORM: InventoryItemForm = {
   name: "",
   unit: "unit",
   category_id: null,
+  good_id: null,
   current_stock: "0",
   reorder_level: "0",
   cost_price: "0",
@@ -135,6 +138,26 @@ export default function InventoryItemsPage() {
     queryFn: () => fetchInventoryCategories(),
   });
 
+  const categories = React.useMemo(() => {
+    const raw = categoriesQuery.data;
+    if (Array.isArray(raw)) return raw;
+    if (raw && Array.isArray((raw as { data?: unknown }).data)) {
+      return (raw as { data: Array<{ id: number; name: string; is_active?: boolean }> }).data;
+    }
+    return [] as Array<{ id: number; name: string; is_active?: boolean }>;
+  }, [categoriesQuery.data]);
+
+  const categoryOptions = React.useMemo(
+    () => categories.filter((cat) => cat.is_active !== false),
+    [categories]
+  );
+
+  const goodsQuery = useQuery({
+    queryKey: ["inventory", "goods", "for-item-bridge"],
+    queryFn: () => fetchInventoryGoods({ per_page: 200, status: "active" }),
+    staleTime: 60_000,
+  });
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -142,6 +165,7 @@ export default function InventoryItemsPage() {
         name: form.name.trim(),
         unit: form.unit.trim() || "unit",
         category_id: form.category_id || undefined,
+        good_id: form.good_id || null,
         current_stock: parseFloat(form.current_stock) || 0,
         reorder_level: parseFloat(form.reorder_level) || 0,
         cost_price: parseFloat(form.cost_price) || 0,
@@ -283,10 +307,11 @@ export default function InventoryItemsPage() {
       sku: item.sku,
       name: item.name,
       unit: item.unit,
-      category_id: (item as any).category_id || null,
+      category_id: item.category_id || null,
+      good_id: item.good_id || null,
       current_stock: item.current_stock,
       reorder_level: item.reorder_level,
-      cost_price: (item as any).cost_price || "0",
+      cost_price: item.cost_price || "0",
       selling_price: item.selling_price,
       is_active: item.is_active,
     });
@@ -330,6 +355,23 @@ export default function InventoryItemsPage() {
             <div>
               <p className="font-semibold">{item.name}</p>
               <p className="text-xs text-muted-foreground">{item.unit}</p>
+            </div>
+          );
+        },
+      },
+      {
+        id: "good",
+        header: t("inventory.items.linked_good", "Linked Good"),
+        enableSorting: false,
+        cell: ({ row }) => {
+          const good = row.original.good;
+          if (!good && !row.original.good_id) {
+            return <span className="text-xs text-amber-600">Unlinked</span>;
+          }
+          return (
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{good?.name ?? `Good #${row.original.good_id}`}</p>
+              <p className="font-mono text-[11px] text-muted-foreground">{good?.sku ?? "—"}</p>
             </div>
           );
         },
@@ -488,7 +530,13 @@ export default function InventoryItemsPage() {
           setOpen(true);
         }}
       >
-        <DialogContent className="sm:max-w-2xl rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl">
+        <DialogContent
+          // FIX: dropdowns (Select) trigger "outside" events that would close the modal
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+          className="sm:max-w-2xl rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl"
+        >
           <div className="border-b border-border/40 px-6 py-5">
             <DialogHeader>
               <DialogTitle className="text-xl font-black tracking-tight">
@@ -544,14 +592,68 @@ export default function InventoryItemsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="item-category">{t("inventory.common.category", "Category")}</Label>
-                <Select value={form.category_id?.toString()} onValueChange={(val) => setForm((prev) => ({ ...prev, category_id: val ? parseInt(val) : null }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("inventory.common.select_category", "Select category")} />
+                <Select
+                  value={form.category_id ? String(form.category_id) : "__none__"}
+                  onValueChange={(val) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      category_id: val === "__none__" ? null : parseInt(val, 10),
+                    }))
+                  }
+                >
+                  <SelectTrigger id="item-category">
+                    <SelectValue
+                      placeholder={
+                        categoriesQuery.isLoading
+                          ? t("inventory.common.loading", "Loading…")
+                          : t("inventory.common.select_category", "Select category")
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {categoriesQuery.data?.data?.map((cat: any) => (
-                      <SelectItem key={cat.id} value={cat.id.toString()}>
+                    <SelectItem value="__none__">
+                      {t("inventory.common.uncategorized", "Uncategorized")}
+                    </SelectItem>
+                    {categoryOptions.map((cat) => (
+                      <SelectItem key={cat.id} value={String(cat.id)}>
                         {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>{t("inventory.items.linked_good", "Linked Good (required for Procurement receive)")}</Label>
+                <Select
+                  value={form.good_id ? String(form.good_id) : "__none__"}
+                  onValueChange={(val) => {
+                    if (val === "__none__") {
+                      setForm((prev) => ({ ...prev, good_id: null }));
+                      return;
+                    }
+                    const goodId = Number(val);
+                    const good = (goodsQuery.data?.data ?? []).find((g) => g.id === goodId);
+                    setForm((prev) => ({
+                      ...prev,
+                      good_id: goodId,
+                      name: prev.name.trim() ? prev.name : good?.name || prev.name,
+                      sku: prev.sku.trim() ? prev.sku : good?.sku || prev.sku,
+                      unit: prev.unit && prev.unit !== "unit" ? prev.unit : good?.uom || prev.unit,
+                      cost_price:
+                        prev.cost_price && prev.cost_price !== "0"
+                          ? prev.cost_price
+                          : String(good?.unit_cost ?? prev.cost_price),
+                    }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={goodsQuery.isLoading ? "Loading goods…" : "Select catalog good"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Not linked</SelectItem>
+                    {(goodsQuery.data?.data ?? []).map((good) => (
+                      <SelectItem key={good.id} value={String(good.id)}>
+                        {good.sku} · {good.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -650,7 +752,13 @@ export default function InventoryItemsPage() {
       </Dialog>
 
       <Dialog open={stockDialogOpen} onOpenChange={setStockDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl">
+        <DialogContent
+          // FIX: dropdowns (Select) trigger "outside" events that would close the modal
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+          className="sm:max-w-md rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl"
+        >
           <div className="border-b border-border/40 px-6 py-5">
             <DialogHeader>
               <DialogTitle className="text-xl font-black tracking-tight">

@@ -184,8 +184,49 @@ function overlappingPublishedRosters(
   });
 }
 
-function ActionError({ message }: { message: string }) {
+const TEMPORARY_SCHEDULE_WORKFLOW_HREF =
+  "/dashboard/workflow?module=attendance_management&event=temporary_schedule_submitted";
+const SHIFT_SWAP_WORKFLOW_HREF =
+  "/dashboard/workflow?module=attendance_management&event=shift_swap_submitted";
+
+function workflowGapFromMessage(message: string): {
+  label: string;
+  href: string;
+  configureLabel: string;
+} | null {
+  if (/temporary schedule workflow/i.test(message)) {
+    return {
+      label: "HR Temporary Schedule",
+      href: TEMPORARY_SCHEDULE_WORKFLOW_HREF,
+      configureLabel: "Configure temporary schedule workflow",
+    };
+  }
+  if (/shift swap workflow/i.test(message)) {
+    return {
+      label: "HR Shift Swap",
+      href: SHIFT_SWAP_WORKFLOW_HREF,
+      configureLabel: "Configure shift swap workflow",
+    };
+  }
+  if (/configure and activate.*workflow/i.test(message)) {
+    return {
+      label: "required HR",
+      href: "/dashboard/workflow?module=attendance_management",
+      configureLabel: "Configure workflow",
+    };
+  }
+  return null;
+}
+
+function ActionError({
+  message,
+  canConfigureWorkflow,
+}: {
+  message: string;
+  canConfigureWorkflow: boolean;
+}) {
   const ref = useRef<HTMLDivElement>(null);
+  const workflowGap = workflowGapFromMessage(message);
 
   useEffect(() => {
     ref.current?.focus();
@@ -196,9 +237,34 @@ function ActionError({ message }: { message: string }) {
       ref={ref}
       id="schedule-action-error"
       tabIndex={-1}
+      role="alert"
       className="rounded-lg border border-red-700 bg-red-50 p-3 text-sm font-semibold text-red-900 outline-none focus-visible:ring-2 focus-visible:ring-red-700 dark:border-red-300 dark:bg-red-950 dark:text-red-100"
     >
-      {message}
+      {workflowGap ? (
+        <div className="space-y-3">
+          <p>
+            {canConfigureWorkflow
+              ? `An ${workflowGap.label} workflow must be configured and active before this request can be submitted.`
+              : `Ask an admin to activate the ${workflowGap.label} workflow.`}
+          </p>
+          {canConfigureWorkflow ? (
+            <Button
+              asChild
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 border-red-700 bg-white font-semibold text-red-900 hover:bg-red-100 dark:border-red-300 dark:bg-red-900 dark:text-red-50 dark:hover:bg-red-800"
+            >
+              <Link href={workflowGap.href}>
+                {workflowGap.configureLabel}
+                <ExternalLink aria-hidden="true" className="ml-2 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          ) : null}
+        </div>
+      ) : (
+        message
+      )}
     </div>
   );
 }
@@ -216,7 +282,10 @@ function SchedulingActionDialog({
 }) {
   const scope = getWorkspaceScopeKey();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canConfigureWorkflow = hasPermission("manage_workflow_automation");
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const wasOpenRef = useRef(false);
   const rosterEmployeeHintId = useId();
   const cycleHintId = useId();
   const [error, setError] = useState("");
@@ -325,7 +394,10 @@ function SchedulingActionDialog({
   });
 
   useEffect(() => {
-    if (!open) return;
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!justOpened) return;
+
     const firstMode = availableModes[0] ?? "swap";
     setMode(firstMode);
     setError("");
@@ -462,18 +534,28 @@ function SchedulingActionDialog({
           },
         );
         if (rotation.employee_id) {
-          await attendanceFetch(
-            `/schedule-templates/${created.data.id}/assign`,
-            {
-              method: "POST",
-              body: JSON.stringify({
-                scope_type: "employee",
-                employee_ids: [Number(rotation.employee_id)],
-                priority: 200,
-                effective_from: rotation.anchor_date,
-              }),
-            },
-          );
+          try {
+            await attendanceFetch(
+              `/schedule-templates/${created.data.id}/assign`,
+              {
+                method: "POST",
+                body: JSON.stringify({
+                  scope_type: "employee",
+                  employee_ids: [Number(rotation.employee_id)],
+                  priority: 200,
+                  effective_from: rotation.anchor_date,
+                }),
+              },
+            );
+          } catch (failure) {
+            const detail =
+              failure instanceof Error && failure.message
+                ? failure.message
+                : "This scope already has an active schedule assignment in the selected period.";
+            throw new Error(
+              `Rotation "${created.data.name}" was created, but assignment failed. ${detail}`,
+            );
+          }
         }
         return "Rotation created and assigned.";
       }
@@ -538,12 +620,13 @@ function SchedulingActionDialog({
       });
     },
     onError: (failure) => {
-      setErrorField("form");
-      setError(
+      const message =
         failure instanceof Error
           ? failure.message
-          : "Schedule action: the request could not be completed.",
-      );
+          : "Schedule action: the request could not be completed.";
+      setErrorField("form");
+      setError(message);
+      toast.error(message);
     },
   });
 
@@ -664,7 +747,12 @@ function SchedulingActionDialog({
           </DialogHeader>
 
           <div className="mt-5 space-y-5">
-            {error && <ActionError message={error} />}
+            {error && (
+              <ActionError
+                message={error}
+                canConfigureWorkflow={canConfigureWorkflow}
+              />
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="schedule-action-mode">Action</Label>
@@ -1541,11 +1629,15 @@ function SchedulingActionDialog({
             >
               {mutation.isPending
                 ? "Saving…"
-                : mode === "rotation"
-                  ? "Create rotation"
-                  : mode === "roster"
-                    ? "Generate roster"
-                    : "Send for approval"}
+                : mode === "shift"
+                  ? "Create shift"
+                  : mode === "rotation"
+                    ? "Create rotation"
+                    : mode === "roster"
+                      ? "Generate roster"
+                      : mode === "temporary" || mode === "swap"
+                        ? "Send for approval"
+                        : "Save"}
             </Button>
           </DialogFooter>
         </form>

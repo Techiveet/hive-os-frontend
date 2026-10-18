@@ -121,10 +121,10 @@ export function ProductSearchPicker({
         onValueChange={(next) => onChange(next === "none" ? "" : next)}
         disabled={disabled || !enabled}
       >
-        <SelectTrigger id={id}>
+        <SelectTrigger id={id} className="w-full">
           <SelectValue placeholder={loading ? "Loading…" : placeholder ?? "Select a product"} />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="z-[100]">
           {allowClear ? <SelectItem value="none">—</SelectItem> : null}
           {options.map((product) => (
             <SelectItem key={product.id} value={String(product.id)}>
@@ -213,10 +213,10 @@ export function LocationSearchPicker({
         onValueChange={(next) => onChange(next === "none" ? "" : next)}
         disabled={disabled || !enabled}
       >
-        <SelectTrigger id={id}>
+        <SelectTrigger id={id} className="w-full">
           <SelectValue placeholder={loading ? "Loading…" : placeholder ?? "Select a location"} />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="z-[100]">
           {allowClear ? <SelectItem value="none">—</SelectItem> : null}
           {options.map((loc) => (
             <SelectItem key={loc.id} value={String(loc.id)}>
@@ -293,10 +293,10 @@ export function WarehouseSearchPicker({
         onValueChange={(next) => onChange(next === "none" ? "" : next)}
         disabled={disabled || !enabled}
       >
-        <SelectTrigger id={id}>
+        <SelectTrigger id={id} className="w-full">
           <SelectValue placeholder={loading ? "Loading…" : placeholder ?? "Select a warehouse"} />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="z-[100]">
           {allowClear ? <SelectItem value="none">—</SelectItem> : null}
           {options.map((wh) => (
             <SelectItem key={wh.id} value={String(wh.id)}>

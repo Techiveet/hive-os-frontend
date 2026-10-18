@@ -290,7 +290,6 @@ export default function BatchTraceabilityPage() {
               const order = orders.find((candidate) => String(candidate.id) === value);
               if (!order?.batch_number) return;
               setInput(order.batch_number);
-              runTrace(order.batch_number);
             }}
           >
             <SelectTrigger>

@@ -4,7 +4,8 @@ import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Coins, HelpCircle, Layers3, Lock, TrendingDown, TrendingUp } from "lucide-react";
+import Link from "next/link";
+import { Coins, HelpCircle, Layers3, Lock, Route, TrendingDown, TrendingUp } from "lucide-react";
 import type { Step } from "react-joyride";
 import { useTranslation } from "@/store/use-translation";
 import { useTour } from "@/components/providers/tour-provider";
@@ -177,6 +178,12 @@ export default function ValuationPage() {
   const entriesColumns = React.useMemo<ColumnDef<ValuationEntry>[]>(
     () => [
       {
+        id: "id",
+        header: t("inventory.common.id", "ID"),
+        enableSorting: false,
+        cell: ({ row }) => <span className="font-mono text-muted-foreground">#{row.original.id}</span>,
+      },
+      {
         id: "direction",
         header: t("inventory.valuation.direction", "Dir"),
         enableSorting: false,
@@ -240,13 +247,33 @@ export default function ValuationPage() {
         enableSorting: false,
         cell: ({ row }) =>
           row.original.gl_journal_id ? (
-            <Badge variant="outline" className="rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
-              #{row.original.gl_journal_id}
-            </Badge>
+            <Link
+              href={`/dashboard/inventory/gl-trace?journal=${row.original.gl_journal_id}`}
+              className="inline-flex"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Badge variant="outline" className="rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25">
+                #{row.original.gl_journal_id}
+              </Badge>
+            </Link>
           ) : (
             <span className="text-xs text-muted-foreground">{row.original.gl_status ?? "—"}</span>
           ),
         meta: { align: "center" as const },
+      },
+      {
+        id: "actions",
+        header: t("inventory.common.actions", "Actions"),
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
+            <Link href={`/dashboard/inventory/gl-trace?entry=${row.original.id}`}>
+              <Route className="mr-1.5 h-3.5 w-3.5" />
+              {t("inventory.valuation.trace", "Trace")}
+            </Link>
+          </Button>
+        ),
+        meta: { align: "right" as const },
       },
     ],
     [t]

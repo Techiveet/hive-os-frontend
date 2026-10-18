@@ -52,6 +52,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/use-permissions";
+import { dialogSelectDismissProps } from "@/modules/production/dialog-select-dismiss";
 import { crmApi } from "@/modules/crm/api";
 import type { CrmContact } from "@/modules/crm/types";
 import { productionApi } from "@/modules/production/api";
@@ -584,18 +585,18 @@ export default function ContainerDepositsPage() {
         header: t("production.common.actions", "Actions"),
         cell: ({ row }) => {
           const customerId = row.original.customer_contact_id;
-          if (!customerId) return null;
           return (
             <div className="flex gap-1">
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 text-xs"
-                onClick={() => setStatementCustomerId(customerId)}
+                onClick={() => customerId && setStatementCustomerId(customerId)}
+                disabled={!customerId}
               >
                 <FileText className="h-3 w-3" />
               </Button>
-              {canRecordMovement ? (
+              {customerId ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -610,7 +611,7 @@ export default function ContainerDepositsPage() {
         },
       },
     ],
-    [canRecordMovement, contactNameById, t],
+    [contactNameById, t],
   );
 
   const movementColumns = React.useMemo<ColumnDef<ContainerMovement>[]>(
@@ -1392,7 +1393,10 @@ function MovementDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl rounded-[2rem] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-2xl rounded-[2rem] max-h-[90vh] overflow-y-auto"
+        {...dialogSelectDismissProps}
+      >
         <DialogHeader>
           <DialogTitle>{t("production.containers.movement_title", "Record container movement")}</DialogTitle>
           <DialogDescription>
@@ -1593,7 +1597,7 @@ function TypeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl rounded-[2rem]">
+      <DialogContent className="sm:max-w-xl rounded-[2rem]" {...dialogSelectDismissProps}>
         <DialogHeader>
           <DialogTitle>
             {form.id

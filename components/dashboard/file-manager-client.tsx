@@ -2394,7 +2394,14 @@ export function FileManagerClient({
                 </Button>
               )}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+            <div
+              className={cn(
+                "grid gap-3",
+                // Viewport breakpoints crush these inside picker modals (max-w-5xl − sidebar).
+                // auto-fill keeps each card readable regardless of container width.
+                "grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))]",
+              )}
+            >
               <MetricCard
                 isActive={activeTypeFilter === "image"}
                 onClick={() =>
@@ -3999,35 +4006,34 @@ function MetricCard({
   isActive,
 }: MetricCardProps) {
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
       className={cn(
-        "border p-3.5 rounded-2xl flex flex-col gap-2 min-w-0 transition-all cursor-pointer group",
+        "border p-3 rounded-2xl flex flex-col gap-2 min-w-0 w-full overflow-hidden text-left transition-all cursor-pointer group",
         color,
         isActive
           ? "ring-2 ring-emerald-500 ring-offset-2 ring-offset-background scale-[1.02] shadow-md border-emerald-500/50"
           : "hover:bg-muted/50 hover:scale-[1.01]",
       )}
     >
-      <div className="flex items-center justify-between w-full">
-        <div className="bg-background/80 p-2 rounded-xl border border-border/50 shadow-sm shrink-0">
+      <div className="flex items-center justify-between gap-2 w-full min-w-0">
+        <div className="bg-background/80 p-1.5 rounded-lg border border-border/50 shadow-sm shrink-0">
           {icon}
         </div>
         <Badge
           variant="outline"
-          className="text-[11px] font-mono opacity-60 bg-transparent border-border/50"
+          className="shrink-0 text-[10px] font-mono opacity-70 bg-transparent border-border/50 px-1.5"
         >
           {count}
         </Badge>
       </div>
-      <div className="overflow-hidden w-full mt-1">
-        <p className="text-xs font-bold text-foreground truncate w-full">
-          {title}
-        </p>
-        <p className="text-[11px] font-mono text-muted-foreground mt-0.5 truncate w-full">
+      <div className="min-w-0 w-full">
+        <p className="text-xs font-bold text-foreground truncate">{title}</p>
+        <p className="text-[10px] font-mono text-muted-foreground mt-0.5 truncate">
           {formatBytes(size)}
         </p>
       </div>
-    </div>
+    </button>
   );
 }

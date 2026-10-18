@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/use-permissions";
 import { productionApi } from "@/modules/production/api";
+import { dialogSelectDismissProps } from "@/modules/production/dialog-select-dismiss";
 import type { ProductionBom, ProductionBomItem } from "@/modules/production/types";
 import {
   BusyLabel,
@@ -665,7 +666,7 @@ export default function BillsOfMaterialsPage() {
       />
 
       <Dialog open={inspectId !== null} onOpenChange={(open) => !open && setInspectId(null)}>
-        <DialogContent className="sm:max-w-3xl rounded-[2rem] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl rounded-[2rem] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t("production.boms.inspect_title", "Recipe detail")}</DialogTitle>
             <DialogDescription>
@@ -870,7 +871,10 @@ function BomFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl rounded-[2rem] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-4xl rounded-[2rem] max-h-[90vh] overflow-y-auto"
+        {...dialogSelectDismissProps}
+      >
         <DialogHeader>
           <DialogTitle>
             {form.id ? t("production.boms.edit_title", "Edit recipe") : t("production.boms.create_title", "New recipe")}
@@ -1004,137 +1008,142 @@ function BomFormDialog({
             </div>
 
             {form.items.map((item, index) => (
-              <div key={index} className="grid gap-2 rounded-xl border bg-background p-3 md:grid-cols-12">
-                <div className="md:col-span-4">
-                  <ProductSearchPicker
-                    id={`bom-component-${index}`}
-                    label={t("production.trace.component", "Component")}
-                    value={item.component_product_id}
-                    onChange={(value) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        items: prev.items.map((candidate, candidateIndex) =>
-                          candidateIndex === index ? { ...candidate, component_product_id: value } : candidate,
-                        ),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label className="text-[11px]">{t("production.common.type", "Type")}</Label>
-                  <Select
-                    value={item.component_type}
-                    onValueChange={(value) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        items: prev.items.map((candidate, candidateIndex) =>
-                          candidateIndex === index ? { ...candidate, component_type: value } : candidate,
-                        ),
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COMPONENT_TYPES.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type.replace(/_/g, " ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="md:col-span-2">
-                  <Label className="text-[11px]">{t("production.boms.qty_per_unit", "Qty / unit")}</Label>
-                  <Input
-                    type="number"
-                    step="0.000001"
-                    className="h-9"
-                    value={item.quantity_per_unit}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        items: prev.items.map((candidate, candidateIndex) =>
-                          candidateIndex === index
-                            ? { ...candidate, quantity_per_unit: event.target.value }
-                            : candidate,
-                        ),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <Label className="text-[11px]">{t("production.common.uom", "UoM")}</Label>
-                  <Input
-                    className="h-9"
-                    value={item.uom}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        items: prev.items.map((candidate, candidateIndex) =>
-                          candidateIndex === index ? { ...candidate, uom: event.target.value } : candidate,
-                        ),
-                      }))
-                    }
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label className="text-[11px]">{t("production.boms.scrap", "Scrap %")}</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    className="h-9"
-                    value={item.scrap_percent}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        items: prev.items.map((candidate, candidateIndex) =>
-                          candidateIndex === index ? { ...candidate, scrap_percent: event.target.value } : candidate,
-                        ),
-                      }))
-                    }
-                  />
-                  {item.quantity_per_unit ? (
-                    <p className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
-                      ={" "}
-                      {effectiveQuantityPerUnit({
-                        quantity_per_unit: item.quantity_per_unit,
-                        scrap_percent: item.scrap_percent,
-                      }).toFixed(4)}{" "}
-                      {item.uom}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex items-end justify-between gap-2 md:col-span-1">
-                  <label className="flex items-center gap-1.5 text-[11px]">
-                    <Checkbox
-                      checked={item.is_critical}
-                      onCheckedChange={(checked) =>
+              <div key={index} className="space-y-3 rounded-xl border bg-background p-3">
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <ProductSearchPicker
+                      id={`bom-component-${index}`}
+                      label={t("production.trace.component", "Component")}
+                      value={item.component_product_id}
+                      onChange={(value) =>
                         setForm((prev) => ({
                           ...prev,
                           items: prev.items.map((candidate, candidateIndex) =>
-                            candidateIndex === index ? { ...candidate, is_critical: checked === true } : candidate,
+                            candidateIndex === index ? { ...candidate, component_product_id: value } : candidate,
                           ),
                         }))
                       }
                     />
-                    {t("production.boms.critical", "Critical")}
-                  </label>
+                  </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     type="button"
-                    className="h-8 w-8 shrink-0 p-0 text-destructive"
+                    className="mt-6 h-9 w-9 shrink-0 p-0 text-destructive"
                     onClick={() =>
                       setForm((prev) => ({
                         ...prev,
                         items: prev.items.filter((_, candidateIndex) => candidateIndex !== index),
                       }))
                     }
+                    aria-label={t("production.common.delete", "Delete")}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-5">
+                  <div>
+                    <Label className="text-[11px]">{t("production.common.type", "Type")}</Label>
+                    <Select
+                      value={item.component_type}
+                      onValueChange={(value) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          items: prev.items.map((candidate, candidateIndex) =>
+                            candidateIndex === index ? { ...candidate, component_type: value } : candidate,
+                          ),
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COMPONENT_TYPES.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type.replace(/_/g, " ")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-[11px]">{t("production.boms.qty_per_unit", "Qty / unit")}</Label>
+                    <Input
+                      type="number"
+                      step="0.000001"
+                      className="h-9"
+                      value={item.quantity_per_unit}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          items: prev.items.map((candidate, candidateIndex) =>
+                            candidateIndex === index
+                              ? { ...candidate, quantity_per_unit: event.target.value }
+                              : candidate,
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[11px]">{t("production.common.uom", "UoM")}</Label>
+                    <Input
+                      className="h-9"
+                      value={item.uom}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          items: prev.items.map((candidate, candidateIndex) =>
+                            candidateIndex === index ? { ...candidate, uom: event.target.value } : candidate,
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[11px]">{t("production.boms.scrap", "Scrap %")}</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      className="h-9"
+                      value={item.scrap_percent}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          items: prev.items.map((candidate, candidateIndex) =>
+                            candidateIndex === index ? { ...candidate, scrap_percent: event.target.value } : candidate,
+                          ),
+                        }))
+                      }
+                    />
+                    {item.quantity_per_unit ? (
+                      <p className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
+                        ={" "}
+                        {effectiveQuantityPerUnit({
+                          quantity_per_unit: item.quantity_per_unit,
+                          scrap_percent: item.scrap_percent,
+                        }).toFixed(4)}{" "}
+                        {item.uom}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex items-end pb-1">
+                    <label className="flex items-center gap-1.5 text-[11px] whitespace-nowrap">
+                      <Checkbox
+                        checked={item.is_critical}
+                        onCheckedChange={(checked) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            items: prev.items.map((candidate, candidateIndex) =>
+                              candidateIndex === index ? { ...candidate, is_critical: checked === true } : candidate,
+                            ),
+                          }))
+                        }
+                      />
+                      {t("production.boms.critical", "Critical")}
+                    </label>
+                  </div>
                 </div>
               </div>
             ))}

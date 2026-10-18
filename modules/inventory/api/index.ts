@@ -116,6 +116,9 @@ export const fetchInventoryEntityRecords = async (resource: string, params: List
     })
   ).data;
 
+export const fetchInventoryEntityRecord = async (resource: string, id: number) =>
+  (await api.get<InventoryEntityRecord>(`/inventory/${resource}/${id}`)).data;
+
 export const createInventoryEntityRecord = async (resource: string, payload: Record<string, unknown> | FormData) =>
   (await api.post<InventoryEntityRecord>(`/inventory/${resource}`, payload)).data;
 
@@ -265,5 +268,4 @@ export const runInventoryDocumentAction = async (
   payload: Record<string, unknown> = {}
 ) => (await api.post<any>(`/inventory/documents/${id}/actions/${action}`, payload)).data;
 
-export * from "./goods";
 export * from "./operations";

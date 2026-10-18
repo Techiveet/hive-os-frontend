@@ -99,12 +99,28 @@ function dateTimeFor(date: string) {
   ).padStart(2, "0")}`;
 }
 
+const ATTENDANCE_CORRECTION_WORKFLOW_HREF =
+  "/dashboard/workflow?module=attendance_management&event=attendance_correction_submitted";
+
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-function CorrectionError({ message }: { message: string }) {
+function isAttendanceCorrectionWorkflowGap(message: string) {
+  return /attendance correction workflow|configure and activate.*workflow/i.test(
+    message,
+  );
+}
+
+function CorrectionError({
+  message,
+  canConfigureWorkflow,
+}: {
+  message: string;
+  canConfigureWorkflow: boolean;
+}) {
   const ref = useRef<HTMLDivElement>(null);
+  const isWorkflowGap = isAttendanceCorrectionWorkflowGap(message);
 
   useEffect(() => {
     ref.current?.focus();
@@ -115,9 +131,34 @@ function CorrectionError({ message }: { message: string }) {
       ref={ref}
       id="attendance-correction-error"
       tabIndex={-1}
+      role="alert"
       className="rounded-lg border border-red-700 bg-red-50 p-3 text-sm font-semibold text-red-800 outline-none focus-visible:ring-2 focus-visible:ring-red-700 dark:border-red-300 dark:bg-red-950 dark:text-red-200"
     >
-      {message}
+      {isWorkflowGap ? (
+        <div className="space-y-3">
+          <p>
+            {canConfigureWorkflow
+              ? "An HR Attendance Correction workflow must be configured and active before this request can be submitted."
+              : "Ask an admin to activate the HR Attendance Correction workflow."}
+          </p>
+          {canConfigureWorkflow ? (
+            <Button
+              asChild
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 border-red-700 bg-white font-semibold text-red-900 hover:bg-red-100 dark:border-red-300 dark:bg-red-900 dark:text-red-50 dark:hover:bg-red-800"
+            >
+              <Link href={ATTENDANCE_CORRECTION_WORKFLOW_HREF}>
+                Configure correction workflow
+                <ExternalLink aria-hidden="true" className="ml-2 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          ) : null}
+        </div>
+      ) : (
+        message
+      )}
     </div>
   );
 }
@@ -135,6 +176,8 @@ function CorrectionDialog({
 }) {
   const scope = getWorkspaceScopeKey();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canConfigureWorkflow = hasPermission("manage_workflow_automation");
   const recordHintId = useId();
   const eventHintId = useId();
   const reasonHintId = useId();
@@ -268,7 +311,12 @@ function CorrectionDialog({
           </DialogHeader>
 
           <div className="my-5 space-y-4">
-            {error && <CorrectionError message={error} />}
+            {error && (
+              <CorrectionError
+                message={error}
+                canConfigureWorkflow={canConfigureWorkflow}
+              />
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="correction-record">
