@@ -133,13 +133,13 @@ export default function GlTracePage() {
               value={id}
               inputMode="numeric"
               onChange={(e) => setId(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && id) traceMutation.mutate(); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && id) traceMutation.mutate({ mode, id }); }}
               placeholder={mode === "valuation"
                 ? t("inventory.gltrace.ph_valuation", "From Valuation → Trace, or type #")
                 : t("inventory.gltrace.ph_journal", "From journal badge, or type #")}
             />
           </div>
-          <Button className="rounded-full px-5" disabled={!id || traceMutation.isPending} onClick={() => traceMutation.mutate()}>
+          <Button className="rounded-full px-5" disabled={!id || traceMutation.isPending} onClick={() => traceMutation.mutate({ mode, id })}>
             {traceMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
             {t("inventory.gltrace.trace_btn", "Trace")}
           </Button>

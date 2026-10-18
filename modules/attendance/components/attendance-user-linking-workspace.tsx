@@ -121,7 +121,7 @@ function enrolmentBadge(status: UserLinkingRecord["enrolment_status"]) {
   }
 }
 
-type ConfirmAction = "bulk-link" | "enroll" | null;
+type ConfirmAction = "bulk-link" | "enrol" | null;
 
 export function AttendanceUserLinkingWorkspace() {
   const scope = getWorkspaceScopeKey();

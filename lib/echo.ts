@@ -90,6 +90,12 @@ export const getLogisticsOperationsChannelName = () => {
   return tenantId ? `tenant.${tenantId}.logistics.operations` : null;
 };
 
+export const getInventoryChannelName = () => {
+  const tenantId = getTenantId();
+
+  return tenantId ? `tenant.${tenantId}.inventory` : null;
+};
+
 /**
  * A connection for anonymous visitors.
  *

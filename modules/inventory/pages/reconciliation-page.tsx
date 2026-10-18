@@ -50,7 +50,9 @@ function ReconcileCard({
           )}
         >
           {reconciled
-            ? t("inventory.recon.reconciled", "Reconciled")
+            ? result.within_tolerance
+              ? t("inventory.recon.reconciled_rounding", "Reconciled within rounding")
+              : t("inventory.recon.reconciled", "Reconciled")
             : outstandingOk
               ? t("inventory.recon.expected", "Outstanding (expected)")
               : t("inventory.recon.mismatch", "Mismatch")}
@@ -72,6 +74,15 @@ function ReconcileCard({
           </p>
         </div>
       </div>
+      {result.rounding_difference && Number(result.rounding_difference) !== 0 ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          {t("inventory.recon.rounding_line", "Cent rounding across {n} journals: {r} · Unexplained: {u}", {
+            n: result.journal_count ?? 0,
+            r: result.rounding_difference,
+            u: result.unexplained_difference ?? result.difference,
+          })}
+        </p>
+      ) : null}
       {result.account_code ? (
         <p className="mt-3 text-xs text-muted-foreground">
           {t("inventory.recon.account", "Account")}: <span className="font-mono">{result.account_code}</span>

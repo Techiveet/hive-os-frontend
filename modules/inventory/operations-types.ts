@@ -253,7 +253,17 @@ export interface ReconciliationResult {
   subledger_balance: DecimalString;
   gl_balance: DecimalString;
   difference: DecimalString;
+  /** Drift from rounding each journal line to cents; explains part of `difference`. */
+  rounding_difference?: DecimalString;
+  /** `difference` minus `rounding_difference`: what `reconciled` is judged on. */
+  unexplained_difference?: DecimalString;
+  rounding_tolerance?: DecimalString;
+  journal_count?: number;
   reconciled: boolean;
+  exact_match?: boolean;
+  /** Reconciled only after allowing for rounding. */
+  within_tolerance?: boolean;
+  balance_side?: "credit";
   account_id?: number;
   account_code?: string;
   note?: string;

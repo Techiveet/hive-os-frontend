@@ -1,4 +1,4 @@
-import { AlertOctagon, BarChart3, Boxes, CalendarCheck, Combine, Container, FileCheck2, FileText, Gauge, Landmark, LineChart, MonitorDot, PlusCircle, RadioTower, ReceiptText, Settings2, Warehouse } from "lucide-react";
+import { Activity, AlertOctagon, BarChart3, Boxes, CalendarCheck, Combine, Container, FileCheck2, FileText, Gauge, Landmark, LineChart, MonitorDot, PlusCircle, RadioTower, ReceiptText, Settings2, Sparkles, Warehouse, Workflow } from "lucide-react";
 import type { FrontendModuleDefinition } from "@/modules/types";
 
 const common = { moduleId: "logistics" as const, subscriptionSlug: "logistics_freight_forwarding", placement: "primary" as const };
@@ -22,6 +22,11 @@ export const logisticsModule: FrontendModuleDefinition = {
     { ...common, translationKey: "nav.logistics_documents", fallbackLabel: "Freight documents", href: "/dashboard/logistics/documents", icon: FileCheck2, permissions: ["view_logistics_documents", "manage_logistics"] },
     { ...common, translationKey: "nav.logistics_warehouse_handoffs", fallbackLabel: "Warehouse handoffs", href: "/dashboard/logistics/warehouse-handoffs", icon: Warehouse, permissions: ["view_logistics_warehouse_handoffs", "manage_logistics"] },
     { ...common, translationKey: "nav.logistics_financial_reports", fallbackLabel: "Financial reports", href: "/dashboard/logistics/financial-reports", icon: BarChart3, permissions: ["view_logistics_financial_reports", "manage_logistics"] },
+    { ...common, translationKey: "nav.logistics_integrations", fallbackLabel: "Integration hub", href: "/dashboard/logistics/integrations", icon: Activity, permissions: ["view_logistics_integrations", "manage_logistics_integrations", "manage_logistics"] },
+    { ...common, translationKey: "nav.logistics_sla", fallbackLabel: "SLA performance", href: "/dashboard/logistics/sla", icon: Gauge, permissions: ["view_logistics_sla", "manage_logistics"] },
+    { ...common, translationKey: "nav.logistics_advanced_analytics", fallbackLabel: "Advanced analytics", href: "/dashboard/logistics/advanced-analytics", icon: LineChart, permissions: ["view_logistics_advanced_analytics", "manage_logistics"] },
+    { ...common, translationKey: "nav.logistics_prediction_lab", fallbackLabel: "ETA prediction lab", href: "/dashboard/logistics/prediction-lab", icon: Sparkles, permissions: ["view_logistics_predictive_eta", "manage_logistics"] },
+    { ...common, translationKey: "nav.logistics_automation", fallbackLabel: "Command automation", href: "/dashboard/logistics/automation", icon: Workflow, permissions: ["manage_logistics_automation_rules", "manage_logistics"], placement: "secondary" },
     { ...common, translationKey: "nav.logistics_tracking_settings", fallbackLabel: "Tracking rules", href: "/dashboard/logistics/tracking-settings", icon: Settings2, permissions: ["manage_logistics_alert_rules", "manage_logistics_exception_rules", "manage_logistics"], placement: "secondary" },
     { ...common, translationKey: "nav.logistics_create_job", fallbackLabel: "New forwarding job", href: "/dashboard/logistics/jobs/create", icon: PlusCircle, permissions: ["create_logistics_jobs", "manage_logistics"], placement: "secondary" },
   ],

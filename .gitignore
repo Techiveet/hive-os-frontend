@@ -51,3 +51,5 @@ next-env.d.ts
 
 # Playwright e2e dev-server build output
 /.next-e2e/
+
+/p4g3_build.log

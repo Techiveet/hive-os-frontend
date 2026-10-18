@@ -99,6 +99,7 @@ import { LocalizationManager } from "@/components/settings/localization-manager"
 import { FileManagerClient } from "@/components/dashboard/file-manager-client";
 import { BackupSettings } from "@/components/settings/backup-settings";
 import { EmailSettings } from "@/components/settings/email-settings";
+import { StorageSettings } from "@/components/settings/storage-settings";
 import { SmsSettings } from "@/components/settings/sms-settings";
 import { TelegramSettings } from "@/components/settings/telegram-settings";
 import { PaymentSettings } from "@/components/settings/payment-settings";
@@ -1918,6 +1919,13 @@ function SettingsTabs({
           : null,
         canManageGeneral
           ? {
+              id: "storage",
+              label: t("nav.settings_storage", "Storage & Quotas"),
+              icon: HardDrive,
+            }
+          : null,
+        canManageGeneral
+          ? {
               id: "email",
               label: t("nav.settings_email", "Email Servers"),
               icon: Mail,
@@ -2101,6 +2109,9 @@ function SettingsTabs({
           )}
         {canManageGeneral && resolvedActiveTab === "general" && (
           <GeneralSettings />
+        )}
+        {canManageGeneral && resolvedActiveTab === "storage" && (
+          <StorageSettings />
         )}
         {canManageGeneral && resolvedActiveTab === "email" && <EmailSettings />}
         {canManageGeneral && resolvedActiveTab === "sms" && (

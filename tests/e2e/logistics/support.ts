@@ -19,5 +19,8 @@ export type LogisticsFixtureManifest = {
     job_charge_id: number;
     job_cost_id: number;
     finance_period_id: number;
+    public_tracking_token?: string;
+    integration_connection_id?: number;
+    sla_policy_id?: number;
   };
 };
