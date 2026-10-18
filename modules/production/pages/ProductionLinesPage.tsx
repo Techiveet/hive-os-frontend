@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/use-permissions";
 import { productionApi } from "@/modules/production/api";
+import { dialogSelectDismissProps } from "@/modules/production/dialog-select-dismiss";
 import type { ProductionLine } from "@/modules/production/types";
 import {
   BusyLabel,
@@ -749,7 +750,10 @@ function LineFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl rounded-[2rem] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-2xl rounded-[2rem] max-h-[90vh] overflow-y-auto"
+        {...dialogSelectDismissProps}
+      >
         <DialogHeader>
           <DialogTitle>
             {form.id

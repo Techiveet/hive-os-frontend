@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/use-permissions";
 import { productionApi } from "@/modules/production/api";
+import { dialogSelectDismissProps } from "@/modules/production/dialog-select-dismiss";
 import type {
   ProductionBom,
   ProductionBomItem,
@@ -226,35 +227,6 @@ function editPayloadFromForm(form: ReturnType<typeof emptyOrderForm>) {
     notes: form.notes || null,
   };
 }
-
-/** Portaled Select menus sit outside DialogContent; dismiss them without closing the dialog. */
-function isSelectPortalTarget(target: EventTarget | null) {
-  if (!(target instanceof Element)) return false;
-  return Boolean(
-    target.closest('[data-slot="select-content"]') ||
-      target.closest("[data-radix-select-content]") ||
-      target.closest("[data-radix-popper-content-wrapper]") ||
-      target.closest('[role="listbox"]'),
-  );
-}
-
-function preventDialogDismissForSelect(event: {
-  preventDefault: () => void;
-  target: EventTarget | null;
-}) {
-  if (isSelectPortalTarget(event.target)) event.preventDefault();
-}
-
-/** Keep form dialogs open while interacting with portaled Selects (Cancel / X still close). */
-const blockOutsideDismiss = (event: { preventDefault: () => void }) => {
-  event.preventDefault();
-};
-
-const dialogSelectDismissProps = {
-  onPointerDownOutside: blockOutsideDismiss,
-  onInteractOutside: blockOutsideDismiss,
-  onFocusOutside: preventDialogDismissForSelect,
-} as const;
 
 type TableQueryState = {
   page: number;

@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/use-permissions";
 import { productionApi } from "@/modules/production/api";
+import { dialogSelectDismissProps } from "@/modules/production/dialog-select-dismiss";
 import type {
   DowntimeReason,
   OeeMetrics,
@@ -521,6 +522,7 @@ export default function ShiftRunsPage() {
       invalidate();
       queryClient.invalidateQueries({ queryKey: ["production", "downtime"] });
       setDowntimeForm(DEFAULT_DOWNTIME_FORM);
+      setDowntimeRun(null);
       if (inspectRunId) detailQuery.refetch();
     },
     onError: (error) => {
@@ -1134,7 +1136,7 @@ export default function ShiftRunsPage() {
       </Dialog>
 
       <Dialog open={downtimeRun !== null} onOpenChange={(open) => !open && setDowntimeRun(null)}>
-        <DialogContent className="sm:max-w-xl rounded-[2rem]">
+        <DialogContent className="sm:max-w-xl rounded-[2rem]" {...dialogSelectDismissProps}>
           <DialogHeader>
             <DialogTitle>{t("production.runs.downtime_title", "Log a stoppage")}</DialogTitle>
             <DialogDescription>
@@ -1302,7 +1304,10 @@ function RunFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl rounded-[2rem] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-3xl rounded-[2rem] max-h-[90vh] overflow-y-auto"
+        {...dialogSelectDismissProps}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
