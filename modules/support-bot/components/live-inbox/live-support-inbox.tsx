@@ -62,6 +62,9 @@ export function LiveSupportInbox({ bot }: Props) {
 
   const typingTimerRef = React.useRef<number | null>(null);
   const typingSentAtRef = React.useRef(0);
+  const selectedConvIdRef = React.useRef<number | null>(selectedConvId);
+  selectedConvIdRef.current = selectedConvId;
+  const conversationReadRef = React.useRef(0);
 
   /** Lets the visitor see that a person is composing. Throttled. */
   const pingTyping = (conversationId: number) => {
@@ -110,6 +113,17 @@ export function LiveSupportInbox({ bot }: Props) {
     return () => window.clearInterval(timer);
   }, [loadConversations]);
 
+  // Polls, realtime and mutations all share this guard. A response for an old
+  // selection (or an older read of the same ticket) must never replace the
+  // displayed transcript while the reply action targets the current selection.
+  const refreshConversation = React.useCallback(async (conversationId: number) => {
+    const request = ++conversationReadRef.current;
+    const data = await supportBotApi.getConversation(bot.id, conversationId);
+    if (selectedConvIdRef.current === conversationId && conversationReadRef.current === request) {
+      setActiveConv(data);
+    }
+  }, [bot.id]);
+
   // Load single conversation details
   React.useEffect(() => {
     if (!selectedConvId) {
@@ -119,11 +133,7 @@ export function LiveSupportInbox({ bot }: Props) {
 
     const loadSingle = async () => {
       try {
-        const data = await supportBotApi.getConversation(
-          bot.id,
-          selectedConvId,
-        );
-        setActiveConv(data);
+        await refreshConversation(selectedConvId);
       } catch (e) {
         console.error("Failed to load conversation details", e);
       }
@@ -131,8 +141,11 @@ export function LiveSupportInbox({ bot }: Props) {
 
     loadSingle();
     const interval = setInterval(loadSingle, 4000); // Live poll updates
-    return () => clearInterval(interval);
-  }, [bot.id, selectedConvId]);
+    return () => {
+      ++conversationReadRef.current;
+      clearInterval(interval);
+    };
+  }, [refreshConversation, selectedConvId]);
 
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -144,9 +157,6 @@ export function LiveSupportInbox({ bot }: Props) {
   // so a visitor asking for a person sat unseen until somebody reloaded the
   // page. This subscribes to the tenant's support channel instead: an
   // escalation or a visitor message arrives while the agent is looking at it.
-  const selectedConvIdRef = React.useRef<number | null>(null);
-  selectedConvIdRef.current = selectedConvId;
-
   // Opening a conversation is the moment its messages have been seen.
   React.useEffect(() => {
     if (selectedConvId === null) return;
@@ -182,9 +192,7 @@ export function LiveSupportInbox({ bot }: Props) {
       if (selectedConvIdRef.current !== conversationId) return;
 
       try {
-        setActiveConv(
-          await supportBotApi.getConversation(bot.id, conversationId),
-        );
+        await refreshConversation(conversationId);
       } catch {
         // The poll will catch up.
       }
@@ -242,21 +250,18 @@ export function LiveSupportInbox({ bot }: Props) {
       channel.stopListening(".support-bot.message");
       channel.stopListening(".support-bot.typing");
     };
-  }, [bot.id]);
+  }, [bot.id, loadConversations, refreshConversation]);
 
   const handleSendReply = async () => {
-    if (!replyText.trim() || !selectedConvId || sending) return;
+    if (!replyText.trim() || !selectedConvId || activeConv?.id !== selectedConvId || sending) return;
 
     try {
       setSending(true);
       await supportBotApi.sendAgentMessage(bot.id, selectedConvId, replyText);
+      if (selectedConvIdRef.current !== selectedConvId) return;
       setReplyText("");
       // Reload conversation messages
-      const updated = await supportBotApi.getConversation(
-        bot.id,
-        selectedConvId,
-      );
-      setActiveConv(updated);
+      await refreshConversation(selectedConvId);
     } catch (e) {
       console.error("Failed to send agent reply", e);
     } finally {
@@ -267,7 +272,7 @@ export function LiveSupportInbox({ bot }: Props) {
   const handleUpdateStatus = async (
     status: "active" | "escalated" | "resolved" | "closed",
   ) => {
-    if (!selectedConvId) return;
+    if (!selectedConvId || activeConv?.id !== selectedConvId) return;
     try {
       await supportBotApi.updateConversationStatus(
         bot.id,
@@ -275,11 +280,7 @@ export function LiveSupportInbox({ bot }: Props) {
         status,
       );
       loadConversations();
-      const updated = await supportBotApi.getConversation(
-        bot.id,
-        selectedConvId,
-      );
-      setActiveConv(updated);
+      await refreshConversation(selectedConvId);
     } catch (e) {
       console.error("Failed to update status", e);
     }
@@ -414,7 +415,7 @@ export function LiveSupportInbox({ bot }: Props) {
 
       {/* Right Chat Thread & Reply Console */}
       <div className="flex-1 flex flex-col bg-background">
-        {activeConv ? (
+        {activeConv && activeConv.id === selectedConvId ? (
           <>
             {/* Thread Header */}
             <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-4 py-2.5">
