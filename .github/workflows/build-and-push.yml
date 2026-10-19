@@ -101,6 +101,33 @@ jobs:
               ;;
           esac
 
+          # Compose intentionally uses immutable image tags. Advance only this
+          # application's frontend pin after the image build has succeeded;
+          # otherwise future pushes would silently redeploy the previous image.
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          pin_body="$(mktemp)"
+          trap 'rm -f "$pin_body"' EXIT
+          pin_payload="$(jq -nc --arg sha "$GITHUB_SHA" '{key:"HIVE_FRONTEND_TAG",value:$sha,is_preview:false,is_literal:true,is_multiline:false,is_shown_once:false,is_runtime:true,is_buildtime:false}')"
+          pin_http_status="$(curl --silent --show-error --retry 3 --retry-all-errors \
+            --connect-timeout 10 --max-time 30 --request PATCH \
+            --output "$pin_body" --write-out '%{http_code}' \
+            "$COOLIFY_API_BASE_URL/applications/z140ve7ehjoyuoluqk0azmwe/envs" \
+            -H "Accept: application/json" -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            --data "$pin_payload" || true)"
+          case "$pin_http_status" in
+            200|201)
+              jq -e '.key == "HIVE_FRONTEND_TAG"' "$pin_body" > /dev/null
+              echo "Coolify frontend image pinned to $GITHUB_SHA. Backend pin unchanged."
+              ;;
+            *)
+              echo "::error::Coolify frontend pin update failed (HTTP $pin_http_status). No deployment requested; check the deployment token's environment-management permission."
+              exit 1
+              ;;
+          esac
+          rm -f "$pin_body"
+          trap - EXIT
+
           response="$(curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
             --request POST "$COOLIFY_API_BASE_URL/deploy?uuid=z140ve7ehjoyuoluqk0azmwe&force=false" \
             -H "Accept: application/json" -H "Authorization: Bearer $COOLIFY_API_TOKEN")"
