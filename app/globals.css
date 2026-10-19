@@ -172,6 +172,48 @@
     --muted-foreground: 240 5% 40%;
   }
 
+  .hikvision-registration {
+    --primary: 162 94% 24%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 162 94% 24%;
+    --input: 215 16% 47%;
+    --muted-foreground: 240 5% 40%;
+    /* Tailwind's non-inline theme aliases resolve at the root; rebind locally
+       so these dialog-specific accessible tokens also affect utilities. */
+    --color-primary: hsl(var(--primary));
+    --color-primary-foreground: hsl(var(--primary-foreground));
+    --color-ring: hsl(var(--ring));
+    --color-input: hsl(var(--input));
+    --color-muted-foreground: hsl(var(--muted-foreground));
+    --color-destructive: hsl(var(--destructive));
+  }
+
+  .dark .hikvision-registration {
+    --primary: 158 64% 52%;
+    --primary-foreground: 240 10% 3.9%;
+    --ring: 158 64% 52%;
+    --input: 215 20% 65%;
+    --muted-foreground: 240 5% 65%;
+    --destructive: 0 91% 71%;
+  }
+
+  .hikvision-registration :where(button, input, select, summary, a, [tabindex]):focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  .hikvision-registration [data-slot="native-select-wrapper"] {
+    width: 100%;
+  }
+
+  .hikvision-registration [data-slot="native-select"] {
+    min-height: 2.75rem;
+  }
+
+  .hikvision-registration [data-slot="input"] {
+    min-height: 2.75rem;
+  }
+
   .dark .tenant-operations {
     --muted-foreground: 240 5% 65%;
     --destructive: 0 91% 71%;

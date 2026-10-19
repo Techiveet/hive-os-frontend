@@ -28,6 +28,9 @@ jobs:
       - name: SSR request-cache regression
         run: npx tsx --test tests/query-client-ssr.test.ts
 
+      - name: Hikvision registration regression
+        run: npx tsx tests/attendance/hikvision-registration.test.ts
+
       - name: Lint
         run: npm run lint
 

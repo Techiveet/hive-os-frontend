@@ -26,6 +26,7 @@ jobs:
         run: |
           npm ci
           npx tsx --test tests/query-client-ssr.test.ts
+          npx tsx tests/attendance/hikvision-registration.test.ts
       - name: Select immutable candidate or production image tags
         id: image-tags
         shell: bash

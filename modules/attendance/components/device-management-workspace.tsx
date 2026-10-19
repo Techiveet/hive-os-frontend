@@ -36,6 +36,7 @@ import {
   Paginated,
 } from "@/modules/humanresources/api";
 import { attendanceFetch } from "@/modules/attendance/api";
+import { HikvisionRegistrationDialog } from "@/modules/attendance/components/hikvision-registration-dialog";
 
 const POLLABLE_ADAPTERS = new Set([
   "hikvision_isapi",
@@ -266,6 +267,9 @@ export function DeviceManagementWorkspace() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {permissions?.can_manage_devices && permissions.can_manage_credentials && (
+              <HikvisionRegistrationDialog key={scope} scope={scope} devices={devices} onSaved={invalidateWorkspace} />
+            )}
             {permissions?.can_manage_devices && (
               <Button asChild className="font-bold">
                 <Link href="/dashboard/attendance/device-onboarding">
