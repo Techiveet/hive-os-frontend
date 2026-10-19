@@ -78,6 +78,20 @@ function deviceLabel(device: AttendanceDevice) {
   return `${device.name} · ${device.device_code}`;
 }
 
+function cleanDeviceUrl(url: string): string {
+  let u = url.trim();
+  if (!u) return "";
+  if (!/^https?:\/\//i.test(u)) {
+    u = `https://${u}`;
+  }
+  try {
+    const parsed = new URL(u);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return u;
+  }
+}
+
 type QuickAddAdapter = string;
 
 const deviceTypeDefaults: Record<string, { code: string; name: string }> = {
@@ -248,7 +262,7 @@ export function AttendanceDeviceConnectors({
             deviceForm.adapter_type === "suprema_biostar2" ||
             deviceForm.adapter_type === "hikvision_isapi"
               ? {
-                  base_url: deviceForm.base_url,
+                  base_url: cleanDeviceUrl(deviceForm.base_url),
                   biostar_device_id:
                     deviceForm.adapter_type === "suprema_biostar2"
                       ? deviceForm.biostar_device_id || undefined
@@ -256,8 +270,10 @@ export function AttendanceDeviceConnectors({
                   verify_tls: deviceForm.verify_tls === "true",
                   allow_http:
                     deviceForm.verify_tls === "false" &&
-                    deviceForm.base_url.startsWith("http://"),
+                    cleanDeviceUrl(deviceForm.base_url).startsWith("http://"),
                   event_limit: 100,
+                  lookback_days:
+                    deviceForm.adapter_type === "hikvision_isapi" ? 2 : undefined,
                   ...(deviceForm.adapter_type === "suprema_biostar2"
                     ? {
                         tna_key_map: {
@@ -406,15 +422,16 @@ export function AttendanceDeviceConnectors({
             secret: usesApiCredentials ? credentialForm.secret : null,
             configuration: usesApiCredentials
               ? {
-                  base_url: credentialForm.base_url,
+                  base_url: cleanDeviceUrl(credentialForm.base_url),
                   biostar_device_id: isBioStar
                     ? credentialForm.biostar_device_id || undefined
                     : undefined,
                   verify_tls: credentialForm.verify_tls === "true",
                   allow_http:
                     credentialForm.verify_tls === "false" &&
-                    credentialForm.base_url.startsWith("http://"),
+                    cleanDeviceUrl(credentialForm.base_url).startsWith("http://"),
                   event_limit: 100,
+                  lookback_days: isHikvision ? 2 : undefined,
                   ...(isBioStar
                     ? {
                         tna_key_map: {
@@ -791,6 +808,10 @@ export function AttendanceDeviceConnectors({
                             adapter_type: adapter,
                             name: defaults.name,
                             device_code: defaults.code,
+                            verify_tls:
+                              adapter === "hikvision_isapi"
+                                ? "false"
+                                : current.verify_tls,
                             base_url:
                               adapter === "suprema_biostar2" ||
                               adapter === "hikvision_isapi"
@@ -887,7 +908,7 @@ export function AttendanceDeviceConnectors({
                             }
                             placeholder={
                               deviceForm.adapter_type === "hikvision_isapi"
-                                ? "https://192.168.1.64"
+                                ? "https://192.168.100.186"
                                 : "https://biostar.example.internal"
                             }
                           />
@@ -929,10 +950,10 @@ export function AttendanceDeviceConnectors({
                               }))
                             }
                           >
-                            <option value="true">Required</option>
                             <option value="false">
-                              Disabled for isolated test LAN
+                              Disabled (recommended for LAN / self-signed certificate)
                             </option>
+                            <option value="true">Required (CA-signed certificate)</option>
                           </select>
                         </div>
                       </>
@@ -1077,7 +1098,7 @@ export function AttendanceDeviceConnectors({
                             }
                             placeholder={
                               isHikvisionCredential
-                                ? "https://192.168.1.64"
+                                ? "https://192.168.100.186"
                                 : "https://biostar.example.internal"
                             }
                             required
@@ -1116,10 +1137,10 @@ export function AttendanceDeviceConnectors({
                               }))
                             }
                           >
-                            <option value="true">Required</option>
                             <option value="false">
-                              Disabled for isolated test LAN
+                              Disabled (recommended for LAN / self-signed certificate)
                             </option>
+                            <option value="true">Required (CA-signed certificate)</option>
                           </select>
                         </div>
                         {isBioStarCredential && (

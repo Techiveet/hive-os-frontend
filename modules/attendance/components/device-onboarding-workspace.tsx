@@ -92,6 +92,20 @@ const STEPS = [
   { id: 9, label: "Complete", icon: CheckCircle2 },
 ];
 
+function cleanDeviceUrl(url: string): string {
+  let u = url.trim();
+  if (!u) return "";
+  if (!/^https?:\/\//i.test(u)) {
+    u = `https://${u}`;
+  }
+  try {
+    const parsed = new URL(u);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return u;
+  }
+}
+
 export function DeviceOnboardingWorkspace() {
   const scope = getWorkspaceScopeKey();
   const queryClient = useQueryClient();
@@ -193,13 +207,13 @@ export function DeviceOnboardingWorkspace() {
           model: isBioStar ? "BioStation 2" : null,
           configuration: isDirectAdapter
             ? {
-                base_url: baseUrl,
+                base_url: cleanDeviceUrl(baseUrl),
                 biostar_device_id: isBioStar
                   ? biostarDeviceId || undefined
                   : undefined,
                 verify_tls: verifyTls === "true",
                 allow_http:
-                  verifyTls === "false" && baseUrl.startsWith("http://"),
+                  verifyTls === "false" && cleanDeviceUrl(baseUrl).startsWith("http://"),
                 event_limit: 100,
                 lookback_days: isHikvision ? 2 : undefined,
                 tna_key_map: {
@@ -274,13 +288,13 @@ export function DeviceOnboardingWorkspace() {
           secret: isDirectAdapter ? secret : null,
           configuration: isDirectAdapter
             ? {
-                base_url: baseUrl,
+                base_url: cleanDeviceUrl(baseUrl),
                 biostar_device_id: isBioStar
                   ? biostarDeviceId || undefined
                   : undefined,
                 verify_tls: verifyTls === "true",
                 allow_http:
-                  verifyTls === "false" && baseUrl.startsWith("http://"),
+                  verifyTls === "false" && cleanDeviceUrl(baseUrl).startsWith("http://"),
                 event_limit: 100,
                 lookback_days: isHikvision ? 2 : undefined,
                 tna_key_map: {
@@ -412,20 +426,37 @@ export function DeviceOnboardingWorkspace() {
     const defaults = deviceTypeDefaults[type];
     setName(defaults.name);
     setDeviceCode(defaults.code);
+    if (type === "hikvision_isapi") {
+      setVerifyTls("false");
+    }
   };
 
   const nextStep = () => {
     if (currentStep === 2 && !createdDevice) {
+      if (isDirectAdapter && !baseUrl.trim()) {
+        toast.error(
+          isHikvision
+            ? "Please enter the Hikvision terminal URL or IP address."
+            : "Please enter the BioStar 2 server URL.",
+        );
+        return;
+      }
       createDeviceMutation.mutate(undefined, {
         onSuccess: () => setCurrentStep(3),
       });
       return;
     }
-    if (currentStep === 3 && (principal || secret)) {
-      rotateCredentialMutation.mutate(undefined, {
-        onSuccess: () => setCurrentStep(4),
-      });
-      return;
+    if (currentStep === 3) {
+      if (isDirectAdapter && (!principal.trim() || !secret.trim())) {
+        toast.error("Please enter both the device username and password.");
+        return;
+      }
+      if (principal || secret) {
+        rotateCredentialMutation.mutate(undefined, {
+          onSuccess: () => setCurrentStep(4),
+        });
+        return;
+      }
     }
     setCurrentStep((prev) => Math.min(prev + 1, STEPS.length));
   };
@@ -696,16 +727,21 @@ export function DeviceOnboardingWorkspace() {
                       </Label>
                       <Input
                         id="onboard-url"
-                        type="url"
+                        type="text"
                         placeholder={
                           isHikvision
-                            ? "http://192.168.100.230"
+                            ? "https://192.168.100.186"
                             : "https://biostar.company.internal"
                         }
                         value={baseUrl}
                         onChange={(e) => setBaseUrl(e.target.value)}
                         className={controlClass}
                       />
+                      {isHikvision && (
+                        <p className="text-xs text-muted-foreground">
+                          Enter the terminal IP or HTTPS URL (e.g. 192.168.100.186 or https://192.168.100.186).
+                        </p>
+                      )}
                     </div>
 
                     {isBioStar && (
@@ -730,11 +766,16 @@ export function DeviceOnboardingWorkspace() {
                         value={verifyTls}
                         onChange={(e) => setVerifyTls(e.target.value)}
                       >
-                        <option value="true">Required (production)</option>
                         <option value="false">
-                          Disabled (isolated LAN only)
+                          Disabled (recommended for LAN / self-signed certificate)
                         </option>
+                        <option value="true">Required (CA-signed domain)</option>
                       </select>
+                      {isHikvision && (
+                        <p className="text-xs text-muted-foreground">
+                          Hikvision terminals on a local network use self-signed certificates. Keep verification Disabled to connect.
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
@@ -797,8 +838,8 @@ export function DeviceOnboardingWorkspace() {
                   <div className="space-y-2">
                     <Label htmlFor="onboard-principal">
                       {isHikvision
-                        ? "Device user name"
-                        : "BioStar API principal"}
+                        ? "Device user name (e.g. admin) *"
+                        : "BioStar API principal *"}
                     </Label>
                     <Input
                       id="onboard-principal"
@@ -811,7 +852,7 @@ export function DeviceOnboardingWorkspace() {
 
                   <div className="space-y-2">
                     <Label htmlFor="onboard-secret">
-                      {isHikvision ? "Device password" : "BioStar password"}
+                      {isHikvision ? "Device password *" : "BioStar password *"}
                     </Label>
                     <Input
                       id="onboard-secret"

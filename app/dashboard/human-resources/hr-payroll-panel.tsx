@@ -7,16 +7,49 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Wallet, Calculator, FileCheck, DollarSign, Printer, Plus } from 'lucide-react';
-import { payrollFetch } from '@/modules/payroll/api';
+import {
+  Wallet,
+  Calculator,
+  FileCheck,
+  DollarSign,
+  Printer,
+  Plus,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  ChevronDown,
+} from 'lucide-react';
+import { payrollFetch, payrollDownload } from '@/modules/payroll/api';
 import { getWorkspaceScopeKey } from '@/lib/runtime-context';
 import { PanelTableSkeleton } from '@/components/ui/loading-states';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export function HrPayrollPanel({ employees }: { employees: any[] }) {
   const queryClient = useQueryClient();
   const scope = getWorkspaceScopeKey();
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedPayslip, setSelectedPayslip] = useState<any>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
+
+  const handleExport = async (format: 'csv' | 'xlsx' | 'pdf') => {
+    try {
+      setExporting(format);
+      await payrollDownload(
+        `/payroll/payslips/export?format=${format}`,
+        `ethiopian-payroll-sheet.${format}`,
+      );
+      toast.success(`Payroll report downloaded (${format.toUpperCase()}).`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to download payroll export.');
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const [form, setForm] = useState({
     employee_id: '',
@@ -147,7 +180,43 @@ export function HrPayrollPanel({ employees }: { employees: any[] }) {
             Compliant with Tax Proclamation 979/2016 and Pension Proclamations 1268/2021 & 1269/2021.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={Boolean(exporting)}>
+                <Download className="mr-1.5 h-4 w-4 text-primary" />
+                {exporting ? `Exporting ${exporting.toUpperCase()}...` : 'Export Payroll Sheet'}
+                <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                disabled={Boolean(exporting)}
+                onClick={() => handleExport('csv')}
+              >
+                <Download className="mr-2 h-4 w-4 text-emerald-600" />
+                <span>Export as CSV (.csv)</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                disabled={Boolean(exporting)}
+                onClick={() => handleExport('xlsx')}
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" />
+                <span>Export as Excel (.xlsx)</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                disabled={Boolean(exporting)}
+                onClick={() => handleExport('pdf')}
+              >
+                <FileText className="mr-2 h-4 w-4 text-red-600" />
+                <span>Export as PDF (.pdf)</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button
             type="button"
             variant="outline"

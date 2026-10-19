@@ -48,7 +48,11 @@ import {
 import { payrollDownload, payrollFetch } from "@/modules/payroll/api";
 
 type ExportFormat = "csv" | "xlsx" | "pdf";
-type PayrollReport = "reconciliation" | "work-entries" | "adjustments";
+type PayrollReport =
+  | "payroll-sheet"
+  | "reconciliation"
+  | "work-entries"
+  | "adjustments";
 
 type PayrollPeriod = {
   id: number;
@@ -264,7 +268,7 @@ export function PayrollReportingWorkspace() {
     page: 1,
   });
   const [filters, setFilters] = useState(draft);
-  const [report, setReport] = useState<PayrollReport>("reconciliation");
+  const [report, setReport] = useState<PayrollReport>("payroll-sheet");
   const queryString = useMemo(() => buildQuery(filters), [filters]);
   const reportQuery = useQuery({
     queryKey: ["payroll-reports", queryString],
@@ -616,6 +620,7 @@ export function PayrollReportingWorkspace() {
                         setReport(event.target.value as PayrollReport)
                       }
                     >
+                      <option value="payroll-sheet">Ethiopian Payroll Sheet / Register</option>
                       <option value="reconciliation">Reconciliation</option>
                       <option value="work-entries">Work entries</option>
                       <option value="adjustments">Adjustments</option>
