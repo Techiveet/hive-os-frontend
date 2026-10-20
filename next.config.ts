@@ -68,7 +68,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Public chat is intended to be framed by the approved Techive site.
+        // Public chat is intended to be framed by the approved Techive and Gubae sites.
         // Keep every authenticated route under the same-origin policy below.
         source: "/embed/support-bot/:path*",
         headers: [
@@ -76,7 +76,7 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Content-Security-Policy",
-            value: "frame-ancestors 'self' https://techiveet.com https://www.techiveet.com; base-uri 'self'; object-src 'none'",
+            value: "frame-ancestors 'self' https://techiveet.com https://www.techiveet.com https://gubae.techiveet.com; base-uri 'self'; object-src 'none'",
           },
         ],
       },
