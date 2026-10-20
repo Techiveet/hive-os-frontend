@@ -196,6 +196,8 @@ export function SupportWebchatWidget({
   const [messages, setMessages] = useState<WidgetMessage[]>([]);
   const [sessionToken, setSessionToken] = useState("");
   const [credentialsLoaded, setCredentialsLoaded] = useState(false);
+  // Restored credentials still need server validation before the visitor can send.
+  const [sessionReady, setSessionReady] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
@@ -252,9 +254,11 @@ export function SupportWebchatWidget({
   const launcherButtonRef = useRef<HTMLButtonElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
   const wasOpenRef = useRef(false);
+  const wasSessionReadyRef = useRef(false);
   const typingTimerRef = useRef<number | null>(null);
   const typingSentAtRef = useRef(0);
   const openingRef = useRef(false);
+  const pendingHostSend = useRef<string | null>(null);
 
   // Read inside the Echo callback, which is created once per stream token and
   // would otherwise close over a stale `isOpen`.
@@ -284,14 +288,15 @@ export function SupportWebchatWidget({
   // Opening the non-modal dialog moves keyboard focus into the conversation;
   // closing it returns focus to the launcher that opened it.
   useEffect(() => {
-    if (isOpen && !wasOpenRef.current) {
+    if (isOpen && sessionReady && (!wasOpenRef.current || !wasSessionReadyRef.current)) {
       requestAnimationFrame(() => messageInputRef.current?.focus());
     } else if (!isOpen && wasOpenRef.current) {
       requestAnimationFrame(() => launcherButtonRef.current?.focus());
     }
 
     wasOpenRef.current = isOpen;
-  }, [isOpen]);
+    wasSessionReadyRef.current = sessionReady;
+  }, [isOpen, sessionReady]);
 
   // Commands from the host page's `HiveAssistant` API. Keyed on the command's
   // id so `send("hello")` twice is two sends rather than one — a value-equality
@@ -342,6 +347,10 @@ export function SupportWebchatWidget({
 
     if (command.type === "send" && command.text.trim()) {
       setIsOpen(true);
+      if (!sessionReady) {
+        pendingHostSend.current = command.text;
+        return;
+      }
       void send(command.text);
     }
   }, [commandId]);
@@ -451,6 +460,7 @@ export function SupportWebchatWidget({
     setSessionId("");
     setSessionToken("");
     setCredentialsLoaded(false);
+    setSessionReady(false);
 
     try {
       const stored = localStorage.getItem(sessionStorageKey);
@@ -507,6 +517,7 @@ export function SupportWebchatWidget({
         );
       }
 
+      setSessionReady(true);
       setSessionId(session.session_id);
       setSessionToken(session.session_token);
       try {
@@ -543,6 +554,7 @@ export function SupportWebchatWidget({
       );
     } catch {
       // Say so rather than showing a chat box that silently answers nothing.
+      setSessionReady(false);
       setUnavailable(true);
     } finally {
       openingRef.current = false;
@@ -815,7 +827,7 @@ export function SupportWebchatWidget({
 
   const send = async (text?: string) => {
     const message = (text ?? inputValue).trim();
-    if (!message || loading || !sessionId || !sessionToken) return;
+    if (!message || loading || !sessionReady || !sessionId || !sessionToken) return;
 
     setMessages((prev) => [
       ...prev,
@@ -901,6 +913,14 @@ export function SupportWebchatWidget({
     }
   };
 
+  // A host may send as soon as the iframe is ready, before its HTTP session.
+  useEffect(() => {
+    if (!sessionReady || pendingHostSend.current === null) return;
+    const text = pendingHostSend.current;
+    pendingHostSend.current = null;
+    void send(text);
+  }, [sessionReady]);
+
   const voice = useDictation(
     // Final transcript: send it, so dictation completes the whole task rather
     // than leaving the visitor to reach for the mouse.
@@ -915,6 +935,8 @@ export function SupportWebchatWidget({
   }, [isOpen, voice]);
 
   const reset = () => {
+    pendingHostSend.current = null;
+    setSessionReady(false);
     setSessionId("");
     setSessionToken("");
     setStreamToken(null);
@@ -1344,7 +1366,7 @@ export function SupportWebchatWidget({
             <button
               type="button"
               onClick={requestHuman}
-              disabled={escalating || unavailable}
+              disabled={escalating || unavailable || !sessionReady}
               className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed px-2.5 py-2 text-[11px] text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-60"
             >
               {escalating ? (
@@ -1364,6 +1386,7 @@ export function SupportWebchatWidget({
                 key={reply}
                 type="button"
                 onClick={() => send(reply)}
+                disabled={!sessionReady || unavailable}
                 className="rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-foreground/80 transition hover:border-primary/40 hover:bg-primary/10 hover:text-foreground"
               >
                 {reply}
@@ -1407,6 +1430,7 @@ export function SupportWebchatWidget({
       )}
 
       <form
+        aria-busy={loading || (!sessionReady && !unavailable)}
         className="flex items-center gap-1.5 border-t bg-background/80 p-2.5"
         onSubmit={(event) => {
           event.preventDefault();
@@ -1431,7 +1455,7 @@ export function SupportWebchatWidget({
             config?.widget_config?.placeholder || "Type your message…"
           }
           className="h-11 min-w-0 flex-1 rounded-full bg-muted/40 px-4 text-xs shadow-none"
-          disabled={loading || unavailable}
+          disabled={loading || unavailable || !sessionReady}
         />
         {/* Always reachable, not just when a notice happens to be showing —
             otherwise there is no way to choose Amharic *before* dictating,
@@ -1455,6 +1479,7 @@ export function SupportWebchatWidget({
           className={`relative h-11 w-11 shrink-0 rounded-full transition ${
             voice.listening ? "bg-destructive/10 text-destructive" : ""
           }`}
+          disabled={(!sessionReady || unavailable || loading) && !voice.listening}
           onClick={voice.toggle}
           title={
             voice.listening
@@ -1478,7 +1503,7 @@ export function SupportWebchatWidget({
           size="icon"
           className="h-11 w-11 shrink-0 rounded-full shadow-sm transition hover:opacity-90"
           style={{ backgroundColor: primaryColor, color: primaryForeground }}
-          disabled={loading || unavailable || !inputValue.trim()}
+          disabled={loading || unavailable || !sessionReady || !inputValue.trim()}
           aria-label="Send message"
         >
           <Send className="h-4 w-4" aria-hidden="true" />
