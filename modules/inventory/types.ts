@@ -128,6 +128,7 @@ export type ProductRecord = {
   status: "draft" | "published" | "archived";
   qa_status?: "pending" | "qa_passed" | "qa_failed" | "no_batches";
   workflow_status?: "pending" | "approved" | "rejected" | undefined;
+  is_variant?: boolean;
 
   weight?: string | null;
   weight_unit?: string | null;

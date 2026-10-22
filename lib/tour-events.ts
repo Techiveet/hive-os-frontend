@@ -9,15 +9,13 @@
  */
 export const TOUR_EXPAND_NAV_EVENT = "hive:tour-expand-nav";
 
-/** Ask the sidebar to open every collapsible group, then wait for the paint. */
+/** Ask the sidebar to open every collapsible group, then wait for the paint and animation. */
 export const prepareNavForTour = async (): Promise<void> => {
   if (typeof window === "undefined") return;
 
   window.dispatchEvent(new CustomEvent(TOUR_EXPAND_NAV_EVENT));
 
-  // Two frames: one for React to commit the state, one for layout to settle so
-  // the freshly mounted rows report real bounding boxes to Joyride.
-  await new Promise<void>((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-  );
+  // Wait for React state commit and CSS slide-in animation (200ms) to settle,
+  // ensuring all child elements have stable, non-zero bounding rects.
+  await new Promise<void>((resolve) => setTimeout(resolve, 250));
 };

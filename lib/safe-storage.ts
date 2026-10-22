@@ -24,6 +24,7 @@ const CRITICAL_LOCAL_STORAGE_KEYS = new Set([
   "hive_locale",
   "hive_welcome_tour_completed",
   "hive_tour_completed",
+  "hive_tour_running",
 ]);
 
 const CRITICAL_SESSION_STORAGE_KEYS = new Set([

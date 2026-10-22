@@ -73,6 +73,9 @@ declare module "@tanstack/react-table" {
     printable?: boolean;
     exportValue?: (row: TData, index: number) => unknown;
     align?: "left" | "center" | "right";
+    sticky?: "left" | "right";
+    stickyOffset?: number | string;
+    className?: string;
   }
 }
 
@@ -121,6 +124,7 @@ interface DataTableProps<TData, TValue> {
   searchPlaceholder?: string;
   serverSearchDebounceMs?: number;
   className?: string;
+  tableClassName?: string;
   enableRowSelection?: boolean;
   getRowId?: (originalRow: TData, index: number) => string;
   selectedRowIds?: RowSelectionState;
@@ -551,6 +555,7 @@ function DataTableInner<TData, TValue>({
   searchPlaceholder = "Search...",
   serverSearchDebounceMs = 400,
   className,
+  tableClassName,
   enableRowSelection = false,
   getRowId,
   selectedRowIds,
@@ -606,6 +611,28 @@ function DataTableInner<TData, TValue>({
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [expanded, setExpanded] = React.useState<ExpandedState>({});
+  const [isScrolledLeft, setIsScrolledLeft] = React.useState(false);
+  const tableContainerRef = React.useRef<HTMLDivElement>(null);
+
+  const handleContainerScroll = React.useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const scrolled = e.currentTarget.scrollLeft > 2;
+      setIsScrolledLeft(scrolled);
+    },
+    [],
+  );
+
+  React.useEffect(() => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+    const checkScroll = () => {
+      const scrolled = el.scrollLeft > 2;
+      setIsScrolledLeft(scrolled);
+    };
+    checkScroll();
+    el.addEventListener("scroll", checkScroll, { passive: true });
+    return () => el.removeEventListener("scroll", checkScroll);
+  }, []);
 
   const effectiveRowSelection = selectedRowIds ?? rowSelection;
   const debouncedSearch = useDebouncedValue(
@@ -685,9 +712,14 @@ function DataTableInner<TData, TValue>({
       id: "select",
       enableSorting: false,
       enableHiding: false,
-      size: 40,
+      size: 48,
+      meta: {
+        sticky: "left",
+        stickyOffset: 0,
+        className: "w-[48px] min-w-[48px] max-w-[48px] px-0 text-center",
+      },
       header: ({ table }) => (
-        <div className="flex justify-center px-2">
+        <div className="flex items-center justify-center w-full h-full">
           <Checkbox
             checked={
               table.getIsAllPageRowsSelected()
@@ -702,7 +734,7 @@ function DataTableInner<TData, TValue>({
         </div>
       ),
       cell: ({ row }) => (
-        <div className="flex justify-center px-2">
+        <div className="flex items-center justify-center w-full h-full">
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(v) => row.toggleSelected(!!v)}
@@ -771,6 +803,68 @@ function DataTableInner<TData, TValue>({
     manualSorting: true,
     pageCount,
   });
+
+  const stickyColInfo = React.useMemo(() => {
+    let accumulatedLeft = 0;
+    const map = new Map<
+      string,
+      {
+        sticky?: "left" | "right";
+        offset: number | string;
+        isLastLeftSticky: boolean;
+      }
+    >();
+
+    const visibleCols = mergedColumns.filter(
+      (c) =>
+        c.id === "select" ||
+        columnVisibility[c.id ?? (c as any).accessorKey] !== false,
+    );
+
+    let lastLeftStickyIndex = -1;
+    visibleCols.forEach((col, idx) => {
+      const meta = col.meta;
+      const isStickyLeft =
+        meta?.sticky === "left" ||
+        (enableRowSelection && col.id === "select");
+      if (isStickyLeft) {
+        lastLeftStickyIndex = idx;
+      }
+    });
+
+    visibleCols.forEach((col, idx) => {
+      const id = (col.id ?? (col as any).accessorKey) as string | undefined;
+      if (!id) return;
+      const meta = col.meta;
+      const isStickyLeft =
+        meta?.sticky === "left" ||
+        (enableRowSelection && col.id === "select");
+      const isStickyRight = meta?.sticky === "right";
+
+      if (isStickyLeft) {
+        const offset =
+          meta?.stickyOffset !== undefined
+            ? meta.stickyOffset
+            : accumulatedLeft;
+        map.set(id, {
+          sticky: "left",
+          offset,
+          isLastLeftSticky: idx === lastLeftStickyIndex,
+        });
+        const width = col.size || (col.id === "select" ? 48 : 280);
+        accumulatedLeft =
+          (typeof offset === "number" ? offset : accumulatedLeft) + width;
+      } else if (isStickyRight) {
+        map.set(id, {
+          sticky: "right",
+          offset: meta?.stickyOffset ?? 0,
+          isLastLeftSticky: false,
+        });
+      }
+    });
+
+    return map;
+  }, [mergedColumns, columnVisibility, enableRowSelection]);
 
   const handleResetAndReload = () => {
     setSearchValue("");
@@ -1046,14 +1140,18 @@ function DataTableInner<TData, TValue>({
           </div>
         </div>
 
-        <div className="relative overflow-x-auto min-h-[300px]">
+        <div className="relative min-h-[300px]">
           {loading && data.length > 0 && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/30 backdrop-blur-[1px] transition-all">
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/30 backdrop-blur-[1px] transition-all">
               <Loader2 className="h-8 w-8 animate-spin text-primary opacity-50" />
             </div>
           )}
 
-          <Table>
+          <Table
+            containerRef={tableContainerRef}
+            onContainerScroll={handleContainerScroll}
+            className={cn("min-w-full", tableClassName)}
+          >
             <TableCaption className="sr-only">
               {caption ?? description ?? `${title ?? resourceName} data table.`}
             </TableCaption>
@@ -1063,81 +1161,107 @@ function DataTableInner<TData, TValue>({
                   key={hg.id}
                   className="border-border/50 hover:bg-transparent"
                 >
-                  {hg.headers.map((h) => (
-                    <TableHead
-                      key={h.id}
-                      scope="col"
-                      aria-sort={
-                        h.column.getIsSorted() === "asc"
-                          ? "ascending"
-                          : h.column.getIsSorted() === "desc"
-                            ? "descending"
-                            : h.column.getCanSort()
-                              ? "none"
-                              : undefined
-                      }
-                      className={cn(
-                        "h-11 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider",
-                        h.column.columnDef.meta?.align === "center" &&
-                          "text-center",
-                        h.column.columnDef.meta?.align === "right" &&
-                          "text-right",
-                      )}
-                    >
-                      {h.isPlaceholder ? null : h.column.getCanSort() ? (
-                        <button
-                          type="button"
-                          className={cn(
-                            "flex w-full items-center gap-2 rounded-sm text-left outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary",
-                            h.column.columnDef.meta?.align === "center" &&
-                              "justify-center",
-                            h.column.columnDef.meta?.align === "right" &&
-                              "justify-end",
-                          )}
-                          onClick={h.column.getToggleSortingHandler()}
-                        >
-                          {flexRender(
-                            h.column.columnDef.header,
-                            h.getContext(),
-                          )}
-                          {{
-                            asc: (
-                              <ArrowUp
+                  {hg.headers.map((h) => {
+                    const meta = h.column.columnDef.meta;
+                    const stickyInfo = stickyColInfo.get(h.column.id);
+                    const isSticky = Boolean(stickyInfo?.sticky);
+                    const isStickyRight = stickyInfo?.sticky === "right";
+                    const stickyOffset = stickyInfo?.offset ?? 0;
+                    const isLastLeftSticky = Boolean(stickyInfo?.isLastLeftSticky);
+
+                    return (
+                      <TableHead
+                        key={h.id}
+                        scope="col"
+                        aria-sort={
+                          h.column.getIsSorted() === "asc"
+                            ? "ascending"
+                            : h.column.getIsSorted() === "desc"
+                              ? "descending"
+                              : h.column.getCanSort()
+                                ? "none"
+                                : undefined
+                        }
+                        style={{
+                          ...(isSticky
+                            ? {
+                                position: "sticky",
+                                [isStickyRight ? "right" : "left"]:
+                                  typeof stickyOffset === "number"
+                                    ? `${stickyOffset}px`
+                                    : stickyOffset,
+                                zIndex: 30,
+                              }
+                            : {}),
+                        }}
+                        className={cn(
+                          "h-11 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider",
+                          meta?.align === "center" && "text-center",
+                          meta?.align === "right" && "text-right",
+                          isSticky && "sticky bg-muted dark:bg-[#15161e] z-30 transition-[box-shadow,border-color] duration-200",
+                          isLastLeftSticky && (
+                            isScrolledLeft
+                              ? "border-r-2 border-border/80 shadow-[8px_0_16px_-4px_rgba(0,0,0,0.16)] dark:shadow-[10px_0_24px_-2px_rgba(0,0,0,0.65)]"
+                              : "border-r border-transparent shadow-none"
+                          ),
+                          meta?.className,
+                        )}
+                      >
+                        {h.isPlaceholder ? null : h.column.getCanSort() ? (
+                          <button
+                            type="button"
+                            className={cn(
+                              "flex w-full items-center gap-2 rounded-sm text-left outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary",
+                              h.column.columnDef.meta?.align === "center" &&
+                                "justify-center",
+                              h.column.columnDef.meta?.align === "right" &&
+                                "justify-end",
+                            )}
+                            onClick={h.column.getToggleSortingHandler()}
+                          >
+                            {flexRender(
+                              h.column.columnDef.header,
+                              h.getContext(),
+                            )}
+                            {{
+                              asc: (
+                                <ArrowUp
+                                  aria-hidden="true"
+                                  className="h-3 w-3 text-primary"
+                                />
+                              ),
+                              desc: (
+                                <ArrowDown
+                                  aria-hidden="true"
+                                  className="h-3 w-3 text-primary"
+                                />
+                              ),
+                            }[h.column.getIsSorted() as string] ?? (
+                              <ChevronsUpDown
                                 aria-hidden="true"
-                                className="h-3 w-3 text-primary"
+                                className="h-3 w-3 opacity-50"
                               />
-                            ),
-                            desc: (
-                              <ArrowDown
-                                aria-hidden="true"
-                                className="h-3 w-3 text-primary"
-                              />
-                            ),
-                          }[h.column.getIsSorted() as string] ?? (
-                            <ChevronsUpDown
-                              aria-hidden="true"
-                              className="h-3 w-3 opacity-50"
-                            />
-                          )}
-                        </button>
-                      ) : (
-                        <div
-                          className={cn(
-                            "flex items-center gap-2",
-                            h.column.columnDef.meta?.align === "center" &&
-                              "justify-center",
-                            h.column.columnDef.meta?.align === "right" &&
-                              "justify-end",
-                          )}
-                        >
-                          {flexRender(
-                            h.column.columnDef.header,
-                            h.getContext(),
-                          )}
-                        </div>
-                      )}
-                    </TableHead>
-                  ))}
+                            )}
+                          </button>
+                        ) : (
+                          <div
+                            className={cn(
+                              "flex items-center gap-2",
+                              h.column.columnDef.meta?.align === "center" &&
+                                "justify-center",
+                              h.column.columnDef.meta?.align === "right" &&
+                                "justify-end",
+                            )}
+                          >
+                            {flexRender(
+                              h.column.columnDef.header,
+                              h.getContext(),
+                            )}
+                          </div>
+                        )}
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
               ))}
             </TableHeader>
@@ -1148,19 +1272,50 @@ function DataTableInner<TData, TValue>({
                     key={`skel-${idx}`}
                     className="border-b border-border/40"
                   >
-                    {mergedColumns.map((col, cIdx) => (
-                      <TableCell
-                        key={`skel-${idx}-${cIdx}`}
-                        className="px-4 py-4"
-                      >
-                        <div
+                    {mergedColumns.map((col, cIdx) => {
+                      const colId = (col.id ?? (col as any).accessorKey) as string;
+                      const meta = col.meta;
+                      const stickyInfo = stickyColInfo.get(colId);
+                      const isSticky = Boolean(stickyInfo?.sticky);
+                      const isStickyRight = stickyInfo?.sticky === "right";
+                      const stickyOffset = stickyInfo?.offset ?? 0;
+                      const isLastLeftSticky = Boolean(stickyInfo?.isLastLeftSticky);
+
+                      return (
+                        <TableCell
+                          key={`skel-${idx}-${cIdx}`}
+                          style={{
+                            ...(isSticky
+                              ? {
+                                  position: "sticky",
+                                  [isStickyRight ? "right" : "left"]:
+                                    typeof stickyOffset === "number"
+                                      ? `${stickyOffset}px`
+                                      : stickyOffset,
+                                  zIndex: 20,
+                                }
+                              : {}),
+                          }}
                           className={cn(
-                            "h-4 bg-muted rounded animate-pulse",
-                            cIdx === 0 ? "w-6" : cIdx === 1 ? "w-32" : "w-24",
+                            "px-4 py-4",
+                            isSticky && "sticky bg-card dark:bg-[#0c0d12] z-20 transition-[box-shadow,border-color] duration-200",
+                            isLastLeftSticky && (
+                              isScrolledLeft
+                                ? "border-r-2 border-border/80 shadow-[8px_0_16px_-4px_rgba(0,0,0,0.16)] dark:shadow-[10px_0_24px_-2px_rgba(0,0,0,0.65)]"
+                                : "border-r border-transparent shadow-none"
+                            ),
+                            meta?.className,
                           )}
-                        />
-                      </TableCell>
-                    ))}
+                        >
+                          <div
+                            className={cn(
+                              "h-4 bg-muted rounded animate-pulse",
+                              cIdx === 0 ? "w-6" : cIdx === 1 ? "w-32" : "w-24",
+                            )}
+                          />
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                 ))
               ) : table.getRowModel().rows.length ? (
@@ -1173,23 +1328,49 @@ function DataTableInner<TData, TValue>({
                       )}
                       data-state={row.getIsSelected() && "selected"}
                     >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell
-                          key={cell.id}
-                          className={cn(
-                            "px-4 py-3 align-middle",
-                            cell.column.columnDef.meta?.align === "center" &&
-                              "text-center",
-                            cell.column.columnDef.meta?.align === "right" &&
-                              "text-right",
-                          )}
-                        >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
-                        </TableCell>
-                      ))}
+                      {row.getVisibleCells().map((cell) => {
+                        const meta = cell.column.columnDef.meta;
+                        const stickyInfo = stickyColInfo.get(cell.column.id);
+                        const isSticky = Boolean(stickyInfo?.sticky);
+                        const isStickyRight = stickyInfo?.sticky === "right";
+                        const stickyOffset = stickyInfo?.offset ?? 0;
+                        const isLastLeftSticky = Boolean(stickyInfo?.isLastLeftSticky);
+
+                        return (
+                          <TableCell
+                            key={cell.id}
+                            style={{
+                              ...(isSticky
+                                ? {
+                                    position: "sticky",
+                                    [isStickyRight ? "right" : "left"]:
+                                      typeof stickyOffset === "number"
+                                        ? `${stickyOffset}px`
+                                        : stickyOffset,
+                                    zIndex: 20,
+                                  }
+                                : {}),
+                            }}
+                            className={cn(
+                              "px-4 py-3 align-middle",
+                              meta?.align === "center" && "text-center",
+                              meta?.align === "right" && "text-right",
+                              isSticky && "sticky bg-card dark:bg-[#0c0d12] group-hover:bg-muted dark:group-hover:bg-[#1a1b23] group-data-[state=selected]:bg-muted dark:group-data-[state=selected]:bg-[#1a1b23] z-20 transition-[background-color,box-shadow,border-color] duration-200",
+                              isLastLeftSticky && (
+                                isScrolledLeft
+                                  ? "border-r-2 border-border/80 shadow-[8px_0_16px_-4px_rgba(0,0,0,0.16)] dark:shadow-[10px_0_24px_-2px_rgba(0,0,0,0.65)]"
+                                  : "border-r border-transparent shadow-none"
+                              ),
+                              meta?.className,
+                            )}
+                          >
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext(),
+                            )}
+                          </TableCell>
+                        );
+                      })}
                     </TableRow>
                     {row.getIsExpanded() && renderSubComponent && (
                       <TableRow>

@@ -1,15 +1,33 @@
 "use client";
 
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
-import { Home } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Home, HelpCircle } from "lucide-react";
 import { useTranslation } from "@/store/use-translation";
 
 export function SecurityHeader({ tenantName }: { tenantName: string }) {
     const { t } = useTranslation();
 
+    const triggerTour = () => {
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("start-security-tour"));
+        }
+    };
+
     return (
         <>
-            <div className="flex w-full justify-end mb-4">
+            <div className="flex w-full items-center justify-end gap-3 mb-4">
+                <Button
+                    id="tour-security-header-tour-trigger"
+                    variant="outline"
+                    size="sm"
+                    onClick={triggerTour}
+                    className="h-8 rounded-lg border-border/50 bg-background/50 text-muted-foreground shadow-sm backdrop-blur-md hover:text-foreground"
+                >
+                    <HelpCircle className="mr-2 h-4 w-4" />
+                    {t('global.page_tour', 'Page Tour')}
+                </Button>
+
                 <Breadcrumbs 
                     items={[
                         { label: "Hive.OS", href: "/dashboard", icon: <Home className="h-4 w-4" /> },

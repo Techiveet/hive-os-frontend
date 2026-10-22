@@ -6,12 +6,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertCircle, Command, Fingerprint, Github, Globe, Loader2, Lock, ChevronRight, Eye, EyeOff } from "lucide-react";
+import { AlertCircle, Command, Fingerprint, Github, Globe, Loader2, Lock, ChevronRight, Eye, EyeOff, Info, HelpCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge"; 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; 
 import { useQuery } from "@tanstack/react-query";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { useTranslation } from "@/store/use-translation";
@@ -267,7 +268,21 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="email" className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground ml-1">{t('auth.login.system_identifier', 'System Identifier')}</Label>
+                <div className="flex items-center gap-1.5 ml-1">
+                  <Label htmlFor="email" className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">{t('auth.login.system_identifier', 'System Identifier')}</Label>
+                  <TooltipProvider>
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <button type="button" tabIndex={-1} aria-label="System identifier information" className="text-muted-foreground hover:text-primary transition-colors cursor-help inline-flex items-center">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs text-xs font-mono p-2.5 rounded-xl bg-popover text-popover-foreground border shadow-lg">
+                        {t('auth.login.identifier_tooltip', 'Enter your registered email address (e.g. super@hive.os for Central Super Admin, or your company user email).')}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <div className="relative group">
                   <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                   <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('auth.login.identifier_placeholder', 'user@hive.corp')} disabled={loading} className="pl-10 h-12 bg-muted/30 border-border focus:ring-1 focus:ring-primary/50 transition-all font-mono" />
@@ -275,8 +290,22 @@ export default function LoginPage() {
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center justify-between ml-1">
-                   <Label htmlFor="password" className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">{t('auth.login.encryption_key', 'Encryption Key')}</Label>
-                   <Link href="/forgot-password" className="font-mono text-[11px] uppercase tracking-tighter text-primary/60 hover:text-primary transition-colors">{t('auth.login.forgot_key', 'Forgot Key?')}</Link>
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor="password" className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">{t('auth.login.encryption_key', 'Encryption Key')}</Label>
+                    <TooltipProvider>
+                      <Tooltip delayDuration={200}>
+                        <TooltipTrigger asChild>
+                          <button type="button" tabIndex={-1} aria-label="Encryption key information" className="text-muted-foreground hover:text-primary transition-colors cursor-help inline-flex items-center">
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs text-xs font-mono p-2.5 rounded-xl bg-popover text-popover-foreground border shadow-lg">
+                          {t('auth.login.encryption_key_tooltip', 'Enter your account master password or passphrase to decrypt your workspace session.')}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <Link href="/forgot-password" className="font-mono text-[11px] uppercase tracking-tighter text-primary/60 hover:text-primary transition-colors">{t('auth.login.forgot_key', 'Forgot Key?')}</Link>
                 </div>
                 <div className="relative group">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
@@ -296,8 +325,19 @@ export default function LoginPage() {
                 </div>
               </div>
             </div>
-            <Button type="submit" disabled={loading} className="w-full bg-primary text-primary-foreground font-space font-bold uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all h-14 group rounded-xl">
-              {loading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t('auth.login.verifying', 'VERIFYING...')}</> : <span className="flex items-center gap-2">{t('auth.login.initiate_handshake', 'Initiate Handshake')} <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" /></span>}
+            <Button 
+              type="submit" 
+              disabled={loading} 
+              className="w-full bg-primary text-primary-foreground font-space font-bold uppercase tracking-widest shadow-xl shadow-primary/25 hover:shadow-primary/40 hover:scale-[1.01] active:scale-[0.99] transition-all h-14 group rounded-xl relative overflow-hidden ring-1 ring-primary/50"
+            >
+              {loading ? (
+                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t('auth.login.verifying', 'VERIFYING...')}</>
+              ) : (
+                <span className="flex items-center gap-2">
+                  {t('auth.login.initiate_handshake', 'Initiate Handshake')} 
+                  <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                </span>
+              )}
             </Button>
           </form>
         </div>
@@ -318,6 +358,9 @@ export default function LoginPage() {
               <div className="bg-background/80 rounded-[22px] p-8 border border-border/50 flex flex-col items-center text-center">
                 <h3 className="font-space font-bold text-xl tracking-tight mb-2 uppercase">{isTenant ? t('auth.login.tenant_gateway', 'Tenant Node Gateway') : t('auth.login.master_gateway', 'Master Cluster Gateway')}</h3>
                 <p className="text-xs text-muted-foreground font-mono">{displayPortalName}</p>
+                <div className="mt-4 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary text-[11px] font-mono font-bold tracking-wide">
+                  {mounted && typeof window !== 'undefined' ? window.location.origin : 'https://hive.techiveet.com'}
+                </div>
               </div>
            </div>
         </div>

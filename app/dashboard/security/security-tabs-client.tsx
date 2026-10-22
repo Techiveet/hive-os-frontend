@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, ShieldCheck, Fingerprint, Lock, ShieldAlert, HelpCircle } from 'lucide-react';
+import { Users, ShieldCheck, Fingerprint, Lock, ShieldAlert } from 'lucide-react';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useTranslation } from '@/store/use-translation';
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from '@/lib/safe-storage';
 import { UsersTabClient } from './users/_components/users-tab-client';
 import { RolesTabClient } from './roles/_components/roles-tab-client';
 import { PermissionsTabClient } from './permissions/_components/permissions-tab-client';
@@ -22,6 +24,7 @@ interface SecurityTabsClientProps {
 
 export function SecurityTabsClient({ tenantId, tenantName, defaultTab: initialTab }: SecurityTabsClientProps) {
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
   const { hasPermission, hasAnyPermission, isLoaded } = usePermissions();
   const { startTour, isActive, currentStep } = useTour();
 
@@ -30,21 +33,49 @@ export function SecurityTabsClient({ tenantId, tenantName, defaultTab: initialTa
   const showPerms = hasPermission('view_permissions');
   const isCompletelyDenied = !showUsers && !showRoles && !showPerms;
 
-  const calculatedDefaultTab = useMemo(() => {
-    if (initialTab) return initialTab;
+  const resolvePermittedTab = useCallback((candidate?: string | null): string | null => {
+    if (!candidate) return null;
+    if (candidate === 'users' && showUsers) return 'users';
+    if (candidate === 'roles' && showRoles) return 'roles';
+    if (candidate === 'permissions' && showPerms) return 'permissions';
+    return null;
+  }, [showUsers, showRoles, showPerms]);
+
+  const fallbackDefaultTab = useMemo(() => {
     if (showUsers) return 'users';
     if (showRoles) return 'roles';
     if (showPerms) return 'permissions';
     return '';
   }, [showUsers, showRoles, showPerms]);
 
-  const [activeTab, setActiveTab] = useState<string>(calculatedDefaultTab);
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const urlTab = new URLSearchParams(window.location.search).get('tab');
+      if (urlTab) return urlTab;
+      const stored = safeLocalStorageGetItem('hive_security_active_tab');
+      if (stored) return stored;
+    }
+    return initialTab || '';
+  });
 
   useEffect(() => {
-    if (!activeTab && calculatedDefaultTab) {
-      setActiveTab(calculatedDefaultTab);
+    if (!isLoaded) return;
+
+    // Check in priority: URL ?tab= -> initialTab prop -> localStorage -> activeTab (if permitted) -> fallback
+    const paramCandidate = searchParams?.get('tab');
+    const storedCandidate = safeLocalStorageGetItem('hive_security_active_tab');
+
+    const targetTab =
+      resolvePermittedTab(paramCandidate) ||
+      resolvePermittedTab(initialTab) ||
+      resolvePermittedTab(storedCandidate) ||
+      resolvePermittedTab(activeTab) ||
+      fallbackDefaultTab;
+
+    if (targetTab && targetTab !== activeTab) {
+      setActiveTab(targetTab);
     }
-  }, [calculatedDefaultTab, activeTab]);
+  }, [isLoaded, searchParams, initialTab, resolvePermittedTab, fallbackDefaultTab]);
 
   // 🚀 AUTOMATIC REACT TAB SWITCHING FOR TOUR:
   useEffect(() => {
@@ -57,7 +88,14 @@ export function SecurityTabsClient({ tenantId, tenantName, defaultTab: initialTa
 
   const onTabChange = useCallback((tab: string) => {
     setActiveTab(tab);
-  }, []);
+    safeLocalStorageSetItem('hive_security_active_tab', tab);
+
+    if (typeof window !== 'undefined' && !isActive) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      window.history.replaceState(null, '', url.toString());
+    }
+  }, [isActive]);
 
   const handleStartTour = useCallback(() => {
     const steps: Step[] = [
@@ -99,8 +137,16 @@ export function SecurityTabsClient({ tenantId, tenantName, defaultTab: initialTa
         {
           target: '#tour-users-filters',
           title: t('tour.filters_title', 'Operator Matrix Filters'),
-          content: t('tour.users_filters_desc', 'Filter operator identities by account status (Active/Locked), assigned clearance role, onboarding status, or registration date range.'),
+          content: t('tour.users_filters_desc', 'Filter operator identities by account status (Active/Locked), assigned clearance role, onboarding status, 2FA security status, or registration date range.'),
           placement: 'bottom',
+          skipBeacon: true,
+          data: { switchTab: 'users' }
+        },
+        {
+          target: '#tour-users-table',
+          title: t('tour.users_fixed_columns_title', 'Pinned Columns (Always Visible)'),
+          content: t('tour.users_fixed_columns_desc', 'The row number (#) and Operator name stay fixed on the left while you scroll sideways, so you always know whose row you are viewing.'),
+          placement: 'top',
           skipBeacon: true,
           data: { switchTab: 'users' }
         },
@@ -360,6 +406,12 @@ export function SecurityTabsClient({ tenantId, tenantName, defaultTab: initialTa
     startTour(steps);
   }, [showUsers, showRoles, showPerms, startTour, t]);
 
+  useEffect(() => {
+    const handleTourEvent = () => handleStartTour();
+    window.addEventListener("start-security-tour", handleTourEvent);
+    return () => window.removeEventListener("start-security-tour", handleTourEvent);
+  }, [handleStartTour]);
+
   if (!isLoaded) {
     return <TabbedModuleSkeleton rows={6} cols={5} />;
   }
@@ -405,16 +457,7 @@ export function SecurityTabsClient({ tenantId, tenantName, defaultTab: initialTa
         </div>
 
         <div className="flex shrink-0 items-center gap-2 ml-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleStartTour}
-            className="h-8 rounded-lg shadow-sm text-muted-foreground hover:text-foreground border-border/50 bg-background/50 backdrop-blur-md hidden sm:flex"
-          >
-            <HelpCircle className="w-4 h-4 mr-1.5" /> {t('security.matrix_tour', 'Matrix Tour')}
-          </Button>
-
-          <div className="hidden lg:flex shrink-0 items-center gap-2 px-3 text-muted-foreground border-l border-border/50">
+          <div className="hidden lg:flex shrink-0 items-center gap-2 px-3 text-muted-foreground">
             <Lock className="h-3.5 w-3.5 text-emerald-500" />
             <span className="text-[11px] font-mono uppercase tracking-widest font-semibold text-foreground">
               {t('security.encrypted', 'Encrypted')}

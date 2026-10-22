@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { ACTIONS, Joyride, type EventData, type Step, STATUS, EVENTS, type TooltipRenderProps } from "react-joyride";
 import { Button } from "@/components/ui/button";
-import { safeLocalStorageSetItem } from "@/lib/safe-storage";
+import { safeLocalStorageSetItem, safeLocalStorageRemoveItem } from "@/lib/safe-storage";
 import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
 import { useTranslation } from "@/store/use-translation";
 
@@ -160,12 +160,76 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
     const [tourType, setTourType] = useState<'welcome' | 'system'>('system');
     const tabTransitionTimer = useRef<NodeJS.Timeout | null>(null);
 
+    const scrollTargetIntoView = useCallback((target: string | HTMLElement) => {
+        if (typeof window === "undefined") return;
+        try {
+            const el = typeof target === "string" ? document.querySelector<HTMLElement>(target) : target;
+            if (!el || !(el instanceof HTMLElement) || !el.isConnected) return;
+
+            // 1. If element is inside the sidebar navigation container, scroll that container smoothly
+            const sidebarNav = document.querySelector<HTMLElement>("#tour-sidebar-nav");
+            if (sidebarNav && sidebarNav.contains(el)) {
+                const navRect = sidebarNav.getBoundingClientRect();
+                const elRect = el.getBoundingClientRect();
+                // Check if element is already comfortably visible inside the sidebar viewport
+                const isComfortablyVisible =
+                    elRect.top >= navRect.top + 30 && elRect.bottom <= navRect.bottom - 30;
+
+                if (!isComfortablyVisible) {
+                    const offset = elRect.top - navRect.top - (navRect.height / 2) + (elRect.height / 2);
+                    sidebarNav.scrollBy({
+                        top: offset,
+                        behavior: "smooth",
+                    });
+                }
+                return;
+            }
+
+            // 2. If element is inside the main scroll container, scroll it smoothly
+            const mainContent =
+                document.querySelector<HTMLElement>("main.overflow-y-auto") ||
+                document.querySelector<HTMLElement>("main");
+            if (mainContent && mainContent.contains(el)) {
+                const mainRect = mainContent.getBoundingClientRect();
+                const elRect = el.getBoundingClientRect();
+                const isComfortablyVisible =
+                    elRect.top >= mainRect.top + 40 && elRect.bottom <= mainRect.bottom - 40;
+
+                if (!isComfortablyVisible) {
+                    const offset = elRect.top - mainRect.top - (mainRect.height / 2) + (elRect.height / 2);
+                    mainContent.scrollBy({
+                        top: offset,
+                        behavior: "smooth",
+                    });
+                }
+                return;
+            }
+
+            // 3. Fallback for topbar / body elements: minimal scroll to avoid viewport jitter
+            el.scrollIntoView({
+                behavior: "smooth",
+                block: "nearest",
+                inline: "nearest",
+            });
+        } catch {
+            // Ignore selector syntax errors if any
+        }
+    }, []);
+
     useEffect(() => {
         setIsMounted(true);
         return () => {
             if (tabTransitionTimer.current) clearTimeout(tabTransitionTimer.current);
         };
     }, []);
+
+    useEffect(() => {
+        if (!run || !steps[stepIndex]) return;
+        const currentTarget = steps[stepIndex]?.target;
+        if (currentTarget) {
+            scrollTargetIntoView(currentTarget as string | HTMLElement);
+        }
+    }, [stepIndex, run, steps, scrollTargetIntoView]);
 
     const switchTabSync = useCallback((switchTab: string | undefined, tabSelector?: string): boolean => {
         if (!switchTab && !tabSelector) return false;
@@ -199,6 +263,10 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const startTour = useCallback((newSteps: Step[], type: 'welcome' | 'system' = 'system') => {
+        // Immediately record tour state so background timers and auto-scrolls stand down
+        safeLocalStorageSetItem('hive_tour_running', 'true');
+        safeLocalStorageSetItem('hive_welcome_tour_completed', 'true');
+
         setTourType(type);
         setSteps(newSteps.map(step => ({ ...step, skipBeacon: true })));
         setStepIndex(0);
@@ -214,12 +282,13 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
             }
         }
 
-        setTimeout(() => setRun(true), 200);
+        setTimeout(() => setRun(true), 150);
     }, [switchTabSync]);
 
     const stopTour = useCallback(() => {
         setRun(false);
         setStepIndex(0);
+        safeLocalStorageRemoveItem('hive_tour_running');
         if (tabTransitionTimer.current) clearTimeout(tabTransitionTimer.current);
     }, []);
 
@@ -254,11 +323,18 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
             return;
         }
 
-        if (type === EVENTS.STEP_AFTER) {
+        if (type === EVENTS.STEP_BEFORE) {
+            if (step?.target) {
+                scrollTargetIntoView(step.target as string | HTMLElement);
+            }
+        } else if (type === EVENTS.STEP_AFTER) {
             const nextIndex = index + (action === 'prev' ? -1 : 1);
 
             if (nextIndex >= 0 && nextIndex < steps.length) {
                 const nextStep = steps[nextIndex];
+                if (nextStep?.target) {
+                    scrollTargetIntoView(nextStep.target as string | HTMLElement);
+                }
                 const nextStepData = nextStep?.data as Record<string, any> | undefined;
                 const didSwitch = switchTabSync(nextStepData?.switchTab, nextStepData?.tabSelector);
 
@@ -281,18 +357,45 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
                 tabTransitionTimer.current = setTimeout(() => {
                     const retryTarget = typeof step.target === 'string' ? document.querySelector(step.target) : step.target;
                     if (retryTarget) {
+                        scrollTargetIntoView(retryTarget as HTMLElement);
                         return;
                     }
-                    setStepIndex(index + (action === 'prev' ? -1 : 1));
+                    const nextIdx = index + (action === 'prev' ? -1 : 1);
+                    if (nextIdx >= 0 && nextIdx < steps.length) {
+                        setStepIndex(nextIdx);
+                    } else {
+                        stopTour();
+                    }
                 }, 300);
                 return;
             }
 
-            setStepIndex(index + (action === 'prev' ? -1 : 1));
+            // Check if element is in the DOM (e.g. was scrolled out of viewport or rendering)
+            const existingEl = typeof step?.target === 'string'
+                ? document.querySelector<HTMLElement>(step.target)
+                : step?.target;
+
+            if (existingEl && existingEl instanceof HTMLElement && existingEl.isConnected) {
+                scrollTargetIntoView(existingEl);
+                if (tabTransitionTimer.current) clearTimeout(tabTransitionTimer.current);
+                tabTransitionTimer.current = setTimeout(() => {
+                    setStepIndex((curr) => curr);
+                }, 100);
+                return;
+            }
+
+            // Truly not found: move to next or prev step safely
+            const nextIdx = index + (action === 'prev' ? -1 : 1);
+            if (nextIdx >= 0 && nextIdx < steps.length) {
+                setStepIndex(nextIdx);
+            } else {
+                stopTour();
+            }
         } else if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
             const isFinished = status === STATUS.FINISHED;
             setRun(false);
             setStepIndex(0);
+            safeLocalStorageRemoveItem('hive_tour_running');
             if (tabTransitionTimer.current) clearTimeout(tabTransitionTimer.current);
 
             if (tourType === 'welcome') {
@@ -318,10 +421,11 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
                     stepIndex={stepIndex}
                     onEvent={handleJoyrideEvent}
                     continuous={true}
-                    scrollToFirstStep={true}
+                    scrollToFirstStep={false}
                     options={{
                         buttons: ["skip", "back", "close", "primary"],
                         overlayClickAction: false,
+                        skipScroll: true,
                         scrollOffset: 140,
                         showProgress: false,
                         zIndex: 999999,
@@ -330,7 +434,7 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
                         backgroundColor: "hsl(var(--card))",
                         textColor: "hsl(var(--foreground))",
                         spotlightRadius: 24,
-                        spotlightPadding: 14,
+                        spotlightPadding: 12,
                     }}
                     tooltipComponent={(props: TooltipRenderProps) => (
                         <CustomTooltip {...props} totalSteps={steps.length} />

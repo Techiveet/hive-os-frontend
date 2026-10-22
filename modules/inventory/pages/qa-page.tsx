@@ -62,7 +62,7 @@ const getBatchStatusConfig = (status: string) => {
       className: "border-yellow-500/50 text-yellow-600 bg-yellow-50",
     },
     qa_passed: {
-      label: "Passed",
+      label: "QA Passed",
       icon: CheckCircle2,
       className: "bg-emerald-500 hover:bg-emerald-600 text-white border-none shadow-sm",
     },

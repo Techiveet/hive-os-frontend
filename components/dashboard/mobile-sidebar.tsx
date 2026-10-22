@@ -1,4 +1,4 @@
-﻿// components/dashboard/mobile-sidebar.tsx
+// components/dashboard/mobile-sidebar.tsx
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -62,6 +62,7 @@ import {
   DASHBOARD_MODULE_IDS,
   DASHBOARD_NAV,
   DASHBOARD_SECONDARY,
+  isSubItemActive,
   type NavItem,
 } from "./nav";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -679,7 +680,7 @@ export function MobileSidebar() {
     cn(
       "group flex min-h-11 items-center justify-between rounded-xl px-2.5 py-1.5 text-[13px] font-semibold transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary",
       isActiveModule
-        ? "border border-amber-700/40 bg-amber-500/15 font-extrabold text-amber-900 shadow-sm dark:border-amber-300/40 dark:text-amber-200"
+        ? "border border-primary/30 bg-primary/15 font-extrabold text-primary shadow-sm"
         : openState
         ? "bg-muted/30 text-foreground"
         : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
@@ -713,18 +714,7 @@ export function MobileSidebar() {
 
   const renderNestedItem = (item: NavItem, siblingItems: NavItem[] = []) => {
     const Icon = item.icon as SidebarIcon;
-    const itemPath = item.href.split("?")[0];
-    const hasMoreSpecificMatch = siblingItems.some((candidate) => {
-      const candidatePath = candidate.href.split("?")[0];
-      return (
-        candidatePath !== itemPath &&
-        candidatePath.startsWith(`${itemPath}/`) &&
-        (pathname === candidatePath || pathname.startsWith(`${candidatePath}/`))
-      );
-    });
-    const active =
-      pathname === itemPath ||
-      (!hasMoreSpecificMatch && pathname.startsWith(`${itemPath}/`));
+    const active = isSubItemActive(item, siblingItems, pathname);
     const label = t(item.translationKey, item.fallbackLabel);
 
     return (
@@ -757,7 +747,9 @@ export function MobileSidebar() {
   }) => {
     if (items.length === 0) return null;
     const sectionId = `mobile-module-${items[0]?.moduleId ?? "section"}`;
-    const isAnyItemActive = items.some((item) => isActive(item.href));
+    const isAnyItemActive = items.some((item) =>
+      isSubItemActive(item, items, pathname),
+    );
 
     return (
       <div className="flex flex-col gap-1">
@@ -1060,7 +1052,7 @@ export function MobileSidebar() {
 
                         {renderModuleSection({
                           items: warehouseModuleItems,
-                          label: t("nav.warehouse", "Warehouse Logic"),
+                          label: t("nav.warehouse", "Warehouse"),
                           icon: Warehouse,
                           openState: isWarehouseOpen,
                           onToggle: () => setIsWarehouseOpen((value) => !value),

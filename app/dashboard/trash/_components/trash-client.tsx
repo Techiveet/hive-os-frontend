@@ -29,6 +29,7 @@ import {
   Sliders,
   Check,
   Radio,
+  Package,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -229,6 +230,7 @@ export function TrashClient() {
       queryClient.invalidateQueries({ queryKey: ["trash-settings"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "products"] });
 
       if (event?.message) {
         toast.info(event.message, {
@@ -289,6 +291,7 @@ export function TrashClient() {
       queryClient.invalidateQueries({ queryKey: ["trash-stats"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "products"] });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || t("trash.restore_failed", "Failed to restore item."));
       queryClient.invalidateQueries({ queryKey: ["trash-items"] });
@@ -320,6 +323,7 @@ export function TrashClient() {
       queryClient.invalidateQueries({ queryKey: ["trash-stats"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "products"] });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || t("trash.restore_all_failed", "Failed to restore all items."));
     } finally {
@@ -337,6 +341,7 @@ export function TrashClient() {
       queryClient.invalidateQueries({ queryKey: ["trash-stats"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory", "products"] });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || t("trash.empty_failed", "Failed to empty trash bin."));
     } finally {
@@ -376,6 +381,7 @@ export function TrashClient() {
     if (entityKey === "file_entry") return <FileText className="h-4 w-4 text-amber-500" />;
     if (entityKey === "warehouse") return <Building className="h-4 w-4 text-cyan-500" />;
     if (entityKey === "fleet_vehicle") return <Truck className="h-4 w-4 text-rose-500" />;
+    if (entityKey === "product") return <Package className="h-4 w-4 text-indigo-500" />;
     return <Layers className="h-4 w-4 text-primary" />;
   };
 
@@ -661,6 +667,7 @@ export function TrashClient() {
               <SelectItem value="warehouse">{t("trash.mod_warehouse", "Warehouse")}</SelectItem>
               <SelectItem value="fleet">{t("trash.mod_fleet", "Fleet Logistics")}</SelectItem>
               <SelectItem value="crm">{t("trash.mod_crm", "CRM")}</SelectItem>
+              <SelectItem value="inventory">{t("trash.mod_inventory", "Inventory Catalog")}</SelectItem>
             </SelectContent>
           </Select>
 

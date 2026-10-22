@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { headers } from "next/headers";
 import { SecurityHeader } from "@/modules/identity/components/security-header";
 import { SecurityTabsClient } from "@/modules/identity/components/security-tabs-client";
+import { TabbedModuleSkeleton } from "@/components/ui/loading-states";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +14,15 @@ export default async function SecurityPage({ searchParams }: { searchParams?: Pr
   const tenantName = isTenant ? host.split(".")[0] : "Central System";
 
   const sp = (await searchParams) ?? {};
-  const requestedTab = (Array.isArray(sp.tab) ? sp.tab[0] : sp.tab) || "users";
+  const requestedTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
 
   return (
     <div className="animate-in fade-in zoom-in-95 duration-300">
       <SecurityHeader tenantName={tenantName} />
 
-      <SecurityTabsClient tenantId={isTenant ? "current" : null} tenantName={tenantName} defaultTab={requestedTab as any} />
+      <Suspense fallback={<TabbedModuleSkeleton rows={6} cols={5} />}>
+        <SecurityTabsClient tenantId={isTenant ? "current" : null} tenantName={tenantName} defaultTab={requestedTab as any} />
+      </Suspense>
     </div>
   );
 }

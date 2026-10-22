@@ -1,4 +1,4 @@
-import { Code2, FileText, HardDrive, LayoutDashboard, Settings, Trash2 } from "lucide-react";
+import { BookOpen, Code2, FileText, HardDrive, LayoutDashboard, Settings, Trash2 } from "lucide-react";
 import type { FrontendModuleDefinition } from "@/modules/types";
 import {
   API_DOCS_ROUTE_PERMISSIONS,
@@ -12,7 +12,7 @@ export const coreModule: FrontendModuleDefinition = {
   name: "Core",
   description: "Shared operational capabilities such as dashboard, settings, audit logs, storage, and docs.",
   backendModule: "Modules\\Core",
-  routePrefixes: ["/dashboard", "/dashboard/trash", "/dashboard/audit-logs", "/dashboard/settings", "/dashboard/storage", "/dashboard/api-docs"],
+  routePrefixes: ["/dashboard", "/dashboard/trash", "/dashboard/audit-logs", "/dashboard/settings", "/dashboard/storage", "/dashboard/api-docs", "/dashboard/user-manual"],
   navItems: [
     {
       moduleId: "core",
@@ -75,6 +75,15 @@ export const coreModule: FrontendModuleDefinition = {
       permissions: [...API_DOCS_ROUTE_PERMISSIONS],
       subscriptionSlug: "api_docs",
       tourId: "tour-nav-api-docs",
+      placement: "secondary",
+    },
+    {
+      moduleId: "core",
+      translationKey: "nav.user_manual",
+      fallbackLabel: "User Manual",
+      href: "/dashboard/user-manual",
+      icon: BookOpen,
+      tourId: "tour-nav-user-manual",
       placement: "secondary",
     },
   ],

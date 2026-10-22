@@ -119,6 +119,7 @@ function WarehouseShelvesList({ warehouse }: { warehouse: Warehouse }) {
 
 export function WarehousesPage() {
   const { t } = useTranslation();
+  const router = useRouter();
 
   const queryClient = useQueryClient();
   const [tableQuery, setTableQuery] = React.useState<TableQueryState>(DEFAULT_QUERY);
@@ -298,7 +299,7 @@ export function WarehousesPage() {
                 size="sm"
                 variant="outline"
                 className="rounded-full bg-primary/10 text-primary hover:bg-primary/20 border-primary/20"
-                onClick={() => (window.location.href = `/dashboard/warehouse/locations/shelves?highlight_warehouse_id=${warehouse.id}`)}
+                onClick={() => router.push(`/dashboard/warehouse/locations/shelves?warehouse_id=${warehouse.id}`)}
               >
                 {t("inventory.warehouses.manage_shelves", "Manage Shelves")}
               </Button>
@@ -342,7 +343,7 @@ export function WarehousesPage() {
         meta: { align: "left" as const },
       },
     ],
-    [deleteMutation, openEdit, t]
+    [deleteMutation, openEdit, router, t]
   );
 
   return (

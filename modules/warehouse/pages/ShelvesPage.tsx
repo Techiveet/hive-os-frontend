@@ -111,11 +111,11 @@ export function ShelvesPage() {
   const queryClient = useQueryClient();
   const addProductId = searchParams.get("add_product_id");
 
-  const highlightWarehouseId = searchParams.get("highlight_warehouse_id");
+  const rawWarehouseId = searchParams.get("warehouse_id") || searchParams.get("highlight_warehouse_id") || undefined;
   
   const [tableQuery, setTableQuery] = React.useState<TableQueryState>({
     ...DEFAULT_QUERY,
-    warehouse_id: searchParams.get("warehouse_id") || undefined,
+    warehouse_id: rawWarehouseId,
   });
   const [selectedRowIds, setSelectedRowIds] = React.useState<RowSelectionState>({});
   const [open, setOpen] = React.useState(false);
@@ -235,6 +235,19 @@ export function ShelvesPage() {
     });
   }, []);
 
+  React.useEffect(() => {
+    if (rawWarehouseId !== tableQuery.warehouse_id) {
+      applyTableQuery({ warehouse_id: rawWarehouseId, page: 1 });
+    }
+  }, [rawWarehouseId, applyTableQuery, tableQuery.warehouse_id]);
+
+  const currentWarehouse = React.useMemo(() => {
+    if (!tableQuery.warehouse_id) return null;
+    return (warehousesQuery.data?.data ?? []).find(
+      (w: Warehouse) => String(w.id) === String(tableQuery.warehouse_id)
+    );
+  }, [tableQuery.warehouse_id, warehousesQuery.data]);
+
   const handleTableQueryChange = React.useCallback(
     (query: DataTableQuery) => {
       applyTableQuery({
@@ -281,10 +294,11 @@ export function ShelvesPage() {
   const exportUrl = React.useMemo(() => {
     const params = new URLSearchParams();
     if (tableQuery.search) params.set("search", tableQuery.search);
+    if (tableQuery.warehouse_id) params.set("warehouse_id", tableQuery.warehouse_id);
     params.set("sortCol", tableQuery.sortCol);
     params.set("sortDir", tableQuery.sortDir);
     return `/api/v1/warehouse/locations/export?type=shelf&${params.toString()}`;
-  }, [tableQuery.search, tableQuery.sortCol, tableQuery.sortDir]);
+  }, [tableQuery.search, tableQuery.sortCol, tableQuery.sortDir, tableQuery.warehouse_id]);
 
   const columns = React.useMemo<ColumnDef<WarehouseLocation>[]>(
     () => [
@@ -293,15 +307,26 @@ export function ShelvesPage() {
         header: t("inventory.shelves.col_name", "Shelf"),
         cell: ({ row }) => {
           const shelf = row.original;
-          const isHighlighted = highlightWarehouseId && String(shelf.warehouse_id) === highlightWarehouseId;
           return (
             <div>
-              <div className="flex items-center gap-2">
-                <p className="font-semibold">{shelf.name}</p>
-                {isHighlighted && <Badge variant="secondary" className="text-[11px] h-5 bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">Current Warehouse</Badge>}
-              </div>
+              <p className="font-semibold">{shelf.name}</p>
               <p className="text-xs text-muted-foreground">{shelf.code || t("inventory.common.no_code", "No code")}</p>
             </div>
+          );
+        },
+      },
+      {
+        id: "warehouse",
+        header: t("inventory.shelves.col_warehouse", "Warehouse"),
+        enableSorting: false,
+        cell: ({ row }) => {
+          const shelf = row.original;
+          const wh = shelf.warehouse;
+          if (!wh) return <span className="text-muted-foreground text-xs">-</span>;
+          return (
+            <Badge variant="outline" className="font-medium text-xs bg-muted/40 border-border/60">
+              {wh.name}
+            </Badge>
           );
         },
       },
@@ -312,7 +337,7 @@ export function ShelvesPage() {
         cell: ({ row }) => {
           const r = readPayloadString(row.original, "rows", "0");
           const c = readPayloadString(row.original, "columns", "0");
-          return `${r} Ã— ${c}`;
+          return `${r} × ${c}`;
         },
         meta: { align: "right" as const },
       },
@@ -448,7 +473,7 @@ export function ShelvesPage() {
         meta: { align: "left" as const },
       },
     ],
-    [deleteMutation, openEdit, addProductId, router, t, highlightWarehouseId]
+    [deleteMutation, openEdit, addProductId, router, t]
   );
 
   return (
@@ -484,11 +509,65 @@ export function ShelvesPage() {
             {t("inventory.shelves.subtitle", "Shelf definitions linked to warehouses, with capacity metadata and datatable exports.")}
           </p>
         </div>
-        <Button className="rounded-full px-5" onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          {t("inventory.shelves.add_btn", "Add Shelf")}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Select
+            value={tableQuery.warehouse_id || "__all__"}
+            onValueChange={(val) => {
+              const nextId = val === "__all__" ? undefined : val;
+              applyTableQuery({ warehouse_id: nextId, page: 1 });
+              const params = new URLSearchParams(window.location.search);
+              if (nextId) {
+                params.set("warehouse_id", nextId);
+              } else {
+                params.delete("warehouse_id");
+              }
+              params.delete("highlight_warehouse_id");
+              router.replace(`/dashboard/warehouse/locations/shelves${params.toString() ? `?${params.toString()}` : ""}`);
+            }}
+          >
+            <SelectTrigger className="h-9 w-[13.5rem] rounded-full text-xs font-medium">
+              <SelectValue placeholder={t("inventory.shelves.all_warehouses", "All Warehouses")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">{t("inventory.shelves.all_warehouses", "All Warehouses")}</SelectItem>
+              {(warehousesQuery.data?.data ?? []).map((w: Warehouse) => (
+                <SelectItem key={w.id} value={String(w.id)}>
+                  {w.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button className="rounded-full px-5" onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t("inventory.shelves.add_btn", "Add Shelf")}
+          </Button>
+        </div>
       </div>
+
+      {currentWarehouse && (
+        <div className="flex items-center justify-between rounded-2xl border border-primary/20 bg-primary/5 px-4 py-2.5 text-xs text-foreground transition-all">
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground font-medium">
+              {t("inventory.shelves.filtered_warehouse", "Showing shelves for warehouse:")}
+            </span>
+            <Badge variant="secondary" className="bg-background text-primary font-bold shadow-sm">
+              {currentWarehouse.name}
+            </Badge>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 rounded-full text-xs text-muted-foreground hover:text-foreground font-semibold"
+            onClick={() => {
+              applyTableQuery({ warehouse_id: undefined, page: 1 });
+              router.replace("/dashboard/warehouse/locations/shelves");
+            }}
+          >
+            {t("inventory.common.show_all", "Clear Filter / Show All")}
+          </Button>
+        </div>
+      )}
 
       <DataTable
         columns={columns}
@@ -514,6 +593,7 @@ export function ShelvesPage() {
         onResetFilters={() => {
           applyTableQuery(DEFAULT_QUERY);
           clearSelection();
+          router.replace("/dashboard/warehouse/locations/shelves");
         }}
         searchPlaceholder={t("inventory.shelves.search_placeholder", "Search shelves by name or code...")}
         resourceName="shelves"

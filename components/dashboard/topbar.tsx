@@ -31,8 +31,8 @@ import {
   getWorkspaceScopeKey,
 } from "@/lib/runtime-context";
 import { handleAuthFailureResponse, isImpersonatingSession, logoutHiveSession, stopImpersonation } from "@/lib/auth-sync";
-import { prepareNavForTour } from "@/lib/tour-events";
-import { buildSidebarTourSteps } from "@/lib/tour-steps";
+import { startMasterSystemTour } from "@/lib/master-tour";
+import { TourDropdown } from "./tour-dropdown";
 import { usePermissions } from "@/hooks/use-permissions";
 import { readStoredUser } from "@/lib/home-path";
 import { PROFILE_ROUTE_PERMISSIONS } from "@/lib/route-permissions";
@@ -190,172 +190,7 @@ export function DashboardTopbar() {
   };
 
   const triggerMasterTour = async () => {
-    // Expand every collapsible sidebar group first. Their children are not
-    // rendered while collapsed, so the filter below used to drop those steps and
-    // the tour visibly jumped over whole sections.
-    await prepareNavForTour();
-
-    const possibleSteps = [
-      // Sidebar Navigation
-      {
-        target: "#tour-sidebar-brand",
-        title: t("tour.sidebar_brand_title", "HIVE.OS Control Hub"),
-        content: t(
-          "tour.sidebar_brand_desc",
-          "This is your central command console.",
-        ),
-        placement: "right" as const,
-      },
-      {
-        target: "#tour-sidebar-search",
-        title: t("tour.sidebar_search_title", "Sidebar Search"),
-        content: t(
-          "tour.sidebar_search_desc",
-          "Quickly find and filter navigation menus.",
-        ),
-        placement: "right" as const,
-      },
-      // Sidebar navigation is generated from the rendered DOM so every module,
-      // sub-module and nested tab is visited in visual order — and so a tenant
-      // node tours exactly the modules it subscribes to. See lib/tour-steps.ts.
-      ...buildSidebarTourSteps(t),
-
-      // Topbar Actions
-      {
-        target: "#tour-topbar-search",
-        title: t("tour.topbar_search_title", "Global Command Search"),
-        content: t(
-          "tour.topbar_search_desc",
-          "Instantly locate node configurations or specific system logs.",
-        ),
-        placement: "bottom" as const,
-      },
-      {
-        target: "#tour-topbar-language",
-        title: t("tour.topbar_language_title", "Interface Language"),
-        content: t(
-          "tour.topbar_language_desc",
-          "Switch the dashboard matrix to your preferred language.",
-        ),
-        placement: "bottom" as const,
-      },
-      {
-        target: "#tour-topbar-theme",
-        title: t("tour.topbar_theme_title", "Interface Theme"),
-        content: t(
-          "tour.topbar_theme_desc",
-          "Toggle between light mode and dark mode.",
-        ),
-        placement: "bottom" as const,
-      },
-      {
-        target: "#tour-topbar-fullscreen",
-        title: t("tour.topbar_fullscreen_title", "Focus Mode"),
-        content: t(
-          "tour.topbar_fullscreen_desc",
-          "Expand the dashboard to fill your entire screen.",
-        ),
-        placement: "bottom" as const,
-      },
-      {
-        target: "#tour-topbar-help",
-        title: t("tour.topbar_help_title", "Guided Tours"),
-        content: t(
-          "tour.topbar_help_desc",
-          "Replay this walkthrough at any time. Individual pages offer their own focused tour from the same control.",
-        ),
-        placement: "bottom" as const,
-      },
-      {
-        target: "#tour-topbar-chat",
-        title: t("tour.topbar_chat_title", "Team Messaging"),
-        content: t(
-          "tour.topbar_chat_desc",
-          "Direct and group conversations with other operators, with unread counts surfaced on the icon.",
-        ),
-        placement: "bottom" as const,
-      },
-      {
-        target: "#tour-topbar-notifications",
-        title: t("tour.topbar_notifications_title", "System Alerts"),
-        content: t(
-          "tour.topbar_notifications_desc",
-          "View real-time security alerts and task notifications.",
-        ),
-        placement: "bottom" as const,
-      },
-      {
-        target: "#tour-topbar-mail",
-        title: t("tour.topbar_mail_title", "Internal Mailbox"),
-        content: t(
-          "tour.topbar_mail_desc",
-          "Encrypted internal mail between operators on this node.",
-        ),
-        placement: "bottom" as const,
-      },
-      {
-        target: "#tour-topbar-profile",
-        title: t("tour.topbar_profile_title", "Operator Profile"),
-        content: t(
-          "tour.topbar_profile_desc",
-          "Manage your settings and safely disconnect your node.",
-        ),
-        placement: "bottom-end" as const,
-      },
-
-      // Dashboard Body Elements
-      {
-        target: "#tour-body-stats",
-        title: t("tour.body_stats_title", "System Metrics"),
-        content: t(
-          "tour.body_stats_desc",
-          "Instant overview of active nodes, users, roles, and core capabilities.",
-        ),
-        placement: "bottom" as const,
-      },
-      {
-        target: "#tour-body-telemetry",
-        title: t("tour.body_telemetry_title", "Live Telemetry"),
-        content: t(
-          "tour.body_telemetry_desc",
-          "Real-time performance graph tracking system requests and overall network health.",
-        ),
-        placement: "right" as const,
-      },
-      {
-        target: "#tour-body-modules",
-        title: t("tour.body_modules_title", "Module Health"),
-        content: t(
-          "tour.body_modules_desc",
-          "Status, latency, and throughput metrics for active microservices.",
-        ),
-        placement: "left" as const,
-      },
-      {
-        target: "#tour-body-audit",
-        title: t("tour.body_audit_title", "Audit Ledger"),
-        content: t(
-          "tour.body_audit_desc",
-          "Live stream of cryptographically sealed actions performed across the network.",
-        ),
-        placement: "top" as const,
-      },
-    ];
-
-    // Sidebar steps arrive as live elements (nested rows carry no id), the
-    // curated ones as selectors — resolve whichever form each step uses and drop
-    // anything not currently on screen.
-    const activeSteps = possibleSteps.filter((step) => {
-      const { target } = step;
-
-      if (typeof target === "string") {
-        return Boolean(document.querySelector(target));
-      }
-
-      return target instanceof HTMLElement && target.isConnected;
-    });
-
-    startTour(activeSteps.map((step) => ({ ...step, skipBeacon: true })));
+    await startMasterSystemTour({ startTour, t });
   };
 
   const userInitials = activeUser?.name
@@ -382,15 +217,10 @@ export function DashboardTopbar() {
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              <Button
+              <TourDropdown
                 id="tour-topbar-help"
-                variant="ghost"
-                className="h-10 px-3 rounded-xl shrink-0 text-primary bg-primary/10 hover:bg-primary/20 font-bold hidden md:flex items-center gap-2 transition-all transform active:scale-95"
-                onClick={triggerMasterTour}
-              >
-                <HelpCircle className="h-4 w-4" />{" "}
-                {t("topbar.system_tour", "System Tour")}
-              </Button>
+                className="hidden md:flex"
+              />
 
               <div className="flex items-center gap-0.5 sm:gap-1">
                 <LanguageSwitcher id="tour-topbar-language" />
@@ -425,7 +255,9 @@ export function DashboardTopbar() {
                 <span id="tour-topbar-chat" className="flex">
                   <ChatNotificationIcon />
                 </span>
-                <TopbarNotificationsIcon activeUser={activeUser} />
+                <span id="tour-topbar-notifications" className="flex">
+                  <TopbarNotificationsIcon activeUser={activeUser} />
+                </span>
                 <span id="tour-topbar-mail" className="flex">
                   <TopbarMailIcon activeUser={activeUser} />
                 </span>

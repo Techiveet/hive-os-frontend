@@ -56,14 +56,29 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // 🚀 DELAYED TRIGGER TO ENSURE DOM IS READY AND BRANDING IS APPLIED
+    // If a tour is already active, running, or was completed, abort immediately.
+    const isTourRunning = typeof window !== "undefined" && (
+      localStorage.getItem("hive_tour_running") === "true" ||
+      localStorage.getItem("hive_welcome_tour_completed") === "true" ||
+      isActive
+    );
+    if (isTourRunning) return;
+
     const timer = setTimeout(() => {
       const storedUser = localStorage.getItem("hive_user");
-      if (!storedUser || isActive) return;
+      const tourRunning = localStorage.getItem("hive_tour_running") === "true";
+      const welcomeCompletedLocal = localStorage.getItem("hive_welcome_tour_completed") === "true";
 
-      const user = JSON.parse(storedUser);
-      const welcomeCompletedLocal = localStorage.getItem("hive_welcome_tour_completed");
+      if (!storedUser || isActive || tourRunning || welcomeCompletedLocal) return;
 
-      if (user && !user.has_completed_welcome_tour && !welcomeCompletedLocal) {
+      let user: any = null;
+      try {
+        user = JSON.parse(storedUser);
+      } catch {
+        return;
+      }
+
+      if (user && !user.has_completed_welcome_tour && !welcomeCompletedLocal && !tourRunning) {
         // Every string here used to be a hardcoded English literal, so the
         // first-login tour stayed English even for an Amharic operator.
         const welcomeSteps = [

@@ -10,6 +10,8 @@ import {
   Calendar,
   Check,
   ChevronsUpDown,
+  Copy,
+  ExternalLink,
   Eye,
   EyeOff,
   Filter,
@@ -54,6 +56,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { DataTable, type CompanySettingsInfo, type BrandingSettingsInfo } from "@/components/datatable/data-table";
+import { FieldInfoPopover } from "@/components/ui/field-info-popover";
 import { useOfflineMutation } from "@/hooks/use-offline-mutation";
 import { isOfflineMutationQueuedResult } from "@/lib/offline/mutation-queue";
 import {
@@ -334,6 +337,7 @@ export function UsersTabClient(props: Props) {
   const [roleFilterOpen, setRoleFilterOpen] = React.useState(false);
   const [onboardingFilter, setOnboardingFilter] = React.useState<string>("all");
   const [avatarFilter, setAvatarFilter] = React.useState<string>("all");
+  const [twoFactorFilter, setTwoFactorFilter] = React.useState<string>("all");
   const [dateFrom, setDateFrom] = React.useState<string>("");
   const [dateTo, setDateTo] = React.useState<string>("");
 
@@ -442,11 +446,11 @@ export function UsersTabClient(props: Props) {
   }, [formEmail, formName, formPassword, formRoleId, isEdit, isProtectedTenantEdit]);
 
   const { data: usersData, isLoading, isFetching } = useQuery({
-    queryKey: ["users", page, pageSize, search, statusFilter, roleFilter, onboardingFilter, avatarFilter, dateFrom, dateTo, sortCol, sortDir, tenantId],
+    queryKey: ["users", page, pageSize, search, statusFilter, roleFilter, onboardingFilter, avatarFilter, twoFactorFilter, dateFrom, dateTo, sortCol, sortDir, tenantId],
     queryFn: async () => {
       const res = await fetchUsers({
         page, pageSize, search: search.trim(), status: statusFilter, role: roleFilter,
-        onboarding: onboardingFilter, avatar: avatarFilter, date_from: dateFrom, date_to: dateTo, sort_by: sortCol, sort_direction: sortDir, tenant_id: tenantId,
+        onboarding: onboardingFilter, avatar: avatarFilter, two_factor: twoFactorFilter, date_from: dateFrom, date_to: dateTo, sort_by: sortCol, sort_direction: sortDir, tenant_id: tenantId,
       }) as Record<string, unknown>;
 
       let rawUsers = [];
@@ -624,8 +628,14 @@ export function UsersTabClient(props: Props) {
 
   const deleteMut = useOfflineMutation<unknown, Error, number>({
     definition: deleteUserOfflineMutationDefinition,
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
+      toast.success(data?.message || t('users.moved_to_trash', 'Operator moved to Trash Bin (will be auto-purged in 30 days).'), {
+        action: {
+          label: t('global.view_trash', 'View Trash'),
+          onClick: () => { window.location.href = '/dashboard/trash'; },
+        },
+      });
     },
     onError: (error: unknown) => {
       toast.error(getErrorMessage(error, t('global.operation_failed', "Operation failed.")));
@@ -646,7 +656,7 @@ export function UsersTabClient(props: Props) {
   }, [queryClient, triggerAudit]);
 
   const resetFilters = React.useCallback(() => {
-    setStatusFilter("all"); setRoleFilter("all"); setOnboardingFilter("all"); setAvatarFilter("all"); setDateFrom(""); setDateTo("");
+    setStatusFilter("all"); setRoleFilter("all"); setOnboardingFilter("all"); setAvatarFilter("all"); setTwoFactorFilter("all"); setDateFrom(""); setDateTo("");
     setSearch(""); setSortCol(null); setSortDir(null); setPage(1); setTableKey((prev) => prev + 1);
     triggerAudit('filtered', 'Reset all Operator Matrix filters');
   }, [triggerAudit]);
@@ -939,7 +949,14 @@ export function UsersTabClient(props: Props) {
       header: t("global.id_number", "ID (#)"),
       enableSorting: false,
       size: 72,
-      meta: { align: "center", exportable: false, printable: true },
+      meta: {
+        sticky: "left" as const,
+        stickyOffset: canDelete ? 48 : 0,
+        className: "w-[72px] min-w-[72px] max-w-[72px]",
+        align: "center",
+        exportable: false,
+        printable: true,
+      },
       cell: ({ row }) => (
         <span className="font-mono text-sm font-bold tabular-nums text-foreground">
           {(page - 1) * pageSize + row.index + 1}
@@ -947,21 +964,30 @@ export function UsersTabClient(props: Props) {
       ),
     },
     {
-      id: "name", accessorKey: "name", header: t('users.col_operator', "Operator"), enableSorting: true,
+      id: "name",
+      accessorKey: "name",
+      header: t('users.col_operator', "Operator"),
+      enableSorting: true,
+      size: 260,
+      meta: {
+        sticky: "left" as const,
+        stickyOffset: canDelete ? 120 : 72,
+        className: "w-[260px] min-w-[260px] max-w-[260px] overflow-hidden",
+      },
       cell: ({ row }) => {
         const u = row.original;
         const isSuper = isProtectedUser(u);
         return (
-          <div className="flex items-center gap-3">
-            <Avatar className={cn("h-9 w-9 border", isSuper ? "border-amber-500/50" : "border-border")}>
+          <div className="flex items-center gap-3 w-[240px] max-w-[240px] min-w-0 overflow-hidden py-1">
+            <Avatar className={cn("h-9 w-9 shrink-0 border", isSuper ? "border-amber-500/50" : "border-border")}>
               <AvatarImage src={u.avatarUrl || ""} alt={u.name || "User"} className="object-cover bg-muted" />
               <AvatarFallback className={cn("text-white text-[11px] font-bold", isSuper ? "bg-amber-600" : "bg-gradient-to-br from-emerald-500 to-teal-600")}>
                 {initials(u.name, u.email)}
               </AvatarFallback>
             </Avatar>
-            <div className="flex flex-col min-w-0">
+            <div className="flex flex-col min-w-0 overflow-hidden">
               <span className="text-sm font-semibold text-foreground leading-tight flex items-center gap-1.5 truncate">
-                {u.name || "Unknown User"}
+                <span className="truncate">{u.name || "Unknown User"}</span>
                 {isSuper && <Shield className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />}
               </span>
               <span className="text-[11px] text-muted-foreground truncate">{u.email}</span>
@@ -1203,6 +1229,15 @@ export function UsersTabClient(props: Props) {
           </SelectContent>
         </Select>
 
+        <Select value={twoFactorFilter} onValueChange={(val) => { setTwoFactorFilter(val); setPage(1); }}>
+          <SelectTrigger aria-label="Filter users by 2FA status" className="h-9 w-[145px] bg-background"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("users.two_factor_all", "All 2FA")}</SelectItem>
+            <SelectItem value="enabled">{t("users.two_factor_enabled", "2FA Active")}</SelectItem>
+            <SelectItem value="disabled">{t("users.two_factor_disabled", "2FA Inactive")}</SelectItem>
+          </SelectContent>
+        </Select>
+
         <div className="flex items-center gap-2 bg-background border border-input rounded-md px-2 h-9">
           <span className="text-xs text-muted-foreground">{t('users.joined', 'Joined:')}</span>
           <label htmlFor="users-joined-from" className="sr-only">Joined from date</label>
@@ -1212,11 +1247,60 @@ export function UsersTabClient(props: Props) {
           <input id="users-joined-to" type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }} className="bg-transparent text-sm w-[110px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm" />
         </div>
 
-        {(statusFilter !== "all" || roleFilter !== "all" || onboardingFilter !== "all" || avatarFilter !== "all" || dateFrom || dateTo) && (
+        {/* Date Quick Presets */}
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs rounded-lg"
+            onClick={() => {
+              const today = new Date().toISOString().split('T')[0];
+              setDateFrom(today);
+              setDateTo(today);
+              setPage(1);
+            }}
+          >
+            {t('global.today', 'Today')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs rounded-lg"
+            onClick={() => {
+              const d = new Date();
+              d.setDate(d.getDate() - 7);
+              setDateFrom(d.toISOString().split('T')[0]);
+              setDateTo(new Date().toISOString().split('T')[0]);
+              setPage(1);
+            }}
+          >
+            7D
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs rounded-lg"
+            onClick={() => {
+              const d = new Date();
+              d.setDate(d.getDate() - 30);
+              setDateFrom(d.toISOString().split('T')[0]);
+              setDateTo(new Date().toISOString().split('T')[0]);
+              setPage(1);
+            }}
+          >
+            30D
+          </Button>
+        </div>
+
+        {(statusFilter !== "all" || roleFilter !== "all" || onboardingFilter !== "all" || avatarFilter !== "all" || twoFactorFilter !== "all" || dateFrom || dateTo) && (
           <Button variant="ghost" size="sm" onClick={resetFilters} className="h-9 px-3 text-destructive hover:bg-destructive/10"><X aria-hidden="true" className="mr-1 h-4 w-4" /> {t('global.clear', 'Clear')}</Button>
         )}
       </div>
 
+      <div id="tour-users-table" className="relative">
       <DataTable
         key={`${tableKey}-${locale}`}
         columns={columns}
@@ -1240,6 +1324,7 @@ export function UsersTabClient(props: Props) {
         companySettings={companySettings ?? undefined}
         brandingSettings={brandingSettings ?? undefined}
       />
+      </div>
 
       {/* CREATE/EDIT USER MODAL */}
       <Dialog open={createDialogOpen} onOpenChange={handleUserDialogOpenChange}>
@@ -1351,6 +1436,16 @@ export function UsersTabClient(props: Props) {
                     <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border border-border/50">
                       {t("users.optional", "Optional")}
                     </span>
+                    <FieldInfoPopover
+                      label={t("users.profile_photo", "Operator Avatar")}
+                      required={false}
+                      info={{
+                        title: "Operator Avatar Profile",
+                        description: "Visual identity asset for this team member. Rendered across the top navigation, sidebar, system audit trail, and warehouse packing slips.",
+                        example: "JPG, PNG, GIF, or WebP up to 5MB. 1:1 square recommended (e.g. 256x256).",
+                        bestPractice: "Upload clear headshots or official badges. If omitted, procedural initials will be automatically synthesized."
+                      }}
+                    />
                   </div>
                   <p className="max-w-md text-xs sm:text-sm leading-relaxed text-muted-foreground">
                     {t("users.photo_reqs", "Upload a photo or select from File Manager. Displayed across topbar, sidebar, and ledgers.")}
@@ -1428,9 +1523,21 @@ export function UsersTabClient(props: Props) {
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   {tenantId && hasHospitalityModule && staffOptions.length > 0 && (
                     <div className="sm:col-span-2 space-y-1.5 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/15 p-4 rounded-xl">
-                      <Label htmlFor="hospitality_staff_id" className="text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1.5 text-xs uppercase tracking-wider">
-                        <VenetianMask className="h-4 w-4" /> Link to Hospitality Staff Profile (Optional)
-                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="hospitality_staff_id" className="text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1.5 text-xs uppercase tracking-wider">
+                          <VenetianMask className="h-4 w-4" /> Link to Hospitality Staff Profile (Optional)
+                        </Label>
+                        <FieldInfoPopover
+                          label="Hospitality Staff Link"
+                          required={false}
+                          info={{
+                            title: "Link Hospitality Staff Profile",
+                            description: "Associates this system operator account with an existing hotel, restaurant, or service staff member.",
+                            example: "Select a front-desk agent or restaurant waiter to sync credentials.",
+                            bestPractice: "Linking automatically fills the operator's legal name, email, and maps operational roles."
+                          }}
+                        />
+                      </div>
                       <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
                         <PopoverTrigger asChild>
                           <Button
@@ -1512,9 +1619,21 @@ export function UsersTabClient(props: Props) {
 
                   {/* FULL NAME */}
                   <div className="sm:col-span-2 space-y-1.5">
-                    <Label htmlFor="name" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", fieldErrors.name && "text-destructive")}>
-                      {t('users.full_name', 'Full Name')} <span className="text-destructive font-bold">*</span>
-                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="name" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", fieldErrors.name && "text-destructive")}>
+                        {t('users.full_name', 'Full Name')} <span className="text-destructive font-bold">*</span>
+                      </Label>
+                      <FieldInfoPopover
+                        label={t('users.full_name', 'Full Name')}
+                        required={true}
+                        info={{
+                          title: "Full Legal & Operational Name",
+                          description: "The official display name of the operator. Immutably stamped on inventory transfers, warehouse bin movements, order approvals, and forensic audit logs.",
+                          example: "e.g. Elena Vance, Ops User HDKZ, Alex Mercer",
+                          bestPractice: "Use the operator's real full name to maintain audit clarity and compliance accountability."
+                        }}
+                      />
+                    </div>
                     <div className="relative">
                       <User aria-hidden="true" className={cn("absolute left-3.5 top-3.5 h-4 w-4 pointer-events-none transition-colors", fieldErrors.name ? "text-destructive" : "text-muted-foreground")} />
                       <Input
@@ -1537,9 +1656,21 @@ export function UsersTabClient(props: Props) {
                   {/* EMAIL ADDRESS */}
                   <div className="sm:col-span-2 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="email" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", fieldErrors.email && "text-destructive")}>
-                        {t('users.email_address', 'Email Address')} <span className="text-destructive font-bold">*</span>
-                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="email" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", fieldErrors.email && "text-destructive")}>
+                          {t('users.email_address', 'Email Address')} <span className="text-destructive font-bold">*</span>
+                        </Label>
+                        <FieldInfoPopover
+                          label={t('users.email_address', 'Email Address')}
+                          required={true}
+                          info={{
+                            title: "Gateway Sign-In Email",
+                            description: "Primary authentication identifier. Used for system gateway logins, password resets, 2FA recovery, and automated incident dispatches.",
+                            example: "e.g. operator@hive.os or ops-user-8@hive.os",
+                            bestPractice: "Must be a unique RFC-compliant address. Once created in Central Admin, email modification is restricted."
+                          }}
+                        />
+                      </div>
                       {isEdit && isCentralAdmin && (
                         <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border border-border/50">
                           {t('users.locked_on_edit', 'Locked on edit')}
@@ -1569,9 +1700,21 @@ export function UsersTabClient(props: Props) {
 
                   {/* CLEARANCE LEVEL (ROLE) */}
                   <div className="space-y-1.5">
-                    <Label htmlFor="role" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", fieldErrors.role && "text-destructive")}>
-                      {t('users.clearance_level', 'Clearance Level')} <span className="text-destructive font-bold">*</span>
-                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="role" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", fieldErrors.role && "text-destructive")}>
+                        {t('users.clearance_level', 'Clearance Level')} <span className="text-destructive font-bold">*</span>
+                      </Label>
+                      <FieldInfoPopover
+                        label={t('users.clearance_level', 'Clearance Level')}
+                        required={true}
+                        info={{
+                          title: "Spatie RBAC Clearance Role",
+                          description: "Determines the operator's system privileges. Controls access to specific dashboard modules, warehouse zones, financial ledgers, and API endpoints.",
+                          example: "Super Admin, Admin, Inventory Manager, Support Specialist, Accountant",
+                          bestPractice: "Apply the principle of least privilege (PoLP) by granting only the clearance required for the operator's duties."
+                        }}
+                      />
+                    </div>
                     {isProtectedTenantEdit ? <Input id="role" value="Super Admin" readOnly aria-describedby="role-hint" /> : <Select value={formRoleId} onValueChange={(val) => {
                       if (val === "__create_new") {
                         setCreateRoleDialogOpen(true);
@@ -1622,10 +1765,22 @@ export function UsersTabClient(props: Props) {
                   {/* ENCRYPTION KEY (PASSWORD) */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="password" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", fieldErrors.password && "text-destructive")}>
-                        {t('users.encryption_key', 'Encryption Key')}
-                        {isEdit && <span className="text-[10px] font-medium text-emerald-500 normal-case tracking-normal">({t('users.unchanged', 'Leave blank to keep current')})</span>}
-                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="password" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", fieldErrors.password && "text-destructive")}>
+                          {t('users.encryption_key', 'Encryption Key')}
+                          {isEdit && <span className="text-[10px] font-medium text-emerald-500 normal-case tracking-normal">({t('users.unchanged', 'Leave blank to keep current')})</span>}
+                        </Label>
+                        <FieldInfoPopover
+                          label={t('users.encryption_key', 'Encryption Key')}
+                          required={!isEdit}
+                          info={{
+                            title: "Cryptographic Authentication Key",
+                            description: "The gateway access password. Transmitted over encrypted TLS 1.3 tunnels and securely hashed using Argon2/Bcrypt before persistence.",
+                            example: "Minimum 8 characters with lowercase, uppercase, numbers, and symbols.",
+                            bestPractice: "Click 'Generate Key' to produce high-entropy uncrackable passwords. On edit, leave blank to keep current credentials."
+                          }}
+                        />
+                      </div>
                       <Button
                         type="button"
                         variant="ghost"
@@ -1771,9 +1926,20 @@ export function UsersTabClient(props: Props) {
           <form onSubmit={(e) => { e.preventDefault(); if (newRoleName.trim()) createRoleMut.mutate({ name: newRoleName.trim(), permissions: newRolePermissions }); }} className="flex flex-col">
             <div className="px-6 py-6 space-y-5 flex-1">
               <div className="space-y-1.5">
-                <Label htmlFor="newRoleName" className="text-xs font-bold uppercase tracking-wider text-foreground">
-                  {t('users.role_name', 'Role Name')} <span className="text-destructive font-bold">*</span>
-                </Label>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="newRoleName" className="text-xs font-bold uppercase tracking-wider text-foreground">
+                    {t('users.role_name', 'Role Name')} <span className="text-destructive font-bold">*</span>
+                  </Label>
+                  <FieldInfoPopover
+                    label={t('users.role_name', 'Role Name')}
+                    required={true}
+                    info={{
+                      title: "Clearance Level Title",
+                      description: "The unique descriptive designation title for this newly established access level.",
+                      example: "e.g. Field Supervisor, Regional Auditor, Dispatch Lead"
+                    }}
+                  />
+                </div>
                 <Input
                   id="newRoleName"
                   value={newRoleName}
@@ -1786,7 +1952,17 @@ export function UsersTabClient(props: Props) {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-foreground">{t('users.permissions', 'Permissions')}</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-foreground">{t('users.permissions', 'Permissions')}</Label>
+                    <FieldInfoPopover
+                      label={t('users.permissions', 'Permissions')}
+                      info={{
+                        title: "Cryptographic Capabilities",
+                        description: "Granular capability tokens bound to this role. Operators holding this clearance level receive these permissions across the system.",
+                        example: "view_products, create_users, manage_orders"
+                      }}
+                    />
+                  </div>
                   <span className="text-[11px] font-mono text-muted-foreground">{newRolePermissions.length} selected</span>
                 </div>
                 <div className="border border-border/60 rounded-xl bg-card/60 p-3.5 max-h-[220px] overflow-y-auto space-y-2 divide-y divide-border/30">
@@ -1848,30 +2024,112 @@ export function UsersTabClient(props: Props) {
           <div className="pt-11 px-6 pb-6 space-y-5">
             <div className="flex justify-between items-start">
               <div className="min-w-0 pr-2">
-                <DialogTitle className="text-xl font-black font-space tracking-tight text-foreground truncate">{viewUser?.name}</DialogTitle>
+                <div className="flex items-center gap-1.5">
+                  <DialogTitle className="text-xl font-black font-space tracking-tight text-foreground truncate">{viewUser?.name}</DialogTitle>
+                  <FieldInfoPopover
+                    label={viewUser?.name || "Operator Identity"}
+                    info={{
+                      title: "Operator Account Profile",
+                      description: "Direct view of the verified operator identity profile, communication endpoint, and operational status in this tenant.",
+                      example: viewUser?.email,
+                      bestPractice: "Ensure email addresses match institutional or organizational domain standards."
+                    }}
+                  />
+                </div>
                 <DialogDescription className="text-xs text-muted-foreground truncate font-mono mt-0.5">{viewUser?.email}</DialogDescription>
               </div>
-              <Badge variant={viewUser?.isActive ? "default" : "secondary"} className={cn("shrink-0 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5", viewUser?.isActive ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30" : "border-border")}>
-                {viewUser?.isActive ? t('global.active', "Active") : t('global.locked', "Locked")}
-              </Badge>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Badge variant={viewUser?.isActive ? "default" : "secondary"} className={cn("shrink-0 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5", viewUser?.isActive ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30" : "border-border")}>
+                  {viewUser?.isActive ? t('global.active', "Active") : t('global.locked', "Locked")}
+                </Badge>
+                <FieldInfoPopover
+                  label={t('users.filter_status', 'Access Status')}
+                  info={{
+                    title: "Security Clearance Status",
+                    description: "Indicates whether this operator identity is permitted to authenticate into the system. Locked accounts are blocked at the identity gateway.",
+                    example: viewUser?.isActive ? "Active (Authentication Allowed)" : "Locked (Access Denied)"
+                  }}
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm border-t border-border/40 pt-4">
               <div className="space-y-1 p-3 rounded-xl bg-muted/20 border border-border/40">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('users.filter_role', 'Clearance Role')}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('users.filter_role', 'Clearance Role')}</p>
+                  <FieldInfoPopover
+                    label={t('users.filter_role', 'Clearance Role')}
+                    info={{
+                      title: "Assigned RBAC Role",
+                      description: "The primary role granting security permissions and authorization privileges to this operator.",
+                      example: viewUser ? getPrimaryRoleName(viewUser) : undefined,
+                      bestPractice: "Roles can be updated or revoked anytime by tenant administrators."
+                    }}
+                  />
+                </div>
                 <p className="font-semibold text-foreground text-xs flex items-center gap-1.5 truncate">
                   <Shield className="h-3.5 w-3.5 text-primary shrink-0" /> {viewUser && getPrimaryRoleName(viewUser)}
                 </p>
               </div>
               <div className="space-y-1 p-3 rounded-xl bg-muted/20 border border-border/40">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('users.joined', 'Joined Date')}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('users.joined', 'Joined Date')}</p>
+                  <FieldInfoPopover
+                    label={t('users.joined', 'Joined Date')}
+                    info={{
+                      title: "Onboarding Timestamp",
+                      description: "The exact date and time this operator record was provisioned in the tenant directory.",
+                      example: viewUser?.createdAt && formatDate(viewUser.createdAt)
+                    }}
+                  />
+                </div>
                 <p className="font-semibold text-foreground text-xs flex items-center gap-1.5 truncate">
                   <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> {viewUser?.createdAt && formatDate(viewUser.createdAt)}
                 </p>
               </div>
               <div className="col-span-2 space-y-1 p-3 rounded-xl bg-muted/20 border border-border/40">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('users.user_id', 'Identity UUID')}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('users.user_id', 'Identity UUID')}</p>
+                  <FieldInfoPopover
+                    label={t('users.user_id', 'Identity UUID')}
+                    info={{
+                      title: "Immutable System Identifier",
+                      description: "A universally unique identifier (UUIDv4) permanently bound to this user entity for audit trail and relational indexing.",
+                      example: viewUser?.id
+                    }}
+                  />
+                </div>
                 <code className="text-[11px] font-mono text-muted-foreground block truncate select-all">{viewUser?.id}</code>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-4">
+              <div className="flex items-center gap-1.5">
+                {viewUser?.email && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs rounded-lg px-2.5"
+                    onClick={() => {
+                      navigator.clipboard.writeText(viewUser.email);
+                      toast.success(t('users.copied_email', 'Operator email copied to clipboard.'));
+                    }}
+                  >
+                    <Copy className="h-3 w-3 mr-1" />
+                    {t('global.copy_email', 'Email')}
+                  </Button>
+                )}
+                {viewUser?.email && (
+                  <Button variant="outline" size="sm" asChild className="h-8 text-xs rounded-lg px-2.5">
+                    <a href={`/dashboard/audit-logs?search=${encodeURIComponent(viewUser.email)}`} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      {t('users.view_audit_trail', 'Audit Trail')}
+                    </a>
+                  </Button>
+                )}
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setViewDialogOpen(false)} className="h-8 text-xs rounded-lg px-4">
+                {t('global.close', 'Close')}
+              </Button>
             </div>
           </div>
         </DialogContent>

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Key, BookOpen, Shield, RefreshCw, Loader2, Filter, X } from "lucide-react";
+import { Key, BookOpen, Shield, RefreshCw, Loader2, Filter, X, Copy, Check, FileJson, FileSpreadsheet, Layers, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,7 @@ export function PermissionsTabClient({ tenantId }: { tenantId: string | null }) 
   const [moduleFilter, setModuleFilter] = React.useState<string>("all");
   const [actionFilter, setActionFilter] = React.useState<string>("all");
   const [scopeFilter, setScopeFilter] = React.useState<string>("all");
+  const [copiedPerm, setCopiedPerm] = React.useState<string | null>(null);
 
   const { data: permissionsData, isLoading } = useQuery({
     queryKey: ["permissions", tenantId],
@@ -96,7 +97,13 @@ export function PermissionsTabClient({ tenantId }: { tenantId: string | null }) 
           return name.includes("employee") || name.includes("department") || name.includes("designation") || name.includes("payroll") || name.includes("attendance") || name.includes("leave") || name.includes("staff");
         }
         if (moduleFilter === "inventory") {
-          return name.includes("product") || name.includes("inventory") || name.includes("category") || name.includes("brand") || name.includes("stock") || name.includes("warehouse") || name.includes("shelf") || name.includes("box") || name.includes("supplier");
+          return name.includes("product") || name.includes("inventory") || name.includes("category") || name.includes("brand") || name.includes("stock") || name.includes("supplier");
+        }
+        if (moduleFilter === "warehouse") {
+          return name.includes("warehouse") || name.includes("shelf") || name.includes("box") || name.includes("movement") || name.includes("batch") || name.includes("logistics") || name.includes("fleet") || name.includes("vehicle");
+        }
+        if (moduleFilter === "crm_hospitality") {
+          return name.includes("hospitality") || name.includes("reservation") || name.includes("room") || name.includes("crm") || name.includes("client") || name.includes("guest") || name.includes("lead");
         }
         if (moduleFilter === "core") {
           return name.includes("setting") || name.includes("activity") || name.includes("audit") || name.includes("backup") || name.includes("log") || name.includes("general");
@@ -117,6 +124,9 @@ export function PermissionsTabClient({ tenantId }: { tenantId: string | null }) 
         }
         if (actionFilter === "delete") {
           return name.startsWith("delete_") || name.startsWith("purge_") || name.startsWith("destroy_") || name.startsWith("remove_");
+        }
+        if (actionFilter === "export") {
+          return name.startsWith("export_") || name.startsWith("download_") || name.startsWith("print_");
         }
         if (actionFilter === "admin") {
           return name.startsWith("impersonate_") || name.startsWith("seed_") || name.startsWith("bypass_") || name.startsWith("super_");
@@ -195,13 +205,60 @@ export function PermissionsTabClient({ tenantId }: { tenantId: string | null }) 
 
   const columns = React.useMemo<ColumnDef<PermissionRecord>[]>(() => [
     {
-      id: "name", accessorKey: "name", header: t('permissions.col_code', "Capability Code"), enableSorting: true,
+      id: "row_number",
+      header: t("global.id_number", "ID (#)"),
+      enableSorting: false,
+      size: 72,
+      meta: {
+        sticky: "left" as const,
+        stickyOffset: 0,
+        className: "w-[72px] min-w-[72px] max-w-[72px]",
+        align: "center",
+        exportable: false,
+        printable: true,
+      },
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <Key className="h-4 w-4 text-primary" />
-          <span className="font-mono font-bold tracking-tight text-sm">{row.original.name}</span>
-        </div>
+        <span className="font-mono text-sm font-bold tabular-nums text-foreground">
+          {(page - 1) * pageSize + row.index + 1}
+        </span>
       ),
+    },
+    {
+      id: "name",
+      accessorKey: "name",
+      header: t('permissions.col_code', "Capability Code"),
+      enableSorting: true,
+      size: 280,
+      meta: {
+        sticky: "left" as const,
+        stickyOffset: 72,
+        className: "w-[280px] min-w-[280px] max-w-[280px] overflow-hidden",
+      },
+      cell: ({ row }) => {
+        const name = row.original.name;
+        return (
+          <div className="flex items-center justify-between group/perm pr-2 min-w-0 w-full">
+            <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+              <Key className="h-4 w-4 text-primary shrink-0" />
+              <span className="font-mono font-bold tracking-tight text-sm truncate">{name}</span>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(name);
+                setCopiedPerm(name);
+                setTimeout(() => setCopiedPerm(null), 2000);
+                toast.success(t('permissions.copied', `Capability code '${name}' copied to clipboard.`));
+              }}
+              title={t('global.copy', 'Copy')}
+              className="opacity-0 group-hover/perm:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+            >
+              {copiedPerm === name ? <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
+            </button>
+          </div>
+        );
+      },
     },
     {
       id: "description",
@@ -228,6 +285,21 @@ export function PermissionsTabClient({ tenantId }: { tenantId: string | null }) 
       },
     },
   ], [page, pageSize, t, locale]);
+
+  const handleCopyJson = () => {
+    const json = JSON.stringify(processedData, null, 2);
+    navigator.clipboard.writeText(json);
+    toast.success(t('permissions.copied_json', `Copied ${processedData.length} capabilities as JSON.`));
+    triggerAudit('copied', 'Copied Capability Dictionary as JSON');
+  };
+
+  const handleCopyCsv = () => {
+    const headers = "id,name,guard_name\n";
+    const rows = processedData.map(p => `"${p.id}","${p.name}","${p.guard_name || 'web'}"`).join('\n');
+    navigator.clipboard.writeText(headers + rows);
+    toast.success(t('permissions.copied_csv', `Copied ${processedData.length} capabilities as CSV.`));
+    triggerAudit('copied', 'Copied Capability Dictionary as CSV');
+  };
 
   const exportUrl = `${isCentralAdmin ? '' : '/tenant'}/permissions/export?module=${moduleFilter}&action=${actionFilter}&scope=${scopeFilter}&search=${encodeURIComponent(search)}&sortCol=${sortCol || ""}&sortDir=${sortDir || ""}&locale=${locale}`;
 
@@ -263,59 +335,115 @@ export function PermissionsTabClient({ tenantId }: { tenantId: string | null }) 
         </div>
       </div>
 
-      {/* 🚀 PERMISSIONS ADVANCED FILTERS BAR */}
-      <div id="tour-permissions-filters" className="bg-card border border-border/50 rounded-xl p-3 shadow-sm flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-2 text-muted-foreground shrink-0 pl-2">
-          <Filter className="h-4 w-4" />
-          <span className="text-sm font-medium">{t('permissions.filters', 'Filters:')}</span>
+      {/* 🚀 CAPABILITY METRICS CARDS */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-card/60 border border-border/50 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium font-mono uppercase tracking-wider">{t('permissions.total_caps', 'Total Protocols')}</span>
+            <Key className="h-4 w-4 text-primary" />
+          </div>
+          <span className="text-2xl font-black font-space mt-2 text-foreground">{permissionsData?.length || 0}</span>
         </div>
 
-        {/* Module / Domain Filter */}
-        <Select value={moduleFilter} onValueChange={(val) => { setModuleFilter(val); setPage(1); triggerAudit('filtered', `Filtered permissions by module: ${val}`); }}>
-          <SelectTrigger aria-label={t('permissions.filter_module', 'Filter by module')} className="h-9 w-[170px] bg-background">
-            <SelectValue placeholder={t('permissions.filter_module', 'Module Domain')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('permissions.all_modules', 'All Module Domains')}</SelectItem>
-            <SelectItem value="identity">{t('permissions.module_identity', 'Users & Identity')}</SelectItem>
-            <SelectItem value="tenancy">{t('permissions.module_tenancy', 'Tenants & Orgs')}</SelectItem>
-            <SelectItem value="hr">{t('permissions.module_hr', 'HR & Payroll')}</SelectItem>
-            <SelectItem value="inventory">{t('permissions.module_inventory', 'Inventory & Warehouses')}</SelectItem>
-            <SelectItem value="core">{t('permissions.module_core', 'Core & Settings')}</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="bg-card/60 border border-border/50 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium font-mono uppercase tracking-wider">{t('permissions.central_scope', 'Central Scope')}</span>
+            <Shield className="h-4 w-4 text-amber-500" />
+          </div>
+          <span className="text-2xl font-black font-space mt-2 text-foreground">
+            {permissionsData?.filter((p: PermissionRecord) => p.guard_name === 'web' || !p.guard_name).length || 0}
+          </span>
+        </div>
 
-        {/* Action Type Filter */}
-        <Select value={actionFilter} onValueChange={(val) => { setActionFilter(val); setPage(1); triggerAudit('filtered', `Filtered permissions by action type: ${val}`); }}>
-          <SelectTrigger aria-label={t('permissions.filter_action', 'Filter by action type')} className="h-9 w-[160px] bg-background">
-            <SelectValue placeholder={t('permissions.filter_action', 'Action Type')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('permissions.all_actions', 'All Actions')}</SelectItem>
-            <SelectItem value="view">{t('permissions.action_view', 'View & Read')}</SelectItem>
-            <SelectItem value="manage">{t('permissions.action_manage', 'Manage & Write')}</SelectItem>
-            <SelectItem value="delete">{t('permissions.action_delete', 'Delete & Purge')}</SelectItem>
-            <SelectItem value="admin">{t('permissions.action_admin', 'Administrative')}</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="bg-card/60 border border-border/50 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium font-mono uppercase tracking-wider">{t('permissions.tenant_scope', 'Tenant Scope')}</span>
+            <Shield className="h-4 w-4 text-indigo-500" />
+          </div>
+          <span className="text-2xl font-black font-space mt-2 text-foreground">
+            {permissionsData?.filter((p: PermissionRecord) => p.guard_name === 'tenant').length || 0}
+          </span>
+        </div>
 
-        {/* Scope Filter */}
-        <Select value={scopeFilter} onValueChange={(val) => { setScopeFilter(val); setPage(1); triggerAudit('filtered', `Filtered permissions by scope: ${val}`); }}>
-          <SelectTrigger aria-label={t('permissions.filter_scope', 'Filter by scope')} className="h-9 w-[160px] bg-background">
-            <SelectValue placeholder={t('permissions.filter_scope', 'Security Scope')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('permissions.all_scopes', 'All Scopes')}</SelectItem>
-            <SelectItem value="central">{t('permissions.central', 'Central Command')}</SelectItem>
-            <SelectItem value="tenant">{t('permissions.tenant_node', 'Tenant Node')}</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="bg-card/60 border border-border/50 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="text-xs font-medium font-mono uppercase tracking-wider">{t('permissions.filtered_match', 'Active Matches')}</span>
+            <Sparkles className="h-4 w-4 text-emerald-500" />
+          </div>
+          <span className="text-2xl font-black font-space mt-2 text-foreground">{processedData.length}</span>
+        </div>
+      </div>
 
-        {(moduleFilter !== "all" || actionFilter !== "all" || scopeFilter !== "all" || search) && (
-          <Button variant="ghost" size="sm" onClick={resetFilters} className="h-9 px-3 text-destructive hover:bg-destructive/10">
-            <X className="mr-1 h-4 w-4" /> {t('global.clear', 'Clear')}
+      {/* 🚀 PERMISSIONS ADVANCED FILTERS BAR */}
+      <div id="tour-permissions-filters" className="bg-card border border-border/50 rounded-xl p-3 shadow-sm flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-muted-foreground shrink-0 pl-2">
+            <Filter className="h-4 w-4" />
+            <span className="text-sm font-medium">{t('permissions.filters', 'Filters:')}</span>
+          </div>
+
+          {/* Module / Domain Filter */}
+          <Select value={moduleFilter} onValueChange={(val) => { setModuleFilter(val); setPage(1); triggerAudit('filtered', `Filtered permissions by module: ${val}`); }}>
+            <SelectTrigger aria-label={t('permissions.filter_module', 'Filter by module')} className="h-9 w-[180px] bg-background">
+              <SelectValue placeholder={t('permissions.filter_module', 'Module Domain')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('permissions.all_modules', 'All Module Domains')}</SelectItem>
+              <SelectItem value="identity">{t('permissions.module_identity', 'Users & Identity')}</SelectItem>
+              <SelectItem value="tenancy">{t('permissions.module_tenancy', 'Tenants & Orgs')}</SelectItem>
+              <SelectItem value="hr">{t('permissions.module_hr', 'HR & Payroll')}</SelectItem>
+              <SelectItem value="inventory">{t('permissions.module_inventory', 'Inventory & Products')}</SelectItem>
+              <SelectItem value="warehouse">{t('permissions.module_warehouse', 'Warehouse & Logistics')}</SelectItem>
+              <SelectItem value="crm_hospitality">{t('permissions.module_crm', 'CRM & Hospitality')}</SelectItem>
+              <SelectItem value="core">{t('permissions.module_core', 'Core & Settings')}</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Action Type Filter */}
+          <Select value={actionFilter} onValueChange={(val) => { setActionFilter(val); setPage(1); triggerAudit('filtered', `Filtered permissions by action type: ${val}`); }}>
+            <SelectTrigger aria-label={t('permissions.filter_action', 'Filter by action type')} className="h-9 w-[160px] bg-background">
+              <SelectValue placeholder={t('permissions.filter_action', 'Action Type')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('permissions.all_actions', 'All Actions')}</SelectItem>
+              <SelectItem value="view">{t('permissions.action_view', 'View & Read')}</SelectItem>
+              <SelectItem value="manage">{t('permissions.action_manage', 'Manage & Write')}</SelectItem>
+              <SelectItem value="delete">{t('permissions.action_delete', 'Delete & Purge')}</SelectItem>
+              <SelectItem value="export">{t('permissions.action_export', 'Export & Reports')}</SelectItem>
+              <SelectItem value="admin">{t('permissions.action_admin', 'Administrative')}</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Scope Filter */}
+          <Select value={scopeFilter} onValueChange={(val) => { setScopeFilter(val); setPage(1); triggerAudit('filtered', `Filtered permissions by scope: ${val}`); }}>
+            <SelectTrigger aria-label={t('permissions.filter_scope', 'Filter by scope')} className="h-9 w-[160px] bg-background">
+              <SelectValue placeholder={t('permissions.filter_scope', 'Security Scope')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('permissions.all_scopes', 'All Scopes')}</SelectItem>
+              <SelectItem value="central">{t('permissions.central', 'Central Command')}</SelectItem>
+              <SelectItem value="tenant">{t('permissions.tenant_node', 'Tenant Node')}</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {(moduleFilter !== "all" || actionFilter !== "all" || scopeFilter !== "all" || search) && (
+            <Button variant="ghost" size="sm" onClick={resetFilters} className="h-9 px-3 text-destructive hover:bg-destructive/10">
+              <X className="mr-1 h-4 w-4" /> {t('global.clear', 'Clear')}
+            </Button>
+          )}
+        </div>
+
+        {/* Quick Export Tools */}
+        <div className="flex items-center gap-1.5">
+          <Button variant="outline" size="sm" onClick={handleCopyJson} className="h-9 text-xs rounded-lg gap-1.5">
+            <FileJson className="h-3.5 w-3.5 text-muted-foreground" />
+            JSON
           </Button>
-        )}
+          <Button variant="outline" size="sm" onClick={handleCopyCsv} className="h-9 text-xs rounded-lg gap-1.5">
+            <FileSpreadsheet className="h-3.5 w-3.5 text-muted-foreground" />
+            CSV
+          </Button>
+        </div>
       </div>
 
       <DataTable

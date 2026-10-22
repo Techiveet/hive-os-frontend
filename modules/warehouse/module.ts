@@ -1,4 +1,4 @@
-import { Warehouse, Rows3, Grid3X3, Gauge } from "lucide-react";
+import { Warehouse, Rows3, Boxes, ArrowLeftRight, Gauge } from "lucide-react";
 import type { FrontendModuleDefinition } from "@/modules/types";
 
 export const warehouseModule: FrontendModuleDefinition = {
@@ -30,7 +30,7 @@ export const warehouseModule: FrontendModuleDefinition = {
       fallbackLabel: "Warehouses",
       href: "/dashboard/warehouse/warehouses",
       icon: Warehouse,
-      permissions: ["view_inventory", "manage_inventory"], // We will use inventory permissions for now or change them if there are specific warehouse permissions
+      permissions: ["view_inventory", "manage_inventory"],
       subscriptionSlug: "warehouse_management",
       placement: "primary",
     },
@@ -46,10 +46,20 @@ export const warehouseModule: FrontendModuleDefinition = {
     },
     {
       moduleId: "warehouse",
+      translationKey: "nav.warehouse_boxes",
+      fallbackLabel: "Compartment Boxes",
+      href: "/dashboard/warehouse/locations/boxes",
+      icon: Boxes,
+      permissions: ["view_inventory", "manage_inventory"],
+      subscriptionSlug: "warehouse_management",
+      placement: "primary",
+    },
+    {
+      moduleId: "warehouse",
       translationKey: "nav.warehouse_movements",
       fallbackLabel: "Stock Movements",
       href: "/dashboard/warehouse/movements",
-      icon: Grid3X3,
+      icon: ArrowLeftRight,
       permissions: ["view_inventory", "manage_inventory"],
       subscriptionSlug: "warehouse_management",
       placement: "primary",

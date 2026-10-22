@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
 import {
-  Shield, PlusCircle, Pencil, Trash2, Key, Loader2, ShieldAlert, Calendar, Eye, Search, X, CheckCircle2, Circle, Filter, Users
+  Shield, PlusCircle, Pencil, Trash2, Key, Loader2, ShieldAlert, Calendar, Eye, Search, X, CheckCircle2, Circle, Filter, Users, Copy, Layers, Sparkles, ExternalLink, Check
 } from "lucide-react";
 
 import {
@@ -20,8 +20,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FieldInfoPopover } from "@/components/ui/field-info-popover";
 import { DataTable, type CompanySettingsInfo, type BrandingSettingsInfo } from "@/components/datatable/data-table";
-import { fetchRoles, fetchPermissions, createRole, updateRole, deleteRole } from "@/lib/api";
+import { fetchRoles, fetchPermissions, createRole, updateRole, deleteRole, cloneRole, bulkDeleteRoles } from "@/lib/api";
 import { logFrontendAction } from "@/modules/core/api";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -271,7 +272,12 @@ export function RolesTabClient({
   const deleteMut = useMutation({
     mutationFn: (id: string | number) => deleteRole(id),
     onSuccess: (data: any) => {
-      toast.success(data.message || t('roles.role_deleted', "Role deleted successfully"));
+      toast.success(data?.message || t('roles.role_deleted', "Role moved to Trash Bin (auto-purged in 30 days)."), {
+        action: {
+          label: t('global.view_trash', 'View Trash'),
+          onClick: () => { window.location.href = '/dashboard/trash'; },
+        },
+      });
       queryClient.invalidateQueries({ queryKey: ["roles-table"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       syncUserSession({ force: true });
@@ -281,19 +287,41 @@ export function RolesTabClient({
     }
   });
 
+  const cloneMut = useMutation({
+    mutationFn: (id: string | number) => cloneRole(id),
+    onSuccess: (data: any) => {
+      toast.success(data?.message || t('roles.cloned_success', "Role clearance level cloned successfully."));
+      queryClient.invalidateQueries({ queryKey: ["roles-table"] });
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      syncUserSession({ force: true });
+      triggerAudit('created', `Cloned security clearance level`);
+    },
+    onError: (err: any) => {
+      toast.error(getErrorMessage(err, t('roles.failed_clone', "Failed to clone role.")));
+    }
+  });
+
   const handleDeleteRows = React.useCallback(async (selectedRows: RoleRecord[]) => {
     const deletableRows = selectedRows.filter((r) => !isProtectedRole(r));
     if (deletableRows.length === 0) {
       toast.error(t('roles.protected_cannot_delete', "Protected system roles cannot be deleted."));
       return;
     }
-    const promises = deletableRows.map((r) => deleteRole(r.id));
-    await Promise.all(promises);
-    toast.success(t('roles.batch_trashed', "Selected custom roles moved to Trash Bin (auto-purged in 30 days)."));
-    queryClient.invalidateQueries({ queryKey: ["roles-table"] });
-    queryClient.invalidateQueries({ queryKey: ["roles"] });
-    syncUserSession({ force: true });
-  }, [deleteMut, isProtectedRole, queryClient, t]);
+    try {
+      const res = await bulkDeleteRoles(deletableRows.map((r) => r.id));
+      toast.success(res?.message || t('roles.batch_trashed', "Selected custom roles moved to Trash Bin (auto-purged in 30 days)."), {
+        action: {
+          label: t('global.view_trash', 'View Trash'),
+          onClick: () => { window.location.href = '/dashboard/trash'; },
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: ["roles-table"] });
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      syncUserSession({ force: true });
+    } catch (e: any) {
+      toast.error(getErrorMessage(e, t('roles.failed_delete', "Failed to delete roles.")));
+    }
+  }, [isProtectedRole, queryClient, t]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -333,24 +361,64 @@ export function RolesTabClient({
 
   const columns = React.useMemo<ColumnDef<RoleRecord>[]>(() => [
     {
-      id: "name", accessorKey: "name", header: t('roles.col_designation', "Clearance Designation"), enableSorting: true,
+      id: "row_number",
+      header: t("global.id_number", "ID (#)"),
+      enableSorting: false,
+      size: 72,
+      meta: {
+        sticky: "left" as const,
+        stickyOffset: canDelete ? 48 : 0,
+        className: "w-[72px] min-w-[72px] max-w-[72px]",
+        align: "center",
+        exportable: false,
+        printable: true,
+      },
+      cell: ({ row }) => (
+        <span className="font-mono text-sm font-bold tabular-nums text-foreground">
+          {(page - 1) * pageSize + row.index + 1}
+        </span>
+      ),
+    },
+    {
+      id: "name",
+      accessorKey: "name",
+      header: t('roles.col_designation', "Clearance Designation"),
+      enableSorting: true,
+      size: 280,
+      meta: {
+        sticky: "left" as const,
+        stickyOffset: canDelete ? 120 : 72,
+        className: "w-[280px] min-w-[280px] max-w-[280px] overflow-hidden",
+      },
       cell: ({ row }) => {
         const r = row.original;
         const isSuper = r.name === 'Super Admin';
         const isAdmin = r.name === 'Admin';
 
         return (
-          <div className="flex items-center gap-3">
-            <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center border shadow-inner", isSuper ? "bg-amber-500/10 border-amber-500/20 text-amber-500" : isAdmin ? "bg-indigo-500/10 border-indigo-500/20 text-indigo-500" : "bg-primary/10 border-primary/20 text-primary")}>
-              <Shield className="h-4 w-4" />
+          <div className="flex items-center gap-3 w-full min-w-0">
+            <div className={cn("h-8 w-8 min-w-[32px] min-h-[32px] shrink-0 rounded-lg flex items-center justify-center border shadow-inner", isSuper ? "bg-amber-500/10 border-amber-500/20 text-amber-500" : isAdmin ? "bg-indigo-500/10 border-indigo-500/20 text-indigo-500" : "bg-primary/10 border-primary/20 text-primary")}>
+              <Shield className="h-4 w-4 shrink-0" />
             </div>
-            <div className="flex flex-col">
-              <span className="font-bold tracking-tight text-sm flex items-center gap-2">
-                {r.name}
-                {isSuper && <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/30">Root</Badge>}
-                {isAdmin && <Badge variant="outline" className="text-[10px] bg-indigo-500/10 text-indigo-600 border-indigo-500/30">System</Badge>}
+            <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
+              <span className="font-bold tracking-tight text-sm flex items-center gap-2 group/role truncate">
+                <span className="truncate">{r.name}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(r.name);
+                    toast.success(t('roles.copied_role_name', 'Clearance name copied to clipboard'));
+                  }}
+                  title={t('global.copy', 'Copy')}
+                  className="opacity-0 group-hover/role:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+                >
+                  <Copy className="h-3 w-3 shrink-0" />
+                </button>
+                {isSuper && <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/30 shrink-0">Root</Badge>}
+                {isAdmin && <Badge variant="outline" className="text-[10px] bg-indigo-500/10 text-indigo-600 border-indigo-500/30 shrink-0">System</Badge>}
               </span>
-              <span className="text-[11px] text-muted-foreground font-mono">
+              <span className="text-[11px] text-muted-foreground font-mono truncate">
                 {r.guard_name ? `guard: ${r.guard_name}` : "web"}
               </span>
             </div>
@@ -377,7 +445,7 @@ export function RolesTabClient({
 
         return (
           <div className="flex items-center gap-1.5 font-mono text-xs">
-            <Key className="h-3.5 w-3.5 text-muted-foreground" />
+            <Key className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span className="font-bold text-foreground">{count}</span>
             <span className="text-muted-foreground text-[11px]">{t('roles.capabilities', "capabilities")}</span>
           </div>
@@ -393,7 +461,7 @@ export function RolesTabClient({
         const count = row.original.users_count ?? 0;
         return (
           <div className="flex items-center gap-1.5 font-mono text-xs">
-            <Users className="h-3.5 w-3.5 text-muted-foreground" />
+            <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span className={cn("font-bold", count > 0 ? "text-foreground" : "text-muted-foreground")}>{count}</span>
             <span className="text-muted-foreground text-[11px]">{t('roles.assigned', "assigned")}</span>
           </div>
@@ -404,7 +472,7 @@ export function RolesTabClient({
       id: "created_at", accessorKey: "created_at", header: t('roles.col_established', "Established"), enableSorting: true,
       cell: ({ row }) => (
         <div className="flex items-center gap-1.5 text-muted-foreground font-mono text-xs">
-          <Calendar className="h-3.5 w-3.5" />
+          <Calendar className="h-3.5 w-3.5 shrink-0" />
           {formatDate(row.original.created_at)}
         </div>
       ),
@@ -420,9 +488,24 @@ export function RolesTabClient({
           <div className="flex items-center justify-end gap-1">
             <span className="tour-roles-action-view flex">
               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-blue-600" title={t('global.view', 'View Details')} onClick={() => openView(r)}>
-                <Eye className="h-4 w-4" />
+                <Eye className="h-4 w-4 shrink-0" />
               </Button>
             </span>
+
+            {canCreate && !isSuper && (
+              <span className="tour-roles-action-clone flex">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-emerald-500"
+                  title={t('roles.clone_role', 'Clone Clearance Level')}
+                  disabled={cloneMut.isPending}
+                  onClick={() => cloneMut.mutate(r.id)}
+                >
+                  <Layers className="h-4 w-4 shrink-0" />
+                </Button>
+              </span>
+            )}
 
             {canEdit && (
               <span className="tour-roles-action-edit flex">
@@ -432,7 +515,7 @@ export function RolesTabClient({
                   className={cn("h-8 w-8 transition-all", isSuper ? "opacity-30 cursor-not-allowed" : "text-muted-foreground hover:text-indigo-600")}
                   onClick={() => openEdit(r)} disabled={isSuper}
                 >
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="h-4 w-4 shrink-0" />
                 </Button>
               </span>
             )}
@@ -444,16 +527,16 @@ export function RolesTabClient({
                 <span className="tour-roles-action-purge flex">
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t('global.delete', 'Purge')}><Trash2 className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t('global.delete', 'Move to Trash')}><Trash2 className="h-4 w-4 shrink-0" /></Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent className="rounded-[2rem] bg-background/95 backdrop-blur-xl">
                       <AlertDialogHeader>
-                        <AlertDialogTitle>{t('roles.purge_title', 'Purge Clearance Level?')}</AlertDialogTitle>
-                        <AlertDialogDescription>{t('roles.purge_desc1', 'This will permanently delete the')} <strong>{r.name}</strong> {t('roles.purge_desc2', 'role. Operators assigned to this role may lose network access.')}</AlertDialogDescription>
+                        <AlertDialogTitle>{t('roles.purge_title', 'Move Clearance Level to Trash?')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('roles.purge_desc1', 'This will move the')} <strong>{r.name}</strong> {t('roles.purge_desc_trash', 'role to the Global Trash Bin (auto-purged in 30 days). Operators assigned to this role will lose their permission bindings.')}</AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel className="rounded-xl">{t('global.cancel', 'Cancel')}</AlertDialogCancel>
-                        <AlertDialogAction className="rounded-xl bg-destructive hover:bg-destructive/90" onClick={() => deleteMut.mutate(r.id)}>{t('roles.confirm_purge', 'Confirm Purge')}</AlertDialogAction>
+                        <AlertDialogAction className="rounded-xl bg-destructive hover:bg-destructive/90" onClick={() => deleteMut.mutate(r.id)}>{t('roles.confirm_purge', 'Move to Trash')}</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
@@ -542,6 +625,57 @@ export function RolesTabClient({
           <input id="roles-date-to" type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); triggerAudit('filtered', `Applied roles date to filter: ${e.target.value}`); }} className="bg-transparent text-sm w-[110px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm" />
         </div>
 
+        {/* Date Quick Presets */}
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs rounded-lg"
+            onClick={() => {
+              const today = new Date().toISOString().split('T')[0];
+              setDateFrom(today);
+              setDateTo(today);
+              setPage(1);
+              triggerAudit('filtered', 'Filter roles by Today');
+            }}
+          >
+            {t('global.today', 'Today')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs rounded-lg"
+            onClick={() => {
+              const d = new Date();
+              d.setDate(d.getDate() - 7);
+              setDateFrom(d.toISOString().split('T')[0]);
+              setDateTo(new Date().toISOString().split('T')[0]);
+              setPage(1);
+              triggerAudit('filtered', 'Filter roles by last 7 days');
+            }}
+          >
+            7D
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs rounded-lg"
+            onClick={() => {
+              const d = new Date();
+              d.setDate(d.getDate() - 30);
+              setDateFrom(d.toISOString().split('T')[0]);
+              setDateTo(new Date().toISOString().split('T')[0]);
+              setPage(1);
+              triggerAudit('filtered', 'Filter roles by last 30 days');
+            }}
+          >
+            30D
+          </Button>
+        </div>
+
         {(typeFilter !== "all" || scopeFilter !== "all" || assignmentFilter !== "all" || dateFrom || dateTo) && (
           <Button variant="ghost" size="sm" onClick={resetFilters} className="h-9 px-3 text-destructive hover:bg-destructive/10">
             <X className="mr-1 h-4 w-4" /> {t('global.clear', 'Clear')}
@@ -604,7 +738,21 @@ export function RolesTabClient({
           <div className="flex-1 overflow-y-auto px-6 py-6">
             <form id="role-form" onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="role-name" className="text-xs font-bold uppercase tracking-wider">{t('roles.designation_name', 'Designation Name')}</Label>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="role-name" className="text-xs font-bold uppercase tracking-wider">
+                    {t('roles.designation_name', 'Designation Name')} <span className="text-destructive font-bold">*</span>
+                  </Label>
+                  <FieldInfoPopover
+                    label={t('roles.designation_name', 'Designation Name')}
+                    required={true}
+                    info={{
+                      title: "Clearance Level Designation",
+                      description: "The unique descriptive title identifying this access role in the Spatie RBAC registry. Predefined system roles like Admin cannot be renamed.",
+                      example: "Inventory Manager, Lead Auditor, Shift Supervisor, Operations Director",
+                      bestPractice: "Use concise, standardized titles reflecting the operator's organizational duties."
+                    }}
+                  />
+                </div>
                 <Input
                   id="role-name"
                   placeholder={t('roles.placeholder_name', "e.g. Field Supervisor, Regional Auditor")}
@@ -617,7 +765,18 @@ export function RolesTabClient({
 
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                  <Label className="text-xs font-bold uppercase tracking-wider">{t('roles.bind_capabilities', 'Bind Capabilities')}</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label className="text-xs font-bold uppercase tracking-wider">{t('roles.bind_capabilities', 'Bind Capabilities')}</Label>
+                    <FieldInfoPopover
+                      label={t('roles.bind_capabilities', 'Bind Capabilities')}
+                      info={{
+                        title: "Cryptographic Capabilities Matrix",
+                        description: "Granular authorization flags attached to this role. Operators assigned to this clearance inherit all selected capabilities across modules.",
+                        example: "manage_products, view_reports, export_orders, access_security",
+                        bestPractice: "Adopt principle of least privilege (PoLP) and avoid assigning high-risk permissions unless explicitly required."
+                      }}
+                    />
+                  </div>
                   <div className="flex items-center gap-2 w-full sm:w-auto">
                     <Button
                       type="button"
@@ -735,7 +894,18 @@ export function RolesTabClient({
                     Clearance Profile
                   </span>
                 </div>
-                <DialogTitle className="text-2xl font-black font-space tracking-tight text-foreground truncate mt-0.5">{viewRole?.name}</DialogTitle>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <DialogTitle className="text-2xl font-black font-space tracking-tight text-foreground truncate">{viewRole?.name}</DialogTitle>
+                  <FieldInfoPopover
+                    label={viewRole?.name || "Clearance Profile"}
+                    info={{
+                      title: "Role Clearance Record",
+                      description: "The defined Spatie RBAC security level and its active capability boundaries in this node.",
+                      example: viewRole?.name,
+                      bestPractice: "Ensure role naming stays consistent across audit logs and compliance audits."
+                    }}
+                  />
+                </div>
                 <DialogDescription className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">{t('roles.caps_overview', 'Network Capabilities Overview')}</DialogDescription>
               </div>
             </div>
@@ -755,8 +925,22 @@ export function RolesTabClient({
             )}
 
             <div className="space-y-3">
-              <div className="text-[11px] font-mono text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-2">
-                <Key className="h-3 w-3" /> {t('roles.explicit_caps', 'Explicitly Bound Capabilities')}
+              <div className="text-[11px] font-mono text-muted-foreground uppercase tracking-widest mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Key className="h-3 w-3" />
+                  <span>{t('roles.explicit_caps', 'Explicitly Bound Capabilities')}</span>
+                  <FieldInfoPopover
+                    label={t('roles.explicit_caps', 'Explicitly Bound Capabilities')}
+                    info={{
+                      title: "Bound Capabilities",
+                      description: "Granular capability tokens directly assigned to this role. Operators holding this role will have access to all listed operations.",
+                      example: viewRole?.permissions?.slice(0, 3).map((p: any) => p.name).join(", ")
+                    }}
+                  />
+                </div>
+                {viewRole?.permissions && (
+                  <span className="text-[10px] font-mono font-bold text-primary">{viewRole.permissions.length} total</span>
+                )}
               </div>
               <div className="flex flex-wrap gap-2.5">
                 {viewRole?.permissions?.length ? (
@@ -774,8 +958,32 @@ export function RolesTabClient({
             </div>
           </div>
 
-          <div className="px-6 py-4 border-t border-border/40 bg-muted/20 flex justify-end">
-            <Button variant="outline" onClick={() => setViewDialogOpen(false)} className="rounded-xl px-8 shadow-sm">
+          <div className="px-6 py-4 border-t border-border/40 bg-muted/20 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl h-9 text-xs"
+                onClick={() => {
+                  if (viewRole?.name) {
+                    navigator.clipboard.writeText(viewRole.name);
+                    toast.success(t('roles.copied_role_name', 'Clearance name copied to clipboard'));
+                  }
+                }}
+              >
+                <Copy className="mr-1.5 h-3.5 w-3.5" />
+                {t('global.copy', 'Copy Name')}
+              </Button>
+              {viewRole?.name && (
+                <Button variant="outline" size="sm" asChild className="rounded-xl h-9 text-xs">
+                  <a href={`/dashboard/audit-logs?search=${encodeURIComponent(viewRole.name)}`} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                    {t('roles.view_audit_trail', 'Audit Trail')}
+                  </a>
+                </Button>
+              )}
+            </div>
+            <Button variant="outline" onClick={() => setViewDialogOpen(false)} className="rounded-xl px-6 shadow-sm h-9 text-xs">
               {t('roles.close_view', 'Close Overview')}
             </Button>
           </div>

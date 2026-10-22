@@ -26,11 +26,15 @@ import {
   Truck,
   Warehouse,
   ArrowRight,
+  HelpCircle,
+  Home,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { useTour } from "@/components/providers/tour-provider";
 import {
   fetchInventoryAnalytics,
   fetchInventoryProductSummary,
@@ -187,6 +191,7 @@ function KpiTile({
 
 export default function InventoryDashboardPage() {
   const { t } = useTranslation();
+  const { startTour } = useTour();
   const { hasModule } = useTenantModuleAccess();
   const { hasPermission, hasAnyPermission } = usePermissions();
   const hasWarehouse = hasModule("warehouse_management");
@@ -533,10 +538,215 @@ export default function InventoryDashboardPage() {
   const catalog = summaryQuery.data?.catalog;
   const windowLabel = t("inventory.dashboard.last_n_days", "last {n} days").replace("{n}", String(days));
 
+  React.useEffect(() => {
+    document.title = "Inventory Control Center | HIVE.OS";
+  }, []);
+
+  const triggerPageTour = React.useCallback(() => {
+    const steps: Array<{
+      target: string;
+      title: string;
+      content: string;
+      placement?: "top" | "bottom" | "left" | "right";
+    }> = [
+      {
+        target: "#tour-inventory-header",
+        title: t("inventory.tour.header_title", "Inventory Control Center"),
+        content: t(
+          "inventory.tour.header_desc",
+          "Centralized cockpit for tracking raw materials, products, categories, suppliers, and live stock levels across facilities."
+        ),
+        placement: "bottom",
+      },
+      {
+        target: "#tour-inventory-realtime",
+        title: t("inventory.tour.realtime_title", "Realtime Telemetry Sync"),
+        content: t(
+          "inventory.tour.realtime_desc",
+          "Live connection indicator powered by Laravel Reverb/Echo that instantly updates metrics whenever inventory changes occur."
+        ),
+        placement: "bottom",
+      },
+      {
+        target: "#tour-inventory-presets",
+        title: t("inventory.tour.presets_title", "Time Window Horizons"),
+        content: t(
+          "inventory.tour.presets_desc",
+          "Switch between 7-day, 30-day, or 90-day analytical horizons to evaluate operational velocity and stock movements."
+        ),
+        placement: "bottom",
+      },
+      {
+        target: "#tour-inventory-quick-nav",
+        title: t("inventory.tour.quick_nav_title", "Quick Workspace Jump"),
+        content: t(
+          "inventory.tour.quick_nav_desc",
+          "Instant navigation to Raw Materials (Goods), Products Catalog, Batches & Expiry, Stocktakes, Reorder Basis, and Warehouses."
+        ),
+        placement: "bottom",
+      },
+      {
+        target: "#tour-inventory-alerts",
+        title: t("inventory.tour.alerts_title", "Stock Alert Center"),
+        content: t(
+          "inventory.tour.alerts_desc",
+          "Real-time actionable warnings for out-of-stock items, critical shortages, and stock falling below safety thresholds."
+        ),
+        placement: "bottom",
+      },
+      {
+        target: "#tour-inventory-kpis",
+        title: t("inventory.tour.kpis_title", "Operational KPIs"),
+        content: t(
+          "inventory.tour.kpis_desc",
+          "High-level telemetry on total inventory valuation, on-hand volume, inbound receipts, outbound issues, batches expiring within 30 days, and dead stock."
+        ),
+        placement: "bottom",
+      },
+      {
+        target: "#tour-inventory-flow",
+        title: t("inventory.tour.flow_title", "Stock Movement Trends"),
+        content: t(
+          "inventory.tour.flow_desc",
+          "Daily movement trends across inbound, outbound, and transfers with an interactive dataZoom slider, paired with source channel breakdown."
+        ),
+        placement: "top",
+      },
+      {
+        target: "#tour-inventory-mix",
+        title: t("inventory.tour.mix_title", "Valuation Over Time & Category Mix"),
+        content: t(
+          "inventory.tour.mix_desc",
+          "Historical inventory valuation rebuilt from the subledger along with product distribution across catalog categories."
+        ),
+        placement: "top",
+      },
+      {
+        target: "#tour-inventory-health",
+        title: t("inventory.tour.health_title", "Reorder Health & Low Stock Coverage"),
+        content: t(
+          "inventory.tour.health_desc",
+          "Safety stock indicators and normalized coverage ratios against reorder thresholds to prevent stockouts."
+        ),
+        placement: "top",
+      },
+      {
+        target: "#tour-inventory-expiry",
+        title: t("inventory.tour.expiry_title", "Batch Expiry Horizons & Lots to Act On"),
+        content: t(
+          "inventory.tour.expiry_desc",
+          "Perishable goods grouped by remaining shelf-life horizons, with a dedicated priority action table for expiring batches."
+        ),
+        placement: "top",
+      },
+      {
+        target: "#tour-inventory-warehouses",
+        title: t("inventory.tour.warehouses_title", "Warehouse Distribution & Days of Cover"),
+        content: t(
+          "inventory.tour.warehouses_desc",
+          "Stock distribution by storage site (sellable vs on-hold) and days-of-cover runout projections for high-velocity items."
+        ),
+        placement: "top",
+      },
+    ];
+
+    if ((a?.dead_stock?.items ?? []).length > 0) {
+      steps.push({
+        target: "#tour-inventory-dead-stock",
+        title: t("inventory.tour.dead_stock_title", "Dead Stock Liquidation"),
+        content: t(
+          "inventory.tour.dead_stock_desc",
+          "Capital preservation breakdown identifying dormant goods with zero issue velocity in the selected period."
+        ),
+        placement: "top",
+      });
+    }
+
+    steps.push(
+      {
+        target: "#tour-inventory-operations",
+        title: t("inventory.tour.operations_title", "Serials & Stocktakes Pipeline"),
+        content: t(
+          "inventory.tour.operations_desc",
+          "Lifecycle traceability for serialized units and progress tracking for physical stocktake audits."
+        ),
+        placement: "top",
+      },
+      {
+        target: "#tour-inventory-connected",
+        title: t("inventory.tour.connected_title", "Connected Purchasing & Sales Demand"),
+        content: t(
+          "inventory.tour.connected_desc",
+          "Integrated supply chain view: suppliers to reorder from, inbound Purchase Orders, and outbound Sales Order demand."
+        ),
+        placement: "top",
+      },
+      {
+        target: "#tour-inventory-catalog",
+        title: t("inventory.tour.catalog_title", "Catalog Distribution & Recent Additions"),
+        content: t(
+          "inventory.tour.catalog_desc",
+          "Catalog status distribution (published/draft) and quick access to recently added products."
+        ),
+        placement: "top",
+      }
+    );
+
+    if (canFinance) {
+      steps.push({
+        target: "#tour-inventory-finance",
+        title: t("inventory.tour.finance_title", "Finance & GL Reconciliation"),
+        content: t(
+          "inventory.tour.finance_desc",
+          "Valuation treemap by good (FIFO vs Standard costing) and subledger vs General Ledger reconciliation for Inventory Asset, COGS, and PPV accounts."
+        ),
+        placement: "top",
+      });
+    }
+
+    const activeSteps = steps.filter((step) => {
+      const target = step.target as unknown;
+      if (typeof target === "string") {
+        return Boolean(document.querySelector(target));
+      }
+      return target instanceof HTMLElement && target.isConnected;
+    });
+
+    startTour(activeSteps.map((step) => ({ ...step, skipBeacon: true })));
+  }, [a?.dead_stock?.items, canFinance, startTour, t]);
+
   return (
     <div className="space-y-6 pb-8">
+      {/* Topbar Action Row: Page Tour & Breadcrumbs */}
+      <div className="mb-4 flex w-full items-center justify-end gap-3">
+        <Button
+          id="tour-inventory-page-tour-trigger"
+          variant="outline"
+          size="sm"
+          onClick={triggerPageTour}
+          className="h-8 rounded-lg border-border/50 bg-background/50 text-muted-foreground shadow-sm backdrop-blur-md hover:text-foreground text-xs"
+        >
+          <HelpCircle className="mr-2 h-4 w-4" />{" "}
+          {t("global.page_tour", "Page Tour")}
+        </Button>
+
+        <Breadcrumbs
+          items={[
+            {
+              label: "Hive.OS",
+              href: "/dashboard",
+              icon: <Home className="h-4 w-4" />,
+            },
+            { label: t("inventory.dashboard.title", "Inventory Control Center") },
+          ]}
+        />
+      </div>
+
       {/* Header */}
-      <section className="relative overflow-hidden rounded-[2rem] border border-border/40 bg-card/40 p-7 shadow-sm backdrop-blur-md">
+      <section
+        id="tour-inventory-header"
+        className="relative overflow-hidden rounded-[2rem] border border-border/40 bg-card/40 p-7 shadow-sm backdrop-blur-md"
+      >
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl" />
         <div className="relative flex flex-wrap items-start justify-between gap-4">
@@ -545,7 +755,9 @@ export default function InventoryDashboardPage() {
               <h1 className="bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-3xl font-black tracking-tight text-transparent">
                 {t("inventory.dashboard.title", "Inventory Control Center")}
               </h1>
-              <RealtimeIndicator status={realtimeStatus} lastUpdate={lastLiveUpdate} />
+              <div id="tour-inventory-realtime">
+                <RealtimeIndicator status={realtimeStatus} lastUpdate={lastLiveUpdate} />
+              </div>
             </div>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
               {t("inventory.dashboard.subtitle", "Track inventory, product catalogs, categories, suppliers, and stock levels in real-time.")}
@@ -561,7 +773,12 @@ export default function InventoryDashboardPage() {
           </div>
 
           <div className="flex flex-col items-end gap-3">
-            <div className="flex rounded-full border border-border/60 bg-background/50 p-0.5" role="group" aria-label={t("inventory.dashboard.window", "Time window")}>
+            <div
+              id="tour-inventory-presets"
+              className="flex rounded-full border border-border/60 bg-background/50 p-0.5"
+              role="group"
+              aria-label={t("inventory.dashboard.window", "Time window")}
+            >
               {WINDOWS.map((w) => (
                 <button
                   key={w}
@@ -585,7 +802,7 @@ export default function InventoryDashboardPage() {
           </div>
         </div>
 
-        <div className="relative mt-5 flex flex-wrap gap-2">
+        <div id="tour-inventory-quick-nav" className="relative mt-5 flex flex-wrap gap-2">
           <Button asChild size="sm" className="rounded-full shadow-sm">
             <Link href="/dashboard/inventory/catalog/goods">{t("nav.inventory_goods", "Goods (Raw Materials)")}</Link>
           </Button>
@@ -610,10 +827,12 @@ export default function InventoryDashboardPage() {
       </section>
 
       {/* Alerts */}
-      <StockAlertCenter alerts={a?.alerts} canFinance={canFinance} loading={analyticsLoading} t={t} />
+      <div id="tour-inventory-alerts">
+        <StockAlertCenter alerts={a?.alerts} canFinance={canFinance} loading={analyticsLoading} t={t} />
+      </div>
 
       {/* KPIs */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <section id="tour-inventory-kpis" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {canFinance ? (
           <KpiTile icon={Coins} label={t("inventory.dashboard.stock_value", "Stock value")} value={money(k?.stock_value)} sub={`${fmt(k?.on_hand)} ${t("inventory.dashboard.units_on_hand", "units on hand")}`} loading={analyticsLoading} />
         ) : (
@@ -649,7 +868,7 @@ export default function InventoryDashboardPage() {
 
       {/* Stock flow */}
       <SectionTitle hint={windowLabel}>{t("inventory.dashboard.section_flow", "Stock flow")}</SectionTitle>
-      <section className="grid gap-6 lg:grid-cols-3">
+      <section id="tour-inventory-flow" className="grid gap-6 lg:grid-cols-3">
         <ChartCard
           className="lg:col-span-2"
           icon={Activity}
@@ -685,7 +904,7 @@ export default function InventoryDashboardPage() {
 
       {/* Value & mix */}
       <SectionTitle>{canFinance ? t("inventory.dashboard.section_value", "Value & mix") : t("inventory.dashboard.section_mix", "Stock mix")}</SectionTitle>
-      <section className="grid gap-6 lg:grid-cols-3">
+      <section id="tour-inventory-mix" className="grid gap-6 lg:grid-cols-3">
         {canFinance ? (
           <ChartCard
             className="lg:col-span-2"
@@ -739,7 +958,7 @@ export default function InventoryDashboardPage() {
 
       {/* Stock health */}
       <SectionTitle>{t("inventory.dashboard.section_health", "Stock health")}</SectionTitle>
-      <section className="grid gap-6 lg:grid-cols-3">
+      <section id="tour-inventory-health" className="grid gap-6 lg:grid-cols-3">
         <ChartCard
           icon={Gauge}
           title={t("inventory.dashboard.chart_reorder_health_title", "Reorder Health")}
@@ -771,7 +990,7 @@ export default function InventoryDashboardPage() {
         </ChartCard>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-5">
+      <section id="tour-inventory-expiry" className="grid gap-6 lg:grid-cols-5">
         <ChartCard
           className="lg:col-span-2"
           icon={CalendarClock}
@@ -856,7 +1075,7 @@ export default function InventoryDashboardPage() {
 
       {/* Where stock sits */}
       <SectionTitle>{t("inventory.dashboard.section_where", "Where stock sits & what moves")}</SectionTitle>
-      <section className="grid gap-6 lg:grid-cols-2">
+      <section id="tour-inventory-warehouses" className="grid gap-6 lg:grid-cols-2">
         <ChartCard
           icon={Warehouse}
           title={t("inventory.dashboard.chart_warehouse_title", "Stock by Warehouse")}
@@ -888,7 +1107,7 @@ export default function InventoryDashboardPage() {
       </section>
 
       {(a?.dead_stock.items ?? []).length > 0 ? (
-        <section className="rounded-[2rem] border border-border/40 bg-card/30 p-6 backdrop-blur-md">
+        <section id="tour-inventory-dead-stock" className="rounded-[2rem] border border-border/40 bg-card/30 p-6 backdrop-blur-md">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="flex items-center gap-2 text-base font-black tracking-tight">
@@ -925,7 +1144,7 @@ export default function InventoryDashboardPage() {
 
       {/* Operations */}
       <SectionTitle>{t("inventory.dashboard.section_operations", "Operations")}</SectionTitle>
-      <section className="grid gap-6 lg:grid-cols-2">
+      <section id="tour-inventory-operations" className="grid gap-6 lg:grid-cols-2">
         <ChartCard
           icon={Barcode}
           title={t("inventory.dashboard.chart_serials_title", "Serial Inventory Health")}
@@ -956,7 +1175,7 @@ export default function InventoryDashboardPage() {
 
       {/* Connected modules */}
       <SectionTitle>{t("inventory.dashboard.section_connected", "Suppliers, purchasing & sales")}</SectionTitle>
-      <section className="grid gap-6 lg:grid-cols-2">
+      <section id="tour-inventory-connected" className="grid gap-6 lg:grid-cols-2">
         <ChartCard
           icon={Truck}
           title={t("inventory.dashboard.chart_suppliers_title", "Suppliers to Call")}
@@ -1035,7 +1254,7 @@ export default function InventoryDashboardPage() {
 
       {/* Catalog */}
       <SectionTitle>{t("inventory.dashboard.section_catalog", "Catalog")}</SectionTitle>
-      <section className="grid gap-6 lg:grid-cols-3">
+      <section id="tour-inventory-catalog" className="grid gap-6 lg:grid-cols-3">
         <ChartCard
           icon={Activity}
           title={t("inventory.dashboard.chart_status_title", "Stock Status Breakdown")}
@@ -1098,7 +1317,7 @@ export default function InventoryDashboardPage() {
       {canFinance ? (
         <>
           <SectionTitle>{t("inventory.dashboard.section_finance", "Finance")}</SectionTitle>
-          <section className="grid gap-6 lg:grid-cols-5">
+          <section id="tour-inventory-finance" className="grid gap-6 lg:grid-cols-5">
             <ChartCard
               className="lg:col-span-3"
               icon={Coins}

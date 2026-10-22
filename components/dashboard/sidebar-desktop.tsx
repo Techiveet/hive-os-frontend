@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
@@ -54,6 +54,7 @@ import {
   DASHBOARD_MODULE_IDS,
   DASHBOARD_NAV,
   DASHBOARD_SECONDARY,
+  isSubItemActive,
   type NavItem,
 } from "./nav";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -197,6 +198,7 @@ export function DashboardSidebarDesktop({
   );
 }
 
+
 function SidebarInner({
   collapsed,
   onToggle,
@@ -292,6 +294,7 @@ function SidebarInner({
       setIsCrmOpen(true);
       setIsFleetOpen(true);
       setIsPropertyOpen(true);
+      setIsParkingOpen(true);
       setIsServiceOpen(true);
       setIsInternalAuditOpen(true);
       setIsStrategyOpen(true);
@@ -299,6 +302,7 @@ function SidebarInner({
       setIsVantageOpen(true);
       setIsAgricultureOpen(true);
       setIsProductionOpen(true);
+      setIsSupportBotOpen(true);
     };
 
     window.addEventListener(TOUR_EXPAND_NAV_EVENT, expandAll);
@@ -629,6 +633,16 @@ function SidebarInner({
     }
 
     const timer = setTimeout(() => {
+      // Do not auto-scroll if an interactive system tour is currently running
+      if (
+        typeof window !== "undefined" &&
+        (window.localStorage.getItem("hive_tour_running") === "true" ||
+          document.querySelector(".react-joyride__spotlight") ||
+          document.querySelector(".react-joyride__tooltip"))
+      ) {
+        return;
+      }
+
       const activeItem = navRef.current?.querySelector(
         ".hive-sidebar-nested-active, .hive-sidebar-nav-active"
       );
@@ -665,6 +679,7 @@ function SidebarInner({
       <div className="flex flex-col gap-1">
         <h3>
           <button
+            id={`tour-subnav-${moduleId}`}
             type="button"
             onClick={onToggle}
             aria-expanded={openState}
@@ -672,7 +687,7 @@ function SidebarInner({
             className={cn(
               "group flex min-h-11 w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-[13px] font-semibold transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary",
               isModuleActive
-                ? "border border-amber-700/40 bg-amber-500/15 font-extrabold text-amber-900 shadow-sm dark:border-amber-300/40 dark:text-amber-200"
+                ? "border border-primary/30 bg-primary/15 font-extrabold text-primary shadow-sm"
                 : "hive-sidebar-subsection-idle",
             )}
           >
@@ -697,20 +712,7 @@ function SidebarInner({
         {openState && (
           <div id={sectionId} className="flex flex-col gap-1 pl-4">
             {items.map((item) => {
-              const itemPath = item.href.split("?")[0];
-              const hasMoreSpecificMatch = items.some((candidate) => {
-                const candidatePath = candidate.href.split("?")[0];
-                return (
-                  candidatePath !== itemPath &&
-                  candidatePath.startsWith(`${itemPath}/`) &&
-                  (pathname === candidatePath ||
-                    pathname.startsWith(`${candidatePath}/`))
-                );
-              });
-              const active =
-                pathname === itemPath ||
-                (!hasMoreSpecificMatch &&
-                  pathname.startsWith(`${itemPath}/`));
+              const active = isSubItemActive(item, items, pathname);
               const ItemIcon = item.icon;
               const itemLabel = t(item.translationKey, item.fallbackLabel);
 
@@ -840,11 +842,11 @@ function SidebarInner({
       >
         {searchQuery ? (
           filteredNav.map((item) => {
-            const active =
-              item.href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname === item.href ||
-                  pathname.startsWith(item.href + "/");
+            const active = isSubItemActive(
+              item,
+              filteredNav,
+              pathname,
+            );
             const Icon = item.icon;
             const label = t(item.translationKey, item.fallbackLabel);
 
@@ -970,6 +972,7 @@ function SidebarInner({
                     {inventoryModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          id="tour-subnav-inventory"
                           type="button"
                           aria-expanded={isInventoryOpen}
                           aria-controls="desktop-inventory-links"
@@ -999,11 +1002,11 @@ function SidebarInner({
                           <div id="desktop-inventory-links"
                             className="flex flex-col gap-1 pl-4">
                             {inventoryModuleItems.map((item) => {
-                              const active =
-                                item.href === "/dashboard"
-                                  ? pathname === "/dashboard"
-                                  : pathname === item.href ||
-                                    pathname.startsWith(item.href + "/");
+                              const active = isSubItemActive(
+                                item,
+                                inventoryModuleItems,
+                                pathname,
+                              );
                               const Icon = item.icon;
                               const label = t(
                                 item.translationKey,
@@ -1035,6 +1038,7 @@ function SidebarInner({
                     {hospitalityModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          id="tour-subnav-hospitality"
                           type="button"
                           aria-expanded={isHospitalityOpen}
                           aria-controls="desktop-hospitality-links"
@@ -1066,11 +1070,11 @@ function SidebarInner({
                           <div id="desktop-hospitality-links"
                             className="flex flex-col gap-1 pl-4">
                             {hospitalityModuleItems.map((item) => {
-                              const active =
-                                item.href === "/dashboard"
-                                  ? pathname === "/dashboard"
-                                  : pathname === item.href ||
-                                    pathname.startsWith(item.href + "/");
+                              const active = isSubItemActive(
+                                item,
+                                hospitalityModuleItems,
+                                pathname,
+                              );
                               const Icon = item.icon;
                               const label = t(
                                 item.translationKey,
@@ -1102,6 +1106,7 @@ function SidebarInner({
                     {warehouseModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          id="tour-subnav-warehouse"
                           type="button"
                           aria-expanded={isWarehouseOpen}
                           aria-controls="desktop-warehouse-links"
@@ -1116,7 +1121,7 @@ function SidebarInner({
                           <div className="flex items-center gap-3">
                             <Warehouse className={cn("h-4 w-4 shrink-0", pathname.startsWith("/dashboard/warehouse") ? "text-primary font-bold" : "")} />
                             <span className="truncate">
-                              {t("nav.warehouse", "Warehouse Logic")}
+                              {t("nav.warehouse", "Warehouse")}
                             </span>
                           </div>
                           {isWarehouseOpen ? (
@@ -1131,11 +1136,11 @@ function SidebarInner({
                           <div id="desktop-warehouse-links"
                             className="flex flex-col gap-1 pl-4">
                             {warehouseModuleItems.map((item) => {
-                              const active =
-                                item.href === "/dashboard"
-                                  ? pathname === "/dashboard"
-                                  : pathname === item.href ||
-                                    pathname.startsWith(item.href + "/");
+                              const active = isSubItemActive(
+                                item,
+                                warehouseModuleItems,
+                                pathname,
+                              );
                               const Icon = item.icon;
                               const label = t(
                                 item.translationKey,
@@ -1147,8 +1152,9 @@ function SidebarInner({
                                   key={item.href}
                                   id={item.tourId}
                                   href={item.href}
+                                  aria-current={active ? "page" : undefined}
                                   className={cn(
-                                    "group flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-[13px] transition-all duration-200",
+                                    "group flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-[13px] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                                     active
                                       ? "hive-sidebar-nested-active"
                                       : "hive-sidebar-nested-idle",
@@ -1168,6 +1174,7 @@ function SidebarInner({
                       <div className="flex flex-col gap-1">
                         <h3>
                           <button
+                            id="tour-subnav-human-resources"
                             type="button"
                             onClick={() =>
                               setIsHumanResourcesOpen(!isHumanResourcesOpen)
@@ -1214,10 +1221,11 @@ function SidebarInner({
                             className="flex flex-col gap-1 pl-4"
                           >
                             {humanResourcesModuleItems.map((item) => {
-                              const active =
-                                pathname === item.href ||
-                                (item.href !== "/dashboard/human-resources" &&
-                                  pathname.startsWith(`${item.href}/`));
+                              const active = isSubItemActive(
+                                item,
+                                humanResourcesModuleItems,
+                                pathname,
+                              );
                               const Icon = item.icon;
                               const label = t(
                                 item.translationKey,
@@ -1419,54 +1427,33 @@ function SidebarInner({
 
                     {projectManagementModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
-                        <div className={cn(
-                          "group flex items-center justify-between rounded-xl px-2.5 py-1.5 text-[13px] font-semibold transition-all duration-200",
-                          pathname.startsWith("/dashboard/project-management")
-                            ? "bg-primary/15 text-primary font-extrabold border border-primary/30 shadow-sm"
-                            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                        )}>
-                          <Link
-                            href="/dashboard/project-management"
-                            className="flex items-center gap-3 flex-1 overflow-hidden"
-                          >
-                            <ListTodo className="h-4 w-4 shrink-0 text-primary" />
-                            <span className="truncate font-bold text-foreground">
-                              {t(
-                                "nav.project_management",
-                                "Project Management",
-                              )}
+                        <button
+                          id="tour-subnav-pm"
+                          type="button"
+                          aria-expanded={isProjectManagementOpen}
+                          aria-controls="desktop-project-management-links"
+                          onClick={() =>
+                            setIsProjectManagementOpen(!isProjectManagementOpen)
+                          }
+                          className={cn(
+                            "group flex min-h-11 items-center justify-between rounded-xl px-2.5 py-1.5 text-[13px] font-semibold transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                            pathname.startsWith("/dashboard/project-management")
+                              ? "bg-primary/15 text-primary font-extrabold border border-primary/30 shadow-sm"
+                              : "hive-sidebar-subsection-idle",
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <ListTodo className={cn("h-4 w-4 shrink-0", pathname.startsWith("/dashboard/project-management") ? "text-primary font-bold" : "")} />
+                            <span className="truncate">
+                              {t("nav.project_management", "Project Management")}
                             </span>
-                          </Link>
-                          <button
-                            type="button"
-                            aria-expanded={isProjectManagementOpen}
-                            aria-controls="desktop-project-management-links"
-                            aria-label={
-                              isProjectManagementOpen
-                                ? t("nav.collapse_section", "Collapse {section}").replace(
-                                    "{section}",
-                                    t("nav.project_management", "Project Management"),
-                                  )
-                                : t("nav.expand_section", "Expand {section}").replace(
-                                    "{section}",
-                                    t("nav.project_management", "Project Management"),
-                                  )
-                            }
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setIsProjectManagementOpen(
-                                !isProjectManagementOpen,
-                              );
-                            }}
-                            className="rounded-md p-1 text-primary transition-colors hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary-readable))]"
-                          >
-                            {isProjectManagementOpen ? (
-                              <ChevronDown aria-hidden="true" className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight aria-hidden="true" className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
+                          </div>
+                          {isProjectManagementOpen ? (
+                            <ChevronDown aria-hidden="true" className="h-4 w-4 opacity-50" />
+                          ) : (
+                            <ChevronRight aria-hidden="true" className="h-4 w-4 opacity-50" />
+                          )}
+                        </button>
 
                         {isProjectManagementOpen && (
                           <div
@@ -1540,6 +1527,7 @@ function SidebarInner({
                     {workflowModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          id="tour-subnav-workflow"
                           type="button"
                           aria-expanded={isWorkflowOpen}
                           aria-controls="desktop-workflow-links"
@@ -1569,11 +1557,11 @@ function SidebarInner({
                           <div id="desktop-workflow-links"
                             className="flex flex-col gap-1 pl-4">
                             {workflowModuleItems.map((item) => {
-                              const active =
-                                item.href === "/dashboard"
-                                  ? pathname === "/dashboard"
-                                  : pathname === item.href ||
-                                    pathname.startsWith(item.href + "/");
+                              const active = isSubItemActive(
+                                item,
+                                workflowModuleItems,
+                                pathname,
+                              );
                               const Icon = item.icon;
                               const label = t(
                                 item.translationKey,
@@ -1605,6 +1593,7 @@ function SidebarInner({
                     {lmsModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          id="tour-subnav-lms"
                           type="button"
                           aria-expanded={isLmsOpen}
                           aria-controls="desktop-lms-links"
@@ -1634,11 +1623,11 @@ function SidebarInner({
                           <div id="desktop-lms-links"
                             className="flex flex-col gap-1 pl-4">
                             {lmsModuleItems.map((item) => {
-                              const active =
-                                item.href === "/dashboard"
-                                  ? pathname === "/dashboard"
-                                  : pathname === item.href ||
-                                    pathname.startsWith(item.href + "/");
+                              const active = isSubItemActive(
+                                item,
+                                lmsModuleItems,
+                                pathname,
+                              );
                               const Icon = item.icon;
                               const label = t(
                                 item.translationKey,
@@ -1670,6 +1659,7 @@ function SidebarInner({
                     {b2bMarketplaceModuleItems.length > 0 && (
                       <div className="flex flex-col gap-1">
                         <button
+                          id="tour-subnav-b2b"
                           type="button"
                           aria-expanded={isB2BMarketplaceOpen}
                           aria-controls="desktop-b2b-marketplace-links"
@@ -1701,11 +1691,11 @@ function SidebarInner({
                           <div id="desktop-b2b-marketplace-links"
                             className="flex flex-col gap-1 pl-4">
                             {b2bMarketplaceModuleItems.map((item) => {
-                              const active =
-                                item.href === "/dashboard"
-                                  ? pathname === "/dashboard"
-                                  : pathname === item.href ||
-                                    pathname.startsWith(item.href + "/");
+                              const active = isSubItemActive(
+                                item,
+                                b2bMarketplaceModuleItems,
+                                pathname,
+                              );
                               const Icon = item.icon;
                               const label = t(
                                 item.translationKey,
@@ -1773,11 +1763,11 @@ function SidebarInner({
                 {isModulesOpen && (
                   <div id="desktop-collapsed-module-links" className="contents">
                     {moduleNavItems.map((item) => {
-                    const active =
-                      item.href === "/dashboard"
-                        ? pathname === "/dashboard"
-                        : pathname === item.href ||
-                          pathname.startsWith(item.href + "/");
+                    const active = isSubItemActive(
+                      item,
+                      moduleNavItems,
+                      pathname,
+                    );
                     const Icon = item.icon;
                     const label = t(item.translationKey, item.fallbackLabel);
 
@@ -1821,6 +1811,8 @@ function SidebarInner({
               <button
                 id="tour-nav-apps"
                 onClick={() => setIsAppsOpen(!isAppsOpen)}
+                aria-expanded={isAppsOpen}
+                aria-controls="desktop-apps-links"
                 className={cn(
                   "group flex items-center justify-between rounded-xl px-2.5 py-2 text-[13px] font-semibold transition-all duration-200 hive-sidebar-section-idle outline-none",
                   collapsed ? "justify-center px-0 py-2.5" : "",
@@ -1847,7 +1839,7 @@ function SidebarInner({
 
               {/* Sub-menu (Open state for Desktop) */}
               {!collapsed && isAppsOpen && (
-                <div className="flex flex-col gap-1 pl-4 mt-1 animate-in slide-in-from-top-2 duration-200">
+                <div id="desktop-apps-links" className="flex flex-col gap-1 pl-4 mt-1 animate-in slide-in-from-top-2 duration-200">
                   {canAccessConverter && (
                     <Link
                       href="/dashboard/tools/converters"

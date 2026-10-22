@@ -40,7 +40,8 @@ import {
   fetchInventoryEntityRecords, 
   createInventoryEntityRecord, 
   updateInventoryEntityRecord,
-  assignInventoryShelfBox
+  assignInventoryShelfBox,
+  assignProductToShelf
 } from "@/modules/inventory/api";
 import type { InventoryEntityRecord } from "@/modules/inventory/types";
 
@@ -86,13 +87,27 @@ export default function ShelfBoxManagementPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
+      let boxRecord: any;
       if (data.id) {
-        return updateInventoryEntityRecord("shelf-boxes", data.id, data.payload);
+        boxRecord = await updateInventoryEntityRecord("shelf-boxes", data.id, data.payload);
+      } else {
+        boxRecord = await createInventoryEntityRecord("shelf-boxes", data.payload);
       }
-      return createInventoryEntityRecord("shelf-boxes", data.payload);
+
+      if (addProductId && (boxRecord?.id || data.id)) {
+        await assignProductToShelf(Number(addProductId), boxRecord?.id || data.id);
+      }
+
+      return boxRecord;
     },
     onSuccess: () => {
-      toast.success(t("inventory.common.saved", "Box updated successfully."));
+      if (addProductId) {
+        toast.success(t("inventory.shelf_boxes.assigned", "Product assigned to shelf successfully."));
+        queryClient.invalidateQueries({ queryKey: ["inventory", "products"] });
+        router.push("/dashboard/inventory/catalog/products");
+      } else {
+        toast.success(t("inventory.common.saved", "Box updated successfully."));
+      }
       queryClient.invalidateQueries({ queryKey: ["inventory", "shelves", shelfId, "boxes"] });
       setIsDialogOpen(false);
     },

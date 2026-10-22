@@ -4,15 +4,32 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+interface TableProps extends React.ComponentProps<"table"> {
+  containerRef?: React.Ref<HTMLDivElement>
+  containerClassName?: string
+  onContainerScroll?: (e: React.UIEvent<HTMLDivElement>) => void
+}
+
+function Table({
+  className,
+  containerRef,
+  containerClassName,
+  onContainerScroll,
+  ...props
+}: TableProps) {
   return (
     <div
+      ref={containerRef}
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn("relative w-full overflow-x-auto", containerClassName)}
+      onScroll={onContainerScroll}
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn(
+          "w-full caption-bottom text-sm border-separate border-spacing-0",
+          className
+        )}
         {...props}
       />
     </div>
@@ -70,7 +87,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "text-foreground h-11 px-4 text-left align-middle font-medium whitespace-nowrap border-b border-border/50 [&:has([role=checkbox])]:px-0 [&:has([role=checkbox])]:text-center [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
@@ -83,7 +100,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "p-4 align-middle whitespace-nowrap border-b border-border/40 [&:has([role=checkbox])]:px-0 [&:has([role=checkbox])]:text-center [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}

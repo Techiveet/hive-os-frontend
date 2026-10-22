@@ -3,7 +3,7 @@
 import Link from "next/link";
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ClipboardCheck, ExternalLink, Loader2, Package, Pencil, QrCode, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardCheck, ExternalLink, Loader2, Package, Pencil, QrCode, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/store/use-translation";
 
@@ -72,11 +72,13 @@ export default function ProductDetailPage({ productId }: { productId: number }) 
     mutationFn: () => deleteInventoryProduct(productId),
     onSuccess: (data) => {
       const outcome = notifyMutationOutcome(data, {
-        savedMessage: t("inventory.common.deleted", "Product deleted."),
+        savedMessage: t("inventory.products.moved_to_trash", "Product moved to Trash Bin."),
         submittedMessage: t("workflow.submitted_for_approval", "Submitted for approval."),
         queryClient,
       });
       queryClient.invalidateQueries({ queryKey: ["inventory", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["trash-items"] });
+      queryClient.invalidateQueries({ queryKey: ["trash-stats"] });
       if (outcome === "saved") {
         window.location.href = "/dashboard/inventory/catalog/products";
       }
@@ -142,10 +144,21 @@ export default function ProductDetailPage({ productId }: { productId: number }) 
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="rounded-full" onClick={() => setQaDialogOpen(true)}>
-            <ClipboardCheck className="mr-2 h-4 w-4" />
-            Add To QA
-          </Button>
+          {product.qa_status === "qa_passed" ? (
+            <Button
+              variant="outline"
+              disabled
+              className="cursor-not-allowed rounded-full border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 disabled:opacity-90 font-medium"
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              QA Passed
+            </Button>
+          ) : (
+            <Button variant="outline" className="rounded-full" onClick={() => setQaDialogOpen(true)}>
+              <ClipboardCheck className="mr-2 h-4 w-4" />
+              Add To QA
+            </Button>
+          )}
           <Button className="rounded-full" onClick={() => setEditOpen(true)}>
             <Pencil className="mr-2 h-4 w-4" />
             {t("inventory.common.edit", "Edit")}
@@ -163,9 +176,9 @@ export default function ProductDetailPage({ productId }: { productId: number }) 
             </AlertDialogTrigger>
             <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
               <AlertDialogHeader>
-                <AlertDialogTitle>{t("inventory.products.delete_confirm_title", "Delete Product?")}</AlertDialogTitle>
+                <AlertDialogTitle>{t("inventory.products.trash_confirm_title", "Move Product to Trash?")}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  {t("inventory.products.delete_confirm_desc", "This will permanently delete")} <strong>{product.name}</strong>. {t("inventory.common.action_undone", "This action cannot be undone.")}
+                  {t("inventory.products.trash_confirm_desc", "This product will be moved to the Global Trash Bin where it can be restored or will be automatically purged after the retention policy expires.")}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -174,7 +187,7 @@ export default function ProductDetailPage({ productId }: { productId: number }) 
                    className="rounded-xl bg-destructive hover:bg-destructive/90"
                    onClick={() => deleteMutation.mutate()}
                 >
-                  {t("inventory.common.confirm", "Confirm Delete")}
+                  {t("inventory.products.confirm_trash", "Move to Trash")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

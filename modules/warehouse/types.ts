@@ -19,7 +19,7 @@ export interface WarehouseOverview {
         adjustment_quantity: number;
         net_quantity: number;
     };
-    daily_movements: Array<{ date: string; movements: number; received: number; issued: number }>;
+    daily_movements: Array<{ date: string; movements: number; received: number; issued: number; transfers?: number }>;
     movement_mix: Array<{ type: string; count: number; quantity: number }>;
     capacity: Array<{
         warehouse_id: number;
@@ -32,7 +32,14 @@ export interface WarehouseOverview {
         on_hand: number;
     }>;
     expiry_bands: Array<{ key: string; label: string; severity: string; count: number; quantity: number }>;
-    top_products: Array<{ product_id: number; on_hand: number; lines: number }>;
+    top_products: Array<{
+        product_id: number;
+        product_name?: string;
+        sku?: string;
+        on_hand: number;
+        lines: number;
+        value?: number;
+    }>;
     dead_stock: { lines: number; quantity: number; value: number; products: number };
 }
 

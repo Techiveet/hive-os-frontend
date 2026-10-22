@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileBox, ImagePlus, Loader2, Plus, RefreshCcw, Trash2, X } from "lucide-react";
+import { FileBox, ImagePlus, Info, Lightbulb, Loader2, Plus, RefreshCcw, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -108,7 +114,7 @@ const DEFAULT_CURRENCY_OPTIONS = [
 const normalizeKeyValueRows = (rows?: ProductKeyValue[] | null) =>
   rows && rows.length > 0 ? rows : [emptyKeyValue()];
 
-const normalizeSelectedAssetPath = (value: string | null | undefined) => {
+const normalizeSelectedAssetPath = (value: string | null | undefined): string | null => {
   if (!value) return null;
 
   const trimmed = value.trim();
@@ -125,14 +131,14 @@ const normalizeSelectedAssetPath = (value: string | null | undefined) => {
   if (/^https?:\/\//i.test(trimmed)) {
     try {
       const url = new URL(trimmed);
-      return normalizeSelectedAssetPath(url.pathname);
+      const serveMatch = url.pathname.match(/\/api\/v1\/files\/(\d+)\/serve/);
+      if (serveMatch) {
+        return url.pathname;
+      }
+      return normalizeSelectedAssetPath(url.pathname) ?? trimmed;
     } catch {
-      return null;
+      return trimmed;
     }
-  }
-
-  if (trimmed.startsWith("/api/") || trimmed.startsWith("api/")) {
-    return null;
   }
 
   return trimmed.replace(/^\/+/, "");
@@ -402,10 +408,21 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
       if (form.height.trim()) data.append("height", form.height);
       if (isEdit) data.append("set_quantity", form.set_quantity || "0");
       if (!isEdit) data.append("initial_stock", form.initial_stock || "0");
-      if (newImage) data.append("new_image", newImage);
-      if (newModel) data.append("new_3d_model", newModel);
-      if (form.image_path) data.append("image_path", form.image_path);
-      if (form.model_3d_path) data.append("model_3d_path", form.model_3d_path);
+      if (newImage) {
+        data.append("new_image", newImage);
+      } else if (form.image_path) {
+        data.append("image_path", form.image_path);
+      } else if (isEdit) {
+        data.append("image_path", "");
+      }
+
+      if (newModel) {
+        data.append("new_3d_model", newModel);
+      } else if (form.model_3d_path) {
+        data.append("model_3d_path", form.model_3d_path);
+      } else if (isEdit) {
+        data.append("model_3d_path", "");
+      }
 
       if (isEdit && productId) {
         return updateInventoryProduct(productId, data);
@@ -561,7 +578,7 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
                     <Field label="Product Name" required>
                       <Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Hagenes PLC et" />
                     </Field>
-                    <Field label="SKU">
+                    <Field label="SKU" required>
                       <div className="flex gap-2">
                         <Input
                           value={form.sku}
@@ -635,7 +652,7 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
 
                 <SectionCard title="Pricing">
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                    <Field label="Currency" className="min-w-0">
+                    <Field label="Currency" required className="min-w-0">
   <Select
     value={form.currency}
     onValueChange={(value) => setForm((prev) => ({ ...prev, currency: value }))}
@@ -654,7 +671,7 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
   </Select>
 </Field>
                     <Field label="Cost of Good"><Input type="number" min="0" step="0.01" value={form.cost_of_good} onChange={(event) => setForm((prev) => ({ ...prev, cost_of_good: event.target.value }))} /></Field>
-                    <Field label="Unit Price"><Input type="number" min="0" step="0.01" value={form.unit_price} onChange={(event) => setForm((prev) => ({ ...prev, unit_price: event.target.value }))} /></Field>
+                    <Field label="Unit Price" required><Input type="number" min="0" step="0.01" value={form.unit_price} onChange={(event) => setForm((prev) => ({ ...prev, unit_price: event.target.value }))} /></Field>
                     <Field label="Sale Price"><Input type="number" min="0" step="0.01" value={form.sale_price} onChange={(event) => setForm((prev) => ({ ...prev, sale_price: event.target.value }))} /></Field>
                     <Field label="Tax Rate (%)"><Input type="number" min="0" step="0.01" value={form.tax_rate} onChange={(event) => setForm((prev) => ({ ...prev, tax_rate: event.target.value }))} /></Field>
                   </div>
@@ -669,13 +686,15 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
                     <Field label="Units per Package / Case"><Input type="number" min="1" value={form.units_per_package} onChange={(event) => setForm((prev) => ({ ...prev, units_per_package: event.target.value }))} /></Field>
                     <div className="md:col-span-3">
                       <div className="flex flex-wrap items-center gap-4 pt-1 text-sm">
-                        <label className="flex items-center gap-2">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
                           <Checkbox checked={form.track_inventory} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, track_inventory: checked === true }))} />
-                          Track inventory
+                          <span>Track inventory</span>
+                          <FieldInfoPopover label="Track inventory" />
                         </label>
-                        <label className="flex items-center gap-2">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
                           <Checkbox checked={form.allow_backorders} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, allow_backorders: checked === true }))} />
-                          Allow backorders
+                          <span>Allow backorders</span>
+                          <FieldInfoPopover label="Allow backorders" />
                         </label>
                       </div>
                     </div>
@@ -690,7 +709,7 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
 
                 <SectionCard title="Shipping & Packaging">
                   <div className="grid gap-3 md:grid-cols-2">
-                    <Field label="Unit of Measure">
+                    <Field label="Unit of Measure" required>
                       <Select value={form.unit} onValueChange={(value) => setForm((prev) => ({ ...prev, unit: value }))} onOpenChange={setIsAnySelectOpen}>
                         <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
                         <SelectContent>
@@ -711,7 +730,7 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
               <div className="space-y-4 lg:col-span-4">
                 <SectionCard title="Organization">
                   <div className="space-y-3">
-                    <Field label="Status">
+                    <Field label="Status" required>
                       <Select value={form.status} onValueChange={(value) => setForm((prev) => ({ ...prev, status: value as FormState["status"] }))} onOpenChange={setIsAnySelectOpen}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -750,9 +769,10 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
 
                 <SectionCard title="Variant Workflow">
                   <div className="space-y-3">
-                    <label className="flex items-center gap-2 text-sm">
+                    <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
                       <Checkbox checked={form.is_variant} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, is_variant: checked === true, parent_product_id: checked === true ? prev.parent_product_id : "" }))} />
-                      This product has variants
+                      <span>This product has variants</span>
+                      <FieldInfoPopover label="This product has variants" />
                     </label>
                     <Field label="Parent Product">
                       <Select value={form.parent_product_id || "__none__"} onValueChange={(value) => setForm((prev) => ({ ...prev, parent_product_id: value === "__none__" ? "" : value }))} disabled={!form.is_variant} onOpenChange={setIsAnySelectOpen}>
@@ -813,10 +833,29 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
                                 </div>
                               </div>
                             )}
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                              <Button type="button" variant="secondary" size="sm" className="rounded-full" onClick={() => openAssetLibrary("image")}>
-                                <RefreshCcw className="mr-2 h-4 w-4" /> Change Image
+                            <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                              <Button type="button" variant="secondary" size="sm" className="rounded-full shadow-md" onClick={() => openAssetLibrary("image")}>
+                                <RefreshCcw className="mr-1.5 h-3.5 w-3.5" /> Library
                               </Button>
+                              <div className="relative">
+                                <Button type="button" variant="secondary" size="sm" className="rounded-full shadow-md">
+                                  <Upload className="mr-1.5 h-3.5 w-3.5" /> Upload
+                                </Button>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="absolute inset-0 cursor-pointer opacity-0"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0] ?? null;
+                                    setNewImage(file);
+                                    if (file) {
+                                      setForm((prev) => ({ ...prev, image_path: "" }));
+                                      setSelectedImagePreviewUrl(null);
+                                    }
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </div>
                             </div>
                             <Button
                               type="button"
@@ -846,8 +885,23 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
                                 Library
                               </Button>
                               <div className="relative">
-                                <Button type="button" variant="secondary" size="sm" className="rounded-full">Upload</Button>
-                                <input type="file" accept="image/*" className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => setNewImage(e.target.files?.[0] ?? null)} />
+                                <Button type="button" variant="secondary" size="sm" className="rounded-full">
+                                  <Upload className="mr-1.5 h-3.5 w-3.5" /> Upload
+                                </Button>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="absolute inset-0 cursor-pointer opacity-0"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0] ?? null;
+                                    setNewImage(file);
+                                    if (file) {
+                                      setForm((prev) => ({ ...prev, image_path: "" }));
+                                      setSelectedImagePreviewUrl(null);
+                                    }
+                                    e.target.value = "";
+                                  }}
+                                />
                               </div>
                             </div>
                           </div>
@@ -883,15 +937,41 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
                               <p className="truncate text-sm font-medium">{modelDisplayName}</p>
                               <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{modelDisplayPath}</p>
                             </div>
-                            <div className="flex gap-1">
-                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => openAssetLibrary("model_3d")}>
+                            <div className="flex gap-1 items-center">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-lg"
+                                title="Select 3D model from library"
+                                onClick={() => openAssetLibrary("model_3d")}
+                              >
                                 <Plus className="h-4 w-4" />
                               </Button>
                               <div className="relative">
-                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
-                                  <RefreshCcw className="h-4 w-4" />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 rounded-lg"
+                                  title="Upload 3D model (.glb / .gltf)"
+                                >
+                                  <Upload className="h-4 w-4" />
                                 </Button>
-                                <input type="file" accept=".glb,.gltf" className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => setNewModel(e.target.files?.[0] ?? null)} />
+                                <input
+                                  type="file"
+                                  accept=".glb,.gltf"
+                                  className="absolute inset-0 cursor-pointer opacity-0"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0] ?? null;
+                                    setNewModel(file);
+                                    if (file) {
+                                      setForm((prev) => ({ ...prev, model_3d_path: "" }));
+                                      setSelectedModelPreviewUrl(null);
+                                    }
+                                    e.target.value = "";
+                                  }}
+                                />
                               </div>
                               {(form.model_3d_path || newModel) ? (
                                 <Button
@@ -899,6 +979,7 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 rounded-lg text-destructive"
+                                  title="Remove 3D model"
                                   onClick={() => {
                                     setForm((prev) => ({ ...prev, model_3d_path: "" }));
                                     setNewModel(null);
@@ -925,6 +1006,30 @@ export function ProductFormModal({ open, mode, productId, onClose, onSaved }: Pr
           <Button className="rounded-full" disabled={saveMutation.isPending || loading} onClick={() => {
             if (!form.name.trim()) {
               toast.error("Product name is required.");
+              return;
+            }
+            if (!form.sku.trim()) {
+              toast.error("SKU is required. Click the refresh icon to auto-generate one.");
+              return;
+            }
+            if (!form.currency.trim()) {
+              toast.error("Currency is required.");
+              return;
+            }
+            if (!form.unit_price.trim() || isNaN(Number(form.unit_price)) || Number(form.unit_price) < 0) {
+              toast.error("A valid unit price is required.");
+              return;
+            }
+            if (form.sale_price.trim() && !isNaN(Number(form.sale_price)) && Number(form.sale_price) >= Number(form.unit_price)) {
+              toast.error("Sale price must be strictly less than unit price.");
+              return;
+            }
+            if (!form.unit.trim()) {
+              toast.error("Unit of measure is required.");
+              return;
+            }
+            if (!form.status.trim()) {
+              toast.error("Status is required.");
               return;
             }
             saveMutation.mutate();
@@ -984,23 +1089,334 @@ function SectionCard({ title, children }: { title: string; children: React.React
   );
 }
 
+export type FieldInfoData = {
+  title?: string;
+  description: string;
+  example?: string;
+  bestPractice?: string;
+};
+
+const PRODUCT_FIELD_INFO_MAP: Record<string, FieldInfoData> = {
+  "Product Name": {
+    title: "Product Name",
+    description: "The primary commercial display title of the product. Appears across sales quotes, invoices, order packing slips, and the digital catalog.",
+    example: "Highland Reserve Yirgacheffe Coffee Beans 500g",
+    bestPractice: "Include brand name, key distinguishing attribute, and package size for fast search and identification.",
+  },
+  "SKU": {
+    title: "Stock Keeping Unit (SKU)",
+    description: "A unique alphanumeric identifier used to distinguish this exact item variant across warehouses, inventory bins, and barcode scanners.",
+    example: "COF-YIRG-500G",
+    bestPractice: "Must be unique across your organization. Click the refresh button to auto-generate a valid unique code.",
+  },
+  "Stock Code": {
+    title: "Internal Stock Code",
+    description: "Secondary internal reference or legacy inventory ledger code used for enterprise cross-system synchronization and vendor part matching.",
+    example: "STK-COF-001",
+    bestPractice: "Use this to mirror accounting catalog codes or supplier part numbers when they differ from your SKU.",
+  },
+  "Barcode (GTIN / UPC)": {
+    title: "Barcode (GTIN / UPC / EAN)",
+    description: "Standard 12-digit (UPC) or 13-digit (EAN-13) retail barcode scanned at warehouse dispatch, receiving gates, and point-of-sale registers.",
+    example: "6901234567891",
+    bestPractice: "Click the refresh icon to auto-generate a compliant EAN-13 barcode with checksum validation.",
+  },
+  "Description": {
+    title: "Product Description",
+    description: "Detailed narrative describing product characteristics, specifications, usage instructions, or marketing copy for customers and staff.",
+    example: "Specialty Grade 1 washed Arabica coffee beans from Gedeo zone, Yirgacheffe. Features floral aromas and balanced citrus notes.",
+  },
+  "HS Code (Customs)": {
+    title: "Harmonized System (HS) Tariff Code",
+    description: "Standardized international tariff classification code (6 to 10 digits) used by customs authorities worldwide to calculate import/export tariffs, taxes, and duties.",
+    example: "0901.21 (Roasted Coffee) or 2201.10 (Mineral Waters)",
+    bestPractice: "Essential for international shipping documents, bill of lading, and automated export compliance.",
+  },
+  "Country of Origin": {
+    title: "Country of Origin",
+    description: "The 2-letter ISO country code where the item was grown, manufactured, or underwent significant transformation.",
+    example: "ET (Ethiopia), US (United States), DE (Germany)",
+    bestPractice: "Required for customs documentation, preferential trade agreements, and regulatory declarations.",
+  },
+  "Nutritional Facts": {
+    title: "Nutritional Facts & Lab Specs",
+    description: "Structured attribute key-value pairs representing nutritional breakdown (e.g., Calories, Total Fat) or lab test results (e.g., pH, TDS, Purity).",
+    example: "Serving Size: 15g | Calories: 2 kcal | pH: 7.2",
+    bestPractice: "Allows dynamic rendering on product compliance labels, digital menus, and customer specification sheets.",
+  },
+  "Currency": {
+    title: "Pricing Currency",
+    description: "The official transaction currency code for all monetary amounts (Unit Price, Cost of Good, Sale Price) on this item.",
+    example: "ETB (Ethiopian Birr), USD (US Dollar)",
+    bestPractice: "Ensures accounting ledgers, tax reports, and multi-currency order conversions calculate correctly.",
+  },
+  "Cost of Good": {
+    title: "Cost of Goods Sold (COGS)",
+    description: "The direct expense incurred to manufacture or procure one unit of this product (materials, production labor, freight allocation).",
+    example: "480.00",
+    bestPractice: "Used by the ERP valuation engine to determine gross margins and profitability. Defaults to 0.00 if left blank.",
+  },
+  "Unit Price": {
+    title: "Standard Selling Price",
+    description: "The standard list price charged to customers per unit before discounts, taxes, or volume price tiers.",
+    example: "850.00",
+    bestPractice: "Must be a non-negative number. Required to publish items and generate sales quotations.",
+  },
+  "Sale Price": {
+    title: "Discount / Promotional Price",
+    description: "An optional promotional price offered during special discounts, clearances, or partner campaigns.",
+    example: "765.00",
+    bestPractice: "Must be strictly lower than the base Unit Price. Leave empty if no special promotion is active.",
+  },
+  "Tax Rate (%)": {
+    title: "Tax / VAT Rate",
+    description: "The applicable Value Added Tax (VAT) or sales tax percentage charged on this item.",
+    example: "15.00 (Standard VAT rate) or 0.00 (Tax-exempt)",
+    bestPractice: "Calculated automatically on invoice line items. Defaults to standard 15% if left blank.",
+  },
+  "Reorder Point": {
+    title: "Reorder Threshold Point",
+    description: "The minimum inventory level that automatically triggers a low-stock alert or auto-generates a replenishment purchase requisition.",
+    example: "50",
+    bestPractice: "Set this above your minimum safety buffer based on vendor lead times to prevent stockouts.",
+  },
+  "Initial Stock Quantity": {
+    title: "Initial Stock Quantity",
+    description: "The opening inventory balance physically counted and loaded into your central warehouse upon product creation.",
+    example: "320",
+    bestPractice: "Automatically creates an audited initial stock journal movement in the warehouse inventory ledger.",
+  },
+  "Set Quantity": {
+    title: "Current Stock Balance",
+    description: "Manually updates the recorded on-hand quantity for this item in warehouse inventory.",
+    example: "150",
+    bestPractice: "For formal audits, prefer using the Stock Adjustment or Physical Count workflow for complete reconciliation.",
+  },
+  "Units per Package / Case": {
+    title: "Package / Case Pack Quantity",
+    description: "The quantity of individual consumer units contained inside a single bulk shipping carton, case, or crate.",
+    example: "12 (e.g. 12 bottles per shrink bundle), 24, 50",
+    bestPractice: "Allows warehouse staff to pick, scan, and ship in whole case multiples without unboxing.",
+  },
+  "Unit of Measure": {
+    title: "Unit of Measure (UoM)",
+    description: "The primary physical unit used to quantify, count, and transact this item throughout purchasing, warehousing, and sales.",
+    example: "pack, box, kg, bottle, piece, liter",
+    bestPractice: "Standardizes inventory metrics and ensures purchasing and sales measure the exact same units.",
+  },
+  "Weight": {
+    title: "Gross Weight (kg)",
+    description: "The packaged weight of one product unit measured in kilograms (kg).",
+    example: "0.520 kg",
+    bestPractice: "Used by logistics dispatch engines to calculate shipment weight, container capacity, and carrier freight charges.",
+  },
+  "Length": {
+    title: "Package Length (cm)",
+    description: "The outer length dimension of one packaged unit in centimeters (cm).",
+    example: "38.0 cm",
+  },
+  "Width": {
+    title: "Package Width (cm)",
+    description: "The outer width dimension of one packaged unit in centimeters (cm).",
+    example: "26.0 cm",
+  },
+  "Height": {
+    title: "Package Height (cm)",
+    description: "The vertical height dimension of one packaged unit in centimeters (cm).",
+    example: "22.0 cm",
+    bestPractice: "Combined with length and width to compute volumetric dimensional weight for freight shipping.",
+  },
+  "Status": {
+    title: "Product Lifecycle Status",
+    description: "Determines whether this product is actively available for ordering, hidden as a work-in-progress, or retired.",
+    example: "Published (Active), Draft (Work in progress), Archived (Discontinued)",
+    bestPractice: "Keep new items in Draft until photos, compliance specs, and prices are fully approved.",
+  },
+  "Product Category": {
+    title: "Product Category",
+    description: "Primary business classification (e.g. Finished Goods, Raw Materials, Packaging, Maintenance Spares, Cleaning).",
+    example: "Finished Goods",
+    bestPractice: "Drives general ledger inventory accounting, category reports, and sales catalog navigation.",
+  },
+  "Tags": {
+    title: "Search & Marketing Tags",
+    description: "Flexible labels used for merchandising groups, seasonal filters, brand campaigns, and internal search indexing.",
+    example: "#featured, #export-ready, #organic",
+    bestPractice: "Click any tag badge to toggle it on or off for this item.",
+  },
+  "Parent Product": {
+    title: "Parent Product (Matrix Variant)",
+    description: "The master parent SKU that groups related color, size, or style variations together under a single product family.",
+    example: "Parent Coffee SKU or Apparel Master",
+    bestPractice: "Select a parent product when this item represents a specific variant size or color.",
+  },
+  "Variant Attributes": {
+    title: "Variant Attributes",
+    description: "The specific distinguishing attributes (e.g. Size, Color, Flavor, Material Grade) that define this variant variation.",
+    example: "Roast Profile: Medium Roast | Bottle Volume: 500ml",
+    bestPractice: "Define consistent attribute keys so customers can switch between variant options on your web store.",
+  },
+  "Product Image": {
+    title: "Primary Product Photo",
+    description: "High-resolution product photo displayed on catalogs, point-of-sale registers, and order packing slips.",
+    bestPractice: "Upload a square image (PNG or JPG) with good lighting or pick from your SeaweedFS media library.",
+  },
+  "3D Model (.glb / .gltf)": {
+    title: "Interactive 3D Asset",
+    description: "A 3D model file (.glb or .gltf) enabling customers and staff to inspect the item in interactive 360-degree rotation and AR.",
+    bestPractice: "Supports web-optimized .glb files up to 20MB with embedded textures.",
+  },
+  "Track inventory": {
+    title: "Track Inventory Stock",
+    description: "When enabled, stock quantities are strictly audited and deducted upon fulfillment, sales orders, and transfers.",
+    bestPractice: "Leave enabled for physical goods; disable only for digital services or non-inventoried consumables.",
+  },
+  "Allow backorders": {
+    title: "Allow Backorders",
+    description: "Allows orders to proceed and confirm even if stock quantity is zero or insufficient, anticipating future replenishment.",
+    bestPractice: "Useful for fast-moving items with steady supply chains where delivery delays are acceptable.",
+  },
+  "This product has variants": {
+    title: "Variant Enabled",
+    description: "Indicates this product exists in multiple options (such as sizes, colors, or flavors) linked to a parent product.",
+    bestPractice: "Enabling this activates the Parent Product selector and custom Variant Attributes table.",
+  },
+};
+
+export function FieldInfoPopover({
+  label,
+  required,
+  info,
+}: {
+  label: string;
+  required?: boolean;
+  info?: FieldInfoData | string;
+}) {
+  const [open, setOpen] = React.useState(false);
+
+  const resolvedInfo: FieldInfoData | null = React.useMemo(() => {
+    if (typeof info === "string") {
+      return { description: info };
+    }
+    if (info && typeof info === "object") {
+      return info;
+    }
+    if (PRODUCT_FIELD_INFO_MAP[label]) {
+      return PRODUCT_FIELD_INFO_MAP[label];
+    }
+    const cleanLabel = label.split("(")[0].trim();
+    if (PRODUCT_FIELD_INFO_MAP[cleanLabel]) {
+      return PRODUCT_FIELD_INFO_MAP[cleanLabel];
+    }
+    return null;
+  }, [info, label]);
+
+  if (!resolvedInfo) return null;
+
+  const title = resolvedInfo.title || label;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen((prev) => !prev);
+          }}
+          className={cn(
+            "group/info -my-0.5 inline-flex size-4.5 items-center justify-center rounded-full text-muted-foreground/50 transition-all hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 cursor-pointer active:scale-90",
+            open && "bg-primary/15 text-primary ring-1 ring-primary/40 shadow-xs"
+          )}
+          aria-label={`Field explanation for ${label}`}
+          title={`Click to read guide: ${label}`}
+        >
+          <Info className="size-3 transition-transform duration-200 group-hover/info:scale-115" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={6}
+        className="z-[9999] w-84 max-w-[calc(100vw-2rem)] rounded-2xl border border-border/70 bg-popover/95 p-4 shadow-2xl backdrop-blur-xl outline-none text-left normal-case tracking-normal animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-150"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-border/40 pb-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20 shadow-xs">
+              <Info className="size-4" />
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-xs font-bold text-foreground tracking-tight line-clamp-1">{title}</h4>
+              <p className="text-[10px] text-muted-foreground/75 font-medium uppercase tracking-wider">Field Guide</p>
+            </div>
+          </div>
+          {required ? (
+            <Badge variant="destructive" className="h-5 px-2 text-[9px] font-bold uppercase tracking-wider bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25 shrink-0">
+              Required
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="h-5 px-2 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/80 bg-muted/40 border-border/60 shrink-0">
+              Optional
+            </Badge>
+          )}
+        </div>
+
+        <div className="mt-3 space-y-2.5">
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {resolvedInfo.description}
+          </p>
+
+          {resolvedInfo.example ? (
+            <div className="rounded-xl border border-border/50 bg-muted/30 p-2.5 text-[11px] leading-snug">
+              <div className="flex items-center gap-1.5 font-semibold text-foreground/90 mb-1">
+                <span className="inline-block size-1.5 rounded-full bg-primary/70" />
+                <span>Example / Format</span>
+              </div>
+              <p className="font-mono text-muted-foreground break-all text-[11px] pl-3 border-l-2 border-primary/30">
+                {resolvedInfo.example}
+              </p>
+            </div>
+          ) : null}
+
+          {resolvedInfo.bestPractice ? (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-2.5 text-[11px] leading-snug text-muted-foreground">
+              <Lightbulb className="size-4 shrink-0 text-amber-500 mt-0.5" />
+              <div>
+                <span className="font-semibold text-foreground/90 block mb-0.5">Best Practice</span>
+                <span>{resolvedInfo.bestPractice}</span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function Field({
   label,
   required,
   className,
+  info,
   children,
 }: {
   label: string;
   required?: boolean;
   className?: string;
+  info?: FieldInfoData | string;
   children: React.ReactNode;
 }) {
   return (
     <div className={className}>
-      <Label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-        {required ? " *" : ""}
-      </Label>
+      <div className="mb-1.5 flex items-center gap-1.5 select-none">
+        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+          {required ? <span className="text-destructive text-red-500 font-bold ml-1" aria-hidden="true">*</span> : null}
+        </Label>
+        <FieldInfoPopover label={label} required={required} info={info} />
+      </div>
       {children}
     </div>
   );

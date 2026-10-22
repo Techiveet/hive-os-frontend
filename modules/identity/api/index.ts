@@ -38,11 +38,15 @@ export const updateUser = async ({ id, formData }: { id: number; formData: FormD
 };
 export const deleteUser = async (id: number) => unwrapApiResponse(await api.delete(`/users/${id}`));
 export const toggleUserStatus = async (id: number) => unwrapApiResponse(await api.post(`/users/${id}/toggle-status`));
+export const bulkDeleteUsers = async (ids: (string | number)[]) => unwrapApiResponse(await api.post("/users/bulk-delete", { ids }));
+export const bulkToggleUserStatus = async (ids: (string | number)[], is_active: boolean) => unwrapApiResponse(await api.post("/users/bulk-status", { ids, is_active }));
 export const verify2FA = async (data: any) => (await api.post("/verify-2fa", data)).data;
 export const fetchRoles = async (params: any = {}) => (await api.get("/roles", { params })).data;
 export const createRole = async (data: any) => (await api.post("/roles", data)).data;
 export const updateRole = async ({ id, data }: { id: string | number; data: any }) => (await api.put(`/roles/${id}`, data)).data;
 export const deleteRole = async (id: string | number) => (await api.delete(`/roles/${id}`)).data;
+export const cloneRole = async (id: string | number, name?: string) => (await api.post(`/roles/${id}/clone`, { name })).data;
+export const bulkDeleteRoles = async (ids: (string | number)[]) => (await api.post("/roles/bulk-delete", { ids })).data;
 export const fetchPermissions = async () => (await api.get("/permissions")).data;
 
 export default api;
