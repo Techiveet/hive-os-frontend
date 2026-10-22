@@ -10,7 +10,8 @@ import {
   Database, Activity, BarChart3, Bell, Shield, Compass, UserCheck, Eye,
   FileText, Download, Printer, Filter, Archive, Clock,
   UserPlus, ShieldAlert, Trash2, Pencil, VenetianMask, PlusCircle,
-  Mail, ArrowRight
+  Mail, ArrowRight, Building2, Factory, QrCode, SlidersHorizontal,
+  HardDrive, Cpu, Package, CheckCircle
 } from "lucide-react";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,9 @@ import { Input } from "@/components/ui/input";
 import { useTranslation } from "@/store/use-translation";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { isTenantSession, isCentralHost, getTenantId } from "@/lib/runtime-context";
+
+export type ManualScope = "all" | "central" | "tenant";
 
 interface Chapter {
   id: string;
@@ -26,6 +30,7 @@ interface Chapter {
   title: string;
   category: string;
   badge: string;
+  scope: ManualScope;
   summary: string;
 }
 
@@ -35,15 +40,26 @@ const CHAPTERS: Chapter[] = [
     number: "00",
     title: "Central Administrator Authentication & Gateway Handshake",
     category: "Security & Access",
-    badge: "Essential",
-    summary: "Master Cluster Gateway login, domain resolution, System Identifier & Encryption Key verification, and cryptographic session handshake.",
+    badge: "Central Only",
+    scope: "central",
+    summary: "Master Cluster Gateway login (https://hive.techiveet.com/sign-in), domain resolution, System Identifier & Encryption Key verification, and cryptographic session handshake.",
+  },
+  {
+    id: "chapter-0-tenant",
+    number: "00-T",
+    title: "Tenant Workspace Sign-In & Operational Authentication",
+    category: "Security & Access",
+    badge: "Tenant Only",
+    scope: "tenant",
+    summary: "Subdomain-isolated node gateway login (https://{tenant}.techiveet.com/sign-in), workspace isolation, operator credential verification, and shift session security.",
   },
   {
     id: "chapter-1",
     number: "01",
     title: "Executive Dashboard & Telemetry Operations",
     category: "Core Operations",
-    badge: "Core",
+    badge: "Central & Tenant",
+    scope: "all",
     summary: "Role-based views (Central Super Admin vs Tenant Admin vs Operator), real-time KPI metrics, Warehouse & Inventory charts, and interactive tours.",
   },
   {
@@ -51,15 +67,17 @@ const CHAPTERS: Chapter[] = [
     number: "02",
     title: "System Audit Logs & Forensic Investigation",
     category: "Security & Audit",
-    badge: "Security",
-    summary: "Inspect every system action, filter by operator/node/date, payload before/after diffs, export compliance reports, and manage cold storage archives.",
+    badge: "Central & Tenant",
+    scope: "all",
+    summary: "Inspect every system action, cross-tenant auditing for Central administrators vs. workspace-scoped forensic trails for Tenant supervisors, with payload diffs and CSV export.",
   },
   {
     id: "chapter-3",
     number: "03",
     title: "Identity & Access Control Matrix (RBAC)",
     category: "Security & Access",
-    badge: "Security",
+    badge: "Central & Tenant",
+    scope: "all",
     summary: "Operator identity lifecycle, pinned ID & Operator columns, multi-dimensional filters (Status, Role, 2FA), role definitions, capability bindings, and security actions.",
   },
   {
@@ -67,22 +85,27 @@ const CHAPTERS: Chapter[] = [
     number: "04",
     title: "Multi-Tenancy & Workspace Governance",
     category: "Architecture",
-    badge: "Upcoming",
-    summary: "Tenant database provisioning, domain mappings, subscription quotas, and cluster isolation.",
+    badge: "Central Only",
+    scope: "central",
+    summary: "Central workspace provisioning, PostgreSQL schema isolation, custom domain mapping, storage quotas, and automated tenant migration pipelines.",
   },
   {
     id: "chapter-5",
     number: "05",
     title: "Warehouse Operations & Spatial Storage",
     category: "Supply Chain",
-    badge: "Upcoming",
-    summary: "Warehouses, zones, aisles, racks, shelves, box assignments, and QR receipt verification.",
+    badge: "Tenant Only",
+    scope: "tenant",
+    summary: "Spatial warehouse topologies (Aisles, Racks, Shelves, Bins), real-time stock allocation, inbound QR scanning, and order dispatch validation.",
   },
 ];
 
 export default function UserManualPage() {
   const { t } = useTranslation();
   const [activeChapter, setActiveChapter] = useState<string>("chapter-0");
+  const [manualScope, setManualScope] = useState<ManualScope>("all");
+  const [detectedScope, setDetectedScope] = useState<"central" | "tenant">("central");
+  const [detectedTenantName, setDetectedTenantName] = useState<string | null>(null);
   const [dashboardViewMode, setDashboardViewMode] = useState<"annotated" | "raw">("annotated");
   const [auditViewMode, setAuditViewMode] = useState<"annotated" | "raw">("annotated");
   const [securityViewMode, setSecurityViewMode] = useState<"annotated" | "raw">("raw");
@@ -101,6 +124,17 @@ export default function UserManualPage() {
       } else {
         setOrigin("https://hive.techiveet.com");
       }
+
+      const isTenant = isTenantSession();
+      const tid = getTenantId();
+      setDetectedScope(isTenant ? "tenant" : "central");
+      setDetectedTenantName(tid);
+      setManualScope(isTenant ? "tenant" : "central");
+      if (isTenant) {
+        setActiveChapter("chapter-0-tenant");
+      } else {
+        setActiveChapter("chapter-0");
+      }
     }
   }, []);
 
@@ -109,6 +143,22 @@ export default function UserManualPage() {
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
     toast.success(t("global.copied", "Copied to clipboard."));
+  };
+
+  const filteredChapters = CHAPTERS.filter((ch) => {
+    if (manualScope === "all") return true;
+    return ch.scope === "all" || ch.scope === manualScope;
+  });
+
+  const handleScopeChange = (scope: ManualScope) => {
+    setManualScope(scope);
+    const validChapters = CHAPTERS.filter((ch) => {
+      if (scope === "all") return true;
+      return ch.scope === "all" || ch.scope === scope;
+    });
+    if (!validChapters.some((ch) => ch.id === activeChapter)) {
+      setActiveChapter(validChapters[0]?.id || "chapter-0");
+    }
   };
 
   return (
@@ -159,16 +209,106 @@ export default function UserManualPage() {
         </div>
       </div>
 
+      {/* Scope Filter Switcher Bar */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-border/60 bg-card/40 backdrop-blur-md shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+            <SlidersHorizontal className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
+                Manual Scope Filter:
+              </span>
+              <Badge variant="outline" className={cn(
+                "font-mono text-[10px] font-bold uppercase",
+                detectedScope === "central" 
+                  ? "border-indigo-500/30 text-indigo-400 bg-indigo-500/10" 
+                  : "border-emerald-500/30 text-emerald-400 bg-emerald-500/10"
+              )}>
+                {detectedScope === "central" ? "Session: Central Cluster" : `Session: Tenant (${detectedTenantName || "Node"})`}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {manualScope === "central"
+                ? "Displaying Central Command manuals only: Cluster governance, root security, multi-tenancy provisioning, and platform telemetry."
+                : manualScope === "tenant"
+                ? "Displaying Tenant Node manuals only: Workspace operator authentication, shift operations, warehouse spatial storage, and team roles."
+                : "Displaying complete unified manual suite across all Central and Tenant operational domains."}
+            </p>
+          </div>
+        </div>
+
+        {/* 3 Scope Toggle Buttons */}
+        <div className="flex items-center gap-2 bg-background/60 p-1.5 rounded-xl border border-border/60 shrink-0 w-full sm:w-auto">
+          <Button
+            size="sm"
+            type="button"
+            variant={manualScope === "central" ? "default" : "ghost"}
+            onClick={() => handleScopeChange("central")}
+            className={cn(
+              "text-xs font-bold font-space rounded-lg gap-2 h-9 flex-1 sm:flex-initial transition-all",
+              manualScope === "central" ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Central Only</span>
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-mono">
+              {CHAPTERS.filter(c => c.scope === "all" || c.scope === "central").length}
+            </Badge>
+          </Button>
+
+          <Button
+            size="sm"
+            type="button"
+            variant={manualScope === "tenant" ? "default" : "ghost"}
+            onClick={() => handleScopeChange("tenant")}
+            className={cn(
+              "text-xs font-bold font-space rounded-lg gap-2 h-9 flex-1 sm:flex-initial transition-all",
+              manualScope === "tenant" ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Factory className="w-3.5 h-3.5" />
+            <span>Tenant Only</span>
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-mono">
+              {CHAPTERS.filter(c => c.scope === "all" || c.scope === "tenant").length}
+            </Badge>
+          </Button>
+
+          <Button
+            size="sm"
+            type="button"
+            variant={manualScope === "all" ? "default" : "ghost"}
+            onClick={() => handleScopeChange("all")}
+            className={cn(
+              "text-xs font-bold font-space rounded-lg gap-2 h-9 flex-1 sm:flex-initial transition-all",
+              manualScope === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>All Scopes</span>
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-mono">
+              {CHAPTERS.length}
+            </Badge>
+          </Button>
+        </div>
+      </div>
+
       {/* Main Grid: Chapter Nav + Content */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Chapters Navigation */}
         <div className="lg:col-span-4 space-y-3">
-          <div className="text-xs font-bold font-mono uppercase tracking-widest text-muted-foreground px-2">
-            {t("manual.chapters", "Manual Chapters")}
+          <div className="flex items-center justify-between px-2">
+            <span className="text-xs font-bold font-mono uppercase tracking-widest text-muted-foreground">
+              {t("manual.chapters", "Manual Chapters")}
+            </span>
+            <Badge variant="outline" className="text-[10px] font-mono">
+              {filteredChapters.length} Visible
+            </Badge>
           </div>
 
           <div className="space-y-2">
-            {CHAPTERS.map((ch) => {
+            {filteredChapters.map((ch) => {
               const isActive = activeChapter === ch.id;
               return (
                 <button
@@ -188,7 +328,12 @@ export default function UserManualPage() {
                     </span>
                     <Badge
                       variant={isActive ? "default" : "secondary"}
-                      className="text-[10px] font-mono uppercase"
+                      className={cn(
+                        "text-[10px] font-mono uppercase",
+                        ch.scope === "central" ? "border-indigo-500/40 text-indigo-400 bg-indigo-500/10" :
+                        ch.scope === "tenant" ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10" :
+                        "border-border text-muted-foreground"
+                      )}
                     >
                       {ch.badge}
                     </Badge>
@@ -405,6 +550,196 @@ export default function UserManualPage() {
                 </div>
               </div>
             </div>
+          ) : activeChapter === "chapter-0-tenant" ? (
+            /* ========================================================== */
+            /* CHAPTER 00-T: TENANT WORKSPACE SIGN-IN & AUTHENTICATION     */
+            /* ========================================================== */
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="border-b border-border/50 pb-6">
+                <div className="flex items-center gap-2 mb-2 font-mono text-xs font-bold text-emerald-500">
+                  <span>CHAPTER 00-T</span>
+                  <span>•</span>
+                  <span>SECURITY & AUTHENTICATION</span>
+                  <span>•</span>
+                  <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 font-mono text-[10px] bg-emerald-500/10">
+                    TENANT OPERATOR
+                  </Badge>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
+                  Tenant Workspace Sign-In & Operational Authentication
+                </h2>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Official operational procedure for logging into your organization&apos;s isolated Hive.OS workspace, verifying subdomain routing, authenticating operator credentials, and beginning your shift securely.
+                </p>
+              </div>
+
+              {/* Highlight Callouts Box */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">
+                    <Factory className="w-4 h-4" />
+                    Dedicated Organization Subdomain
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Always access through your company&apos;s private workspace address:{" "}
+                    <code className="text-emerald-400 font-mono font-bold bg-background/60 px-1.5 py-0.5 rounded">
+                      https://&#123;company&#125;.techiveet.com/sign-in
+                    </code>. You do not log in through the master cluster gateway.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
+                    <ShieldCheck className="w-4 h-4" />
+                    Strict Data Boundary Isolation
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Your warehouse inventory, orders, customer records, and employee rosters are encrypted and strictly isolated within your organization&apos;s private database schema.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-blue-500/30 bg-blue-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
+                    <Fingerprint className="w-4 h-4" />
+                    Tenant Gateway Header Verification
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    The portal card displays <strong className="text-foreground">TENANT NODE GATEWAY</strong> along with your verified company name, confirming direct connection to your team&apos;s workspace.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                    <Key className="w-4 h-4" />
+                    Role-Scoped Shift Clearance
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Once authenticated, your interface adapts precisely to your operational role (e.g., Warehouse Manager, Inventory Specialist, Dispatch Picker).
+                  </p>
+                </div>
+              </div>
+
+              {/* Embedded Screenshot */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
+                    Figure 0.1-T: Tenant Operator Sign-In Interface
+                  </span>
+                  <Badge variant="outline" className="font-mono text-[10px] text-emerald-400 border-emerald-500/30">
+                    TENANT NODE GATEWAY
+                  </Badge>
+                </div>
+
+                <div className="rounded-2xl border border-border/80 overflow-hidden shadow-2xl bg-black/40 group relative">
+                  <img
+                    src="/manual-screenshots/01-tenant-sign-in.png"
+                    alt="Tenant Operator Sign-In screen on Hive.OS"
+                    className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.01]"
+                  />
+                  <div className="absolute inset-0 border-2 border-emerald-500/20 pointer-events-none rounded-2xl" />
+                </div>
+                <p className="text-xs text-muted-foreground italic text-center">
+                  Live snapshot of the Tenant Access Portal displaying the Tenant Node Gateway card, organization domain badge, and operator credentials form.
+                </p>
+              </div>
+
+              {/* Step-by-Step Instructions */}
+              <div className="space-y-6 pt-4 border-t border-border/50">
+                <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
+                  <Key className="w-5 h-5 text-emerald-500" />
+                  Step-by-Step Novice Sign-In Guide
+                </h3>
+
+                <div className="space-y-6 text-sm leading-relaxed text-foreground/90">
+                  {/* Step 1 */}
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-emerald-500/20">
+                      1
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Open Your Organization&apos;s Dedicated Web Address</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        In your web browser (Chrome, Edge, Firefox, or Safari), type your company&apos;s unique Hive.OS link (for example, <code className="text-emerald-400 font-mono bg-muted/50 px-1 py-0.5 rounded">https://your-company.techiveet.com/sign-in</code>). We recommend saving this link in your browser bookmarks or desktop shortcuts for quick access at the start of every shift.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-emerald-500/20">
+                      2
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Confirm the Tenant Gateway Title</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Look at the security card in the center or right of the screen. It should say <strong className="text-foreground">TENANT NODE GATEWAY</strong> and display your company or branch name. This guarantees you are sending credentials to your company&apos;s private server and not an external network.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-emerald-500/20">
+                      3
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Enter Your Work Email and Password</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Type the email address registered by your team administrator (e.g. <code>jane.doe@company.com</code>). In the password field, enter your password. You can click the eye icon to unmask characters while typing to avoid typos.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Step 4 */}
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-emerald-500/20">
+                      4
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Click &ldquo;Sign In to Workspace&rdquo;</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Click the primary sign-in button. The button will display a brief loading state while establishing an encrypted session token. If your company enforces Two-Factor Authentication (2FA), you will be asked to enter a 6-digit code from your authenticator app.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Step 5 */}
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-emerald-500/20">
+                      5
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Welcome to Your Operational Dashboard</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Upon successful verification, you arrive immediately at your workspace dashboard. The top banner displays your node name, current active shift, and quick links to your permitted tools (Warehouse, Inventory, Dispatch, or Team Directory).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Novice Troubleshooting Box */}
+                <div className="p-5 rounded-2xl border border-border/80 bg-card/40 space-y-4">
+                  <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <HelpCircle className="w-4 h-4 text-emerald-400" />
+                    Frequently Asked Questions for Novice Operators
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div className="p-3.5 rounded-xl border border-border/60 bg-background/50 space-y-1">
+                      <strong className="text-foreground block">Q: What if I see &ldquo;Workspace Not Found&rdquo;?</strong>
+                      <p className="text-muted-foreground">
+                        Double-check the web address in your browser. Ensure you typed your company subdomain correctly (e.g. <code>acme.techiveet.com</code>, not just <code>techiveet.com</code>).
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-xl border border-border/60 bg-background/50 space-y-1">
+                      <strong className="text-foreground block">Q: How do I safely sign out at shift end?</strong>
+                      <p className="text-muted-foreground">
+                        Click your user profile avatar in the upper-right corner of the top bar and select <strong className="text-foreground">Disconnect Node</strong> or <strong className="text-foreground">Sign Out</strong>. This clears temporary session tokens from the computer.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : activeChapter === "chapter-1" ? (
             /* ========================================================== */
             /* CHAPTER 1: DASHBOARD & TELEMETRY OPERATIONS               */
@@ -415,6 +750,10 @@ export default function UserManualPage() {
                   <span>CHAPTER 01</span>
                   <span>•</span>
                   <span>CORE OPERATIONS & TELEMETRY</span>
+                  <span>•</span>
+                  <Badge variant="outline" className="border-primary/40 text-primary font-mono text-[10px]">
+                    CENTRAL & TENANT
+                  </Badge>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
                   Executive Dashboard & Mission Control Cockpit
@@ -422,6 +761,32 @@ export default function UserManualPage() {
                 <p className="text-sm text-muted-foreground mt-2">
                   Complete operational manual for the Hive.OS central mission control: understanding live telemetry, triggering administrative quick actions (including cache flushing), reading real-time analytics, and managing tenant infrastructure.
                 </p>
+              </div>
+
+              {/* Scope Perspective Callout */}
+              <div className="p-4 rounded-2xl border border-primary/20 bg-primary/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold font-mono text-primary uppercase">
+                      Dual-Scope Operations Manual
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      <strong>Central Command:</strong> Displays cluster-wide node status, PostgreSQL/Redis memory, and multi-tenant health. <br className="hidden sm:inline" />
+                      <strong>Tenant Nodes:</strong> Displays local warehouse capacity, department shift rates, and open dispatch work orders.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Badge variant="outline" className="border-indigo-500/30 text-indigo-400 font-mono text-[10px]">
+                    🏢 Central
+                  </Badge>
+                  <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 font-mono text-[10px]">
+                    🏭 Tenant
+                  </Badge>
+                </div>
               </div>
 
               {/* View Toggle Bar */}
@@ -729,6 +1094,10 @@ export default function UserManualPage() {
                   <span>CHAPTER 02</span>
                   <span>•</span>
                   <span>SECURITY & FORENSIC AUDITING</span>
+                  <span>•</span>
+                  <Badge variant="outline" className="border-primary/40 text-primary font-mono text-[10px]">
+                    CENTRAL & TENANT
+                  </Badge>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
                   System Audit Logs & Forensic Investigation
@@ -736,6 +1105,32 @@ export default function UserManualPage() {
                 <p className="text-sm text-muted-foreground mt-2">
                   Complete operational manual for tracking every administrative action, filtering anomalous events across tenant shards, inspecting before/after JSON diff payloads, and exporting tamper-evident audit trails.
                 </p>
+              </div>
+
+              {/* Scope Perspective Callout */}
+              <div className="p-4 rounded-2xl border border-primary/20 bg-primary/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold font-mono text-primary uppercase">
+                      Dual-Scope Operations Manual
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      <strong>Central Command:</strong> Cross-tenant audit investigations across all enterprise nodes with node ID filters. <br className="hidden sm:inline" />
+                      <strong>Tenant Nodes:</strong> Workspace-scoped forensic ledger capturing employee logins, stock adjustments, and clearance changes.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Badge variant="outline" className="border-indigo-500/30 text-indigo-400 font-mono text-[10px]">
+                    🏢 Central
+                  </Badge>
+                  <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 font-mono text-[10px]">
+                    🏭 Tenant
+                  </Badge>
+                </div>
               </div>
 
               {/* View Toggle Bar */}
@@ -1060,6 +1455,10 @@ export default function UserManualPage() {
                   <span>CHAPTER 03</span>
                   <span>•</span>
                   <span>IDENTITY & ACCESS GOVERNANCE (RBAC)</span>
+                  <span>•</span>
+                  <Badge variant="outline" className="border-primary/40 text-primary font-mono text-[10px]">
+                    CENTRAL & TENANT
+                  </Badge>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
                   Identity & Access Control Matrix (RBAC)
@@ -1067,6 +1466,32 @@ export default function UserManualPage() {
                 <p className="text-sm text-muted-foreground mt-2">
                   Complete operational manual for managing human and machine operator identities, enforcing granular role clearances, locking/unlocking account access, cloning clearance levels, inspecting forensic audit telemetry, and exploring the complete cryptographic capability dictionary across all three subsystems.
                 </p>
+              </div>
+
+              {/* Scope Perspective Callout */}
+              <div className="p-4 rounded-2xl border border-primary/20 bg-primary/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold font-mono text-primary uppercase">
+                      Dual-Scope Operations Manual
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      <strong>Central Command:</strong> Super Admin role governance, root operator directories, and global capability dictionary with 1,072 protocols. <br className="hidden sm:inline" />
+                      <strong>Tenant Nodes:</strong> Workspace staff onboarding, custom warehouse roles (Pickers, Managers, Dispatchers), and team 2FA enforcement.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Badge variant="outline" className="border-indigo-500/30 text-indigo-400 font-mono text-[10px]">
+                    🏢 Central
+                  </Badge>
+                  <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 font-mono text-[10px]">
+                    🏭 Tenant
+                  </Badge>
+                </div>
               </div>
 
               {/* Subsystem Sub-Tabs Selector */}
@@ -3224,6 +3649,392 @@ export default function UserManualPage() {
                   <Button className="rounded-full gap-2 font-space font-bold text-xs">
                     <ShieldCheck className="w-3.5 h-3.5" />
                     Open Live Security Matrix
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ) : activeChapter === "chapter-4" ? (
+            /* ========================================================== */
+            /* CHAPTER 4: MULTI-TENANCY & WORKSPACE GOVERNANCE            */
+            /* ========================================================== */
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="border-b border-border/50 pb-6">
+                <div className="flex items-center gap-2 mb-2 font-mono text-xs font-bold text-indigo-400">
+                  <span>CHAPTER 04</span>
+                  <span>•</span>
+                  <span>CLUSTER ARCHITECTURE</span>
+                  <span>•</span>
+                  <Badge variant="outline" className="border-indigo-500/40 text-indigo-400 font-mono text-[10px] bg-indigo-500/10">
+                    CENTRAL ONLY
+                  </Badge>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
+                  Multi-Tenancy & Workspace Governance
+                </h2>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Official operational procedures for provisioning isolated tenant nodes, executing automated database migrations, configuring tenant subdomains, and managing subscription resource quotas.
+                </p>
+              </div>
+
+              {/* Callouts */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
+                    <Zap className="w-4 h-4" />
+                    Zero-Downtime Node Provisioning
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Create and deploy a fully isolated enterprise workspace in seconds with automated database schema migrations and seed configurations.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-purple-500/30 bg-purple-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-purple-400 font-bold text-sm">
+                    <Database className="w-4 h-4" />
+                    Strict Database & Schema Isolation
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Every organization operates on isolated PostgreSQL schemas with dedicated encryption keys, ensuring zero cross-tenant data leaks.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-blue-500/30 bg-blue-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
+                    <Globe className="w-4 h-4" />
+                    Automated Subdomain Routing
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Dynamic reverse proxy routing binds URLs like <code className="text-primary font-mono">https://&#123;tenant&#125;.techiveet.com</code> directly to the target tenant container shard.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                    <HardDrive className="w-4 h-4" />
+                    Enforceable Resource Quotas
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Govern and enforce limits on database storage size, maximum operator seats, and active warehouse facilities per subscription tier.
+                  </p>
+                </div>
+              </div>
+
+              {/* Screenshot Frame */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
+                    Figure 4.1: Central Multi-Tenant Workspace Directory & Node Provisioning Cockpit
+                  </span>
+                  <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
+                    CENTRAL COMMAND
+                  </Badge>
+                </div>
+
+                <div className="rounded-2xl border border-border/80 overflow-hidden shadow-2xl bg-black/40 group relative">
+                  <img
+                    src="/manual-screenshots/04-tenants-main.png"
+                    alt="Multi-Tenant Management Console on Hive.OS"
+                    className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.01]"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground italic text-center">
+                  Live snapshot of the Central Multi-Tenant console displaying active organizations, database sharding status, subscription tiers, and node provisioning controls.
+                </p>
+              </div>
+
+              {/* Step-by-Step Instructions */}
+              <div className="space-y-6 pt-4 border-t border-border/50">
+                <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-indigo-400" />
+                  Step-by-Step Node Provisioning Workflow
+                </h3>
+
+                <div className="space-y-6 text-sm leading-relaxed text-foreground/90">
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-indigo-500/20">
+                      1
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Open the Tenants Directory</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Navigate to <code className="text-primary font-mono bg-muted/50 px-1 py-0.5 rounded">{origin}/dashboard/tenants</code> from the left navigation sidebar or by clicking the &ldquo;Provision Node&rdquo; quick action on the central executive dashboard.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-indigo-500/20">
+                      2
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Click &ldquo;+ Provision Node&rdquo;</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Click the primary creation button in the top-right header to launch the secure node provisioning drawer.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-indigo-500/20">
+                      3
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Configure Tenant Identity & Subdomain</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Enter the organization&apos;s legal entity name (e.g. <code>Acme Logistics Ltd</code>) and system slug (e.g. <code>acme</code>). This slug automatically dictates the subdomain address: <code className="text-primary font-mono">https://acme.techiveet.com</code>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-indigo-500/20">
+                      4
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Assign Subscription Tier & Resource Limits</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Select the appropriate subscription tier (Starter, Business, Enterprise) and define maximum storage quotas, permitted operator seat counts, and allowed warehouse locations.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-indigo-500/20">
+                      5
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Automatic Schema Migration & Admin Invitation</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Click <strong className="text-foreground">Provision Workspace</strong>. The backend asynchronous worker automatically establishes the database schema, runs database migrations, creates the default tenant roles, and dispatches an encrypted invitation email to the tenant&apos;s lead administrator.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Workspace Lifecycle Statuses */}
+                <div className="p-5 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 space-y-4">
+                  <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-indigo-400" />
+                    Understanding Tenant Lifecycle Statuses
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div className="p-3 rounded-xl border border-border/60 bg-background/60 space-y-1">
+                      <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono">ACTIVE</Badge>
+                      <p className="text-muted-foreground">Full read/write operational access for all tenant staff.</p>
+                    </div>
+                    <div className="p-3 rounded-xl border border-border/60 bg-background/60 space-y-1">
+                      <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-mono">MAINTENANCE</Badge>
+                      <p className="text-muted-foreground">Read-only mode during automated database schema updates.</p>
+                    </div>
+                    <div className="p-3 rounded-xl border border-border/60 bg-background/60 space-y-1">
+                      <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-mono">SUSPENDED</Badge>
+                      <p className="text-muted-foreground">Temporarily locked due to billing or compliance verification.</p>
+                    </div>
+                    <div className="p-3 rounded-xl border border-border/60 bg-background/60 space-y-1">
+                      <Badge className="bg-muted text-muted-foreground border border-border text-[10px] font-mono">ARCHIVED</Badge>
+                      <p className="text-muted-foreground">Cold storage archive ready for export or permanent purge.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-border/50 flex items-center justify-end">
+                <Link href="/dashboard/tenants">
+                  <Button className="rounded-full gap-2 font-space font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white">
+                    <Building2 className="w-3.5 h-3.5" />
+                    Open Multi-Tenant Cockpit
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ) : activeChapter === "chapter-5" ? (
+            /* ========================================================== */
+            /* CHAPTER 5: WAREHOUSE OPERATIONS & SPATIAL STORAGE          */
+            /* ========================================================== */
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="border-b border-border/50 pb-6">
+                <div className="flex items-center gap-2 mb-2 font-mono text-xs font-bold text-emerald-500">
+                  <span>CHAPTER 05</span>
+                  <span>•</span>
+                  <span>SUPPLY CHAIN & LOGISTICS</span>
+                  <span>•</span>
+                  <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 font-mono text-[10px] bg-emerald-500/10">
+                    TENANT OPERATOR
+                  </Badge>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
+                  Warehouse Operations & Spatial Storage
+                </h2>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Complete operational manual for managing physical warehouse locations, organizing zones, aisles, and racks, receiving shipments, generating QR codes, and picking inventory accurately.
+                </p>
+              </div>
+
+              {/* Callouts */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">
+                    <Warehouse className="w-4 h-4" />
+                    6-Tier Spatial Coordinate Hierarchy
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Every SKU has an exact physical address: <strong className="text-foreground">Warehouse &gt; Zone &gt; Aisle &gt; Rack &gt; Shelf &gt; Bin</strong>. Zero lost inventory.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-blue-500/30 bg-blue-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
+                    <QrCode className="w-4 h-4" />
+                    Industrial QR & Barcode Integration
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Generate and print industrial QR code labels for any bin or pallet with one click, compatible with standard laser printers and thermal barcode rolls.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
+                    <Package className="w-4 h-4" />
+                    Smart Inbound Put-Away
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Automated put-away logic recommends optimal bin locations based on item weight, package dimensions, and turnover velocity.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                    <Truck className="w-4 h-4" />
+                    Directed Pick & Dispatch Routes
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Hive.OS calculates the shortest physical walking route through warehouse aisles so operators pick orders quickly with zero backtracking.
+                  </p>
+                </div>
+              </div>
+
+              {/* Screenshot Frame */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
+                    Figure 5.1: Warehouse Spatial Topology & Inventory Management Cockpit
+                  </span>
+                  <Badge variant="outline" className="font-mono text-[10px] text-emerald-400 border-emerald-500/30">
+                    TENANT LOGISTICS
+                  </Badge>
+                </div>
+
+                <div className="rounded-2xl border border-border/80 overflow-hidden shadow-2xl bg-black/40 group relative">
+                  <img
+                    src="/manual-screenshots/05-warehouses-main.png"
+                    alt="Warehouse Spatial Storage Cockpit on Hive.OS"
+                    className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.01]"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground italic text-center">
+                  Live snapshot of the Warehouse operations cockpit displaying facilities, zone breakdowns, spatial capacity utilization, and bin inventory.
+                </p>
+              </div>
+
+              {/* Step-by-Step Instructions */}
+              <div className="space-y-6 pt-4 border-t border-border/50">
+                <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
+                  <Compass className="w-5 h-5 text-emerald-500" />
+                  Novice Guide to Daily Warehouse Workflows
+                </h3>
+
+                <div className="space-y-6 text-sm leading-relaxed text-foreground/90">
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-emerald-500/20">
+                      1
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Open the Warehouse Operations Cockpit</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Click <strong className="text-foreground">Warehouses</strong> in the sidebar or visit <code className="text-emerald-400 font-mono bg-muted/50 px-1 py-0.5 rounded">{origin}/dashboard/warehouses</code>. You will see a list of active warehouse buildings and overall capacity gauges.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-emerald-500/20">
+                      2
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Understanding Spatial Coordinates</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Every item location is identified by a clear 6-part address code. For example: <code className="text-primary font-mono font-bold">WH-01 / ZONE-A / AISLE-03 / RACK-02 / SHELF-B / BIN-04</code>. This tells any staff member exactly which building, area, aisle, rack, shelf, and box to walk to.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-emerald-500/20">
+                      3
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Receiving Inbound Shipments & Goods Receipt</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        When goods arrive at the receiving dock, click <strong className="text-foreground">Inbound Receiving</strong>, verify the delivery invoice, scan the supplier barcodes, and click <strong className="text-foreground">Assign Bin</strong> to record the goods in storage.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-emerald-500/20">
+                      4
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Printing QR Code Labels for Bins and Pallets</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        Click the <strong className="text-foreground">Print Label (<Printer className="w-3 h-3 inline text-emerald-400" />)</strong> icon on any bin row. Attach the printed sticker to the shelf. Warehouse pickers can scan this sticker using any wireless scanner or mobile phone to verify they are at the correct location.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 items-start">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-emerald-500/20">
+                      5
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <h4 className="font-bold text-foreground">Order Picking & Dispatch Verification</h4>
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        When customer work orders are created, pickers follow the system-optimized route through the aisles. At the packing station, items are scanned to confirm quantity before being sealed and dispatched with tracking airway bills.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Best Practices Box */}
+                <div className="p-5 rounded-2xl border border-border/80 bg-card/40 space-y-4">
+                  <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    Essential Best Practices for Warehouse Shift Crews
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div className="p-3.5 rounded-xl border border-border/60 bg-background/50 space-y-1">
+                      <strong className="text-foreground block">1. Always Scan Before Moving</strong>
+                      <p className="text-muted-foreground">
+                        Never move stock to another bin without scanning the new bin code. Hive.OS tracks stock movements with timestamps to prevent missing items.
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-xl border border-border/60 bg-background/50 space-y-1">
+                      <strong className="text-foreground block">2. Regular Cycle Counts</strong>
+                      <p className="text-muted-foreground">
+                        Use the built-in Cycle Count tool to count one aisle each morning. This eliminates the need to shut down the warehouse for annual inventory audits.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-border/50 flex items-center justify-end">
+                <Link href="/dashboard/warehouses">
+                  <Button className="rounded-full gap-2 font-space font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
+                    <Warehouse className="w-3.5 h-3.5" />
+                    Open Warehouse Cockpit
                   </Button>
                 </Link>
               </div>
