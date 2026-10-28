@@ -1,4 +1,5 @@
-import { FEATURE_MODULES, type ModuleNavItem } from "@/modules";
+import { FEATURE_MODULES } from "@/modules/index";
+import type { ModuleNavItem } from "@/modules/types";
 import type { RoutePermissionAccess } from "@/lib/route-permissions";
 import { isTenantSession } from "@/lib/runtime-context";
 
@@ -28,12 +29,18 @@ const normalize = (path: string) => {
 
 const covers = (base: string, path: string) => path === base || path.startsWith(`${base}/`);
 
-const ALL_ITEMS: ModuleNavItem[] = FEATURE_MODULES.flatMap((module) => module.navItems);
+let cachedAllItems: ModuleNavItem[] | null = null;
+function getAllItems(): ModuleNavItem[] {
+  if (!cachedAllItems) {
+    cachedAllItems = (FEATURE_MODULES || []).flatMap((module) => module.navItems || []);
+  }
+  return cachedAllItems;
+}
 
 /** The most specific manifest nav item for a path, if any. */
 function navItemFor(path: string): ModuleNavItem | null {
   let best: ModuleNavItem | null = null;
-  for (const item of ALL_ITEMS) {
+  for (const item of getAllItems()) {
     const href = normalize(item.href);
     if (href === "/dashboard") continue; // the dashboard root has its own explicit rule
     if (covers(href, path) && (!best || href.length > normalize(best.href).length)) {
@@ -50,10 +57,11 @@ function navItemFor(path: string): ModuleNavItem | null {
 function moduleRequirementFor(path: string): ModuleNavItem | null {
   // The bare "/dashboard" prefix (core module) would claim every page; the
   // dashboard root has its own explicit rule.
-  const module = FEATURE_MODULES.find((candidate) =>
+  const modules = FEATURE_MODULES || [];
+  const module = modules.find((candidate) =>
     candidate.routePrefixes.some((prefix) => normalize(prefix) !== "/dashboard" && covers(normalize(prefix), path)),
   );
-  if (!module || module.navItems.length === 0) return null;
+  if (!module || !module.navItems?.length) return null;
 
   const slugs = new Set<string>();
   const permissions = new Set<string>();

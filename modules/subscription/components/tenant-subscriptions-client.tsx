@@ -7,7 +7,7 @@ import {
   BadgeCheck, Check, Clock3, CreditCard, ExternalLink,
   HardDrive, Layers, Loader2, Mail, Rocket, ShieldCheck,
   Sparkles, Star, WandSparkles, Zap, ArrowRight, Crown,
-  Lock, ListChecks,
+  Lock, ListChecks, Search, Filter, X, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ import { roundMoney } from "@/lib/money";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { ModulePageSkeleton } from "@/components/ui/loading-states";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -269,22 +270,96 @@ function FeatureAccessMatrix({
   canManage: boolean;
   onModuleRequest: (module: TenantSubscriptionFeatureMatrixModule) => void;
 }) {
-  const modules = React.useMemo(() => matrix?.modules ?? [], [matrix?.modules]);
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<"all" | "subscribed" | "available">("subscribed");
+  const [selectedCategory, setSelectedCategory] = React.useState<string>("all");
+  const [expandedModules, setExpandedModules] = React.useState<Record<string, boolean>>({});
+
+  const allModules = React.useMemo(() => {
+    const list = matrix?.modules ?? [];
+    const seen = new Set<string>();
+    return list.filter((module) => {
+      if (!module.slug || seen.has(module.slug)) return false;
+      seen.add(module.slug);
+      return true;
+    });
+  }, [matrix?.modules]);
+
+  const categories = React.useMemo(() => {
+    const set = new Set<string>();
+    allModules.forEach((m) => {
+      if (m.category) set.add(m.category);
+    });
+    return Array.from(set).sort();
+  }, [allModules]);
+
+  const filteredModules = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return allModules.filter((module) => {
+      // Status filter
+      if (statusFilter === "subscribed" && module.status !== "active") return false;
+      if (statusFilter === "available" && module.status === "active") return false;
+
+      // Category filter
+      if (selectedCategory !== "all" && module.category !== selectedCategory) return false;
+
+      // Search query
+      if (q) {
+        const matchName = module.name?.toLowerCase().includes(q);
+        const matchDesc = module.description?.toLowerCase().includes(q);
+        const matchCat = module.category?.toLowerCase().includes(q);
+        const matchSlug = module.slug?.toLowerCase().includes(q);
+        const matchSub = module.submodules.some((s) =>
+          s.name?.toLowerCase().includes(q) ||
+          s.slug?.toLowerCase().includes(q) ||
+          s.features.some((f) => f.name?.toLowerCase().includes(q) || f.slug?.toLowerCase().includes(q))
+        );
+        if (!matchName && !matchDesc && !matchCat && !matchSlug && !matchSub) return false;
+      }
+
+      return true;
+    });
+  }, [allModules, searchQuery, selectedCategory, statusFilter]);
+
   const groupedModules = React.useMemo(() => {
-    return modules.reduce<Record<string, TenantSubscriptionFeatureMatrixModule[]>>((groups, module) => {
+    return filteredModules.reduce<Record<string, TenantSubscriptionFeatureMatrixModule[]>>((groups, module) => {
       const group = groups[module.category] ?? [];
       group.push(module);
       groups[module.category] = group;
       return groups;
     }, {});
-  }, [modules]);
+  }, [filteredModules]);
 
-  if (modules.length === 0) {
+  const hasFilters = searchQuery.trim() !== "" || statusFilter !== "all" || selectedCategory !== "all";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setSelectedCategory("all");
+  };
+
+  const toggleModuleExpand = (slug: string) => {
+    setExpandedModules((prev) => ({ ...prev, [slug]: !prev[slug] }));
+  };
+
+  const expandAll = () => {
+    const next: Record<string, boolean> = {};
+    filteredModules.forEach((m) => { next[m.slug] = true; });
+    setExpandedModules(next);
+  };
+
+  const collapseAll = () => {
+    setExpandedModules({});
+  };
+
+  if (allModules.length === 0) {
     return null;
   }
 
   return (
     <section className="space-y-4">
+      {/* ── Section Header ── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="flex items-center gap-2 text-xl font-black tracking-tight text-foreground">
@@ -294,25 +369,170 @@ function FeatureAccessMatrix({
             Every central module, submodule, route, page, and action discovered for this tenant workspace.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-widest">
-            {matrix?.subscribed_module_count ?? 0} subscribed
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="rounded-full px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-primary border-primary/30 bg-primary/5">
+            {matrix?.subscribed_module_count ?? 0} of {allModules.length} Subscribed
           </Badge>
-          <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-widest">
+          <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-widest text-muted-foreground">
             {matrix?.unsubscribed_module_count ?? 0} available
           </Badge>
-          <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-widest">
+          <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-widest text-muted-foreground">
             {matrix?.feature_count ?? 0} features
           </Badge>
         </div>
       </div>
 
+      {/* ── Search & Filter Controls ── */}
+      <div className="rounded-2xl border border-border/60 bg-card/45 p-3.5 shadow-xs space-y-3">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search features, submodules, or routes (e.g. fleet, hr, trips, /dashboard)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-9 w-full rounded-full border-border/70 bg-background/80 pl-9 pr-8 text-xs focus-visible:ring-1"
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={expandAll}
+              className="h-8 rounded-full px-3 text-xs gap-1 font-medium hover:bg-muted"
+            >
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> Expand All
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={collapseAll}
+              className="h-8 rounded-full px-3 text-xs gap-1 font-medium hover:bg-muted"
+            >
+              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> Collapse All
+            </Button>
+          </div>
+        </div>
+
+        {/* Filter Bar */}
+        <div className="flex flex-col gap-2 pt-1 border-t border-border/40 sm:flex-row sm:items-center sm:justify-between text-xs">
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="font-semibold text-muted-foreground mr-1 flex items-center gap-1">
+              <Filter className="h-3 w-3" /> Status:
+            </span>
+            {[
+              { key: "all", label: `All (${allModules.length})` },
+              { key: "subscribed", label: `Subscribed (${matrix?.subscribed_module_count ?? 0})` },
+              { key: "available", label: `Available (${matrix?.unsubscribed_module_count ?? 0})` },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setStatusFilter(key as typeof statusFilter)}
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 font-medium transition-colors",
+                  statusFilter === key
+                    ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {hasFilters ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="flex items-center gap-1 font-semibold text-primary hover:underline self-start sm:self-center"
+            >
+              <X className="h-3 w-3" /> Clear filters
+            </button>
+          ) : null}
+        </div>
+
+        {/* Category Pills */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs scrollbar-none">
+          <span className="font-semibold text-muted-foreground shrink-0 mr-1">Category:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedCategory("all")}
+            className={cn(
+              "rounded-full px-2.5 py-0.5 shrink-0 transition-colors",
+              selectedCategory === "all"
+                ? "bg-foreground text-background font-semibold"
+                : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            All Categories
+          </button>
+          {categories.map((cat) => {
+            const countInCat = allModules.filter((m) => m.category === cat).length;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 shrink-0 transition-colors",
+                  selectedCategory === cat
+                    ? "bg-foreground text-background font-semibold"
+                    : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                {cat} ({countInCat})
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Empty Filter State ── */}
+      {filteredModules.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-[1.5rem] border border-dashed border-border/70 bg-card/30 p-8 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+            <Search className="h-6 w-6" />
+          </div>
+          <h6 className="mt-3 font-semibold text-foreground">No features found</h6>
+          <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+            No modules, submodules, or features match your query &quot;{searchQuery}&quot;.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={clearFilters}
+            className="mt-4 rounded-full"
+          >
+            Reset Filters
+          </Button>
+        </div>
+      ) : null}
+
+      {/* ── Discovered Modules Grid ── */}
       <div className="space-y-5">
         {Object.entries(groupedModules).map(([category, categoryModules]) => (
           <div key={category} className="space-y-3">
             <div className="flex items-center gap-2">
               <div className="h-px flex-1 bg-border/60" />
-              <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-muted-foreground">{category}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
+                {category} ({categoryModules.length})
+              </p>
               <div className="h-px flex-1 bg-border/60" />
             </div>
 
@@ -321,12 +541,14 @@ function FeatureAccessMatrix({
                 const isActive = module.status === "active";
                 const isPending = module.status === "pending";
                 const price = Number(module.monthly_price_etb ?? 0);
+                const isExpanded = expandedModules[module.slug] ?? false;
+                const routeHint = module.route_hints?.[0];
 
                 return (
                   <article
                     key={module.slug}
                     className={cn(
-                      "rounded-[1.5rem] border p-4 shadow-sm transition-colors",
+                      "rounded-[1.5rem] border p-4 shadow-sm transition-all",
                       isActive
                         ? "border-emerald-300/50 bg-emerald-50/50 dark:border-emerald-800/40 dark:bg-emerald-950/15"
                         : isPending
@@ -343,70 +565,115 @@ function FeatureAccessMatrix({
                             className={cn(
                               "rounded-full px-2.5 py-0.5 text-[11px] uppercase tracking-widest",
                               isActive
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300"
                                 : isPending
-                                  ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                                  : "border-amber-200 bg-amber-50 text-amber-700"
+                                  ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800/50 dark:bg-indigo-950/30 dark:text-indigo-300"
+                                  : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300"
                             )}
                           >
                             {isActive ? "Subscribed" : isPending ? "Payment Pending" : "Not Subscribed"}
                           </Badge>
                           {module.included_in_plan ? (
-                            <Badge variant="outline" className="rounded-full border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[11px] uppercase tracking-widest text-sky-700">
+                            <Badge variant="outline" className="rounded-full border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[11px] uppercase tracking-widest text-sky-700 dark:border-sky-800/50 dark:bg-sky-950/30 dark:text-sky-300">
                               Plan Included
                             </Badge>
                           ) : null}
                           {module.is_addon ? (
-                            <Badge variant="outline" className="rounded-full border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] uppercase tracking-widest text-amber-700">
+                            <Badge variant="outline" className="rounded-full border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] uppercase tracking-widest text-amber-700 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300">
                               Add-on
                             </Badge>
                           ) : null}
                         </div>
                         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{module.description}</p>
                       </div>
-                      {!isActive && !isPending ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={canManage ? "default" : "outline"}
-                          disabled={!canManage}
-                          onClick={() => onModuleRequest(module)}
-                          className="shrink-0 rounded-full gap-2"
-                        >
-                          <Lock className="h-4 w-4" />
-                          {price > 0 ? `Unlock ETB ${price.toFixed(0)}` : "Enable"}
-                        </Button>
-                      ) : null}
+
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                        {isActive && routeHint ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => router.push(routeHint)}
+                            className="rounded-full gap-1.5 text-xs h-8"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" /> Open
+                          </Button>
+                        ) : null}
+
+                        {!isActive && !isPending ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={canManage ? "default" : "outline"}
+                            disabled={!canManage}
+                            onClick={() => onModuleRequest(module)}
+                            className="rounded-full gap-1.5 text-xs h-8"
+                          >
+                            <Lock className="h-3.5 w-3.5" />
+                            {price > 0 ? `Unlock ETB ${price.toFixed(0)}` : "Enable"}
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
 
+                    {/* Submodules & Features Breakdown */}
                     <div className="mt-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Submodules ({module.submodules.length}) · Features ({module.feature_count})
+                        </p>
+                        {module.submodules.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleModuleExpand(module.slug)}
+                            className="text-[11px] font-medium text-primary hover:underline flex items-center gap-1"
+                          >
+                            {isExpanded ? (
+                              <>Collapse <ChevronUp className="h-3 w-3" /></>
+                            ) : (
+                              <>View details <ChevronDown className="h-3 w-3" /></>
+                            )}
+                          </button>
+                        ) : null}
+                      </div>
+
                       {module.submodules.length === 0 ? (
                         <p className="rounded-xl border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">
                           No submodules were discovered for this module yet.
                         </p>
                       ) : (
-                        module.submodules.map((submodule) => (
-                          <div key={`${module.slug}-${submodule.slug}`} className="rounded-xl border border-border/60 bg-background/70 p-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <p className="text-sm font-bold text-foreground">{submodule.name}</p>
-                              <Badge variant="secondary" className="rounded-full text-[11px]">
-                                {submodule.feature_count} feature{submodule.feature_count === 1 ? "" : "s"}
-                              </Badge>
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {submodule.features.slice(0, 8).map((feature) => (
-                                <Badge key={feature.slug} variant="outline" className="max-w-full rounded-full px-2.5 py-1 text-[11px]">
-                                  <span className="truncate">{feature.name}</span>
+                        module.submodules.map((submodule) => {
+                          const featuresCount = submodule.features.length;
+                          const showFeatures = isExpanded || featuresCount <= 4;
+                          const visibleFeatures = showFeatures ? submodule.features : submodule.features.slice(0, 4);
+
+                          return (
+                            <div key={`${module.slug}-${submodule.slug}`} className="rounded-xl border border-border/60 bg-background/70 p-3 transition-all">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-bold text-foreground">{submodule.name}</p>
+                                <Badge variant="secondary" className="rounded-full text-[11px]">
+                                  {submodule.feature_count} feature{submodule.feature_count === 1 ? "" : "s"}
                                 </Badge>
-                              ))}
-                              {submodule.features.length > 8 ? (
-                                <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-[11px]">
-                                  +{submodule.features.length - 8} more
-                                </Badge>
-                              ) : null}
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {visibleFeatures.map((feature) => (
+                                  <Badge key={feature.slug} variant="outline" className="max-w-full rounded-full px-2.5 py-0.5 text-[11px] bg-background">
+                                    <span className="truncate">{feature.name}</span>
+                                  </Badge>
+                                ))}
+                                {!showFeatures && featuresCount > 4 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleModuleExpand(module.slug)}
+                                    className="rounded-full bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                                  >
+                                    +{featuresCount - 4} more
+                                  </button>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </article>
@@ -466,15 +733,21 @@ export function TenantSubscriptionsClient() {
     return enabled.length > 0 ? enabled : accessEnabledModules;
   }, [accessEnabledModules, subscriptions?.enabled_modules]);
   const rawCatalog = React.useMemo<TenantCatalogModule[]>(() => {
+    let list: TenantCatalogModule[] = EMPTY_CATALOG;
     if ((subscriptions?.catalog_modules?.length ?? 0) > 0) {
-      return subscriptions?.catalog_modules ?? EMPTY_CATALOG;
+      list = subscriptions?.catalog_modules ?? EMPTY_CATALOG;
+    } else if ((data?.data?.catalog?.length ?? 0) > 0) {
+      list = data?.data?.catalog ?? EMPTY_CATALOG;
+    } else {
+      list = publicCatalogData?.data?.catalog ?? EMPTY_CATALOG;
     }
 
-    if ((data?.data?.catalog?.length ?? 0) > 0) {
-      return data?.data?.catalog;
-    }
-
-    return publicCatalogData?.data?.catalog ?? EMPTY_CATALOG;
+    const seen = new Set<string>();
+    return list.filter((module) => {
+      if (!module?.slug || seen.has(module.slug)) return false;
+      seen.add(module.slug);
+      return true;
+    });
   }, [data?.data?.catalog, publicCatalogData?.data?.catalog, subscriptions?.catalog_modules]);
   const planDefaults = React.useMemo<Record<string, string[]>>(
     () => data?.data?.plan_defaults ?? publicCatalogData?.data?.plan_defaults ?? {},
@@ -502,8 +775,19 @@ export function TenantSubscriptionsClient() {
     });
   }, [currentPlan, moduleAccess?.statuses, planDefaults, rawCatalog, serverEnabledModules]);
   const effectiveFeatureMatrix = React.useMemo<TenantSubscriptionFeatureMatrix | undefined>(() => {
-    if ((featureMatrix?.modules?.length ?? 0) > 0) {
-      return featureMatrix;
+    if (featureMatrix && featureMatrix.modules.length > 0) {
+      const seen = new Set<string>();
+      const deduplicatedModules = featureMatrix.modules.filter((module) => {
+        if (!module?.slug || seen.has(module.slug)) return false;
+        seen.add(module.slug);
+        return true;
+      });
+
+      return {
+        ...featureMatrix,
+        modules: deduplicatedModules,
+        module_count: deduplicatedModules.length,
+      };
     }
 
     if (catalog.length === 0) {
@@ -1021,6 +1305,12 @@ export function TenantSubscriptionsClient() {
             purchaseLockedModules={canManage}
             onLockedModuleRequest={handleLockedModuleRequest}
             showCustomModules={false}
+            planDefaultsList={planDefaults[currentPlan]}
+            onResetToPlanDefaults={() => {
+              const defaults = planDefaults[currentPlan] ?? [];
+              setSelectedModules(defaults);
+              toast.info(`Reset modules to ${planMeta.label} defaults (${defaults.length} modules). Click 'Save Changes' to apply.`);
+            }}
           />
         </div>
       </div>

@@ -525,15 +525,6 @@ export default function InventoryDashboardPage() {
     [reconciliationRows, t]
   );
 
-  if (summaryQuery.isLoading && analyticsLoading) {
-    return (
-      <div className="flex h-[50vh] items-center justify-center text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-        {t("inventory.dashboard.loading", "Loading inventory dashboard...")}
-      </div>
-    );
-  }
-
   const k = a?.kpis;
   const catalog = summaryQuery.data?.catalog;
   const windowLabel = t("inventory.dashboard.last_n_days", "last {n} days").replace("{n}", String(days));
@@ -714,6 +705,15 @@ export default function InventoryDashboardPage() {
 
     startTour(activeSteps.map((step) => ({ ...step, skipBeacon: true })));
   }, [a?.dead_stock?.items, canFinance, startTour, t]);
+
+  if (summaryQuery.isLoading && analyticsLoading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        {t("inventory.dashboard.loading", "Loading inventory dashboard...")}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-8">

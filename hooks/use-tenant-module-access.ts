@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { isTenantSession } from "@/lib/runtime-context";
 import type { TenantModuleAccessState } from "@/modules/subscription/types";
 
 type StoredSecurityContext = {
@@ -61,9 +62,10 @@ export function useTenantModuleAccess() {
   }, [refresh]);
 
   const moduleAccess = securityContext?.module_access ?? null;
+  const isTenant = typeof window !== "undefined" && isTenantSession();
   const canBypassModuleSubscriptions = React.useMemo(
-    () => hasCentralControlOverride(securityContext),
-    [securityContext]
+    () => !isTenant && hasCentralControlOverride(securityContext),
+    [isTenant, securityContext]
   );
 
   const hasModule = React.useCallback(

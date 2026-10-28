@@ -66,13 +66,20 @@ export default function ForgotPasswordPage() {
     retry: 1,
   });
 
-  const brandSettings = brandData?.data;
-  const authBackgroundUrl = getPublicServeUrl(brandSettings?.auth_background_image);
+  // Brand data (same query key as the layout's PublicBrandSyncProvider) can be
+  // cached before this page hydrates, while the server rendered the defaults —
+  // a hydration mismatch on the logo and portal name. Apply it after mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const brandSettings = mounted ? brandData?.data : undefined;
+  const authBackgroundUrl = mounted ? getPublicServeUrl(brandSettings?.auth_background_image) : null;
   const displayPortalName = brandSettings?.app_title || portalName;
-  const activeLogoPath =
-    resolvedTheme === "dark"
+  const activeLogoPath = mounted
+    ? (resolvedTheme === "dark"
       ? brandSettings?.logo_dark || brandSettings?.logo_light
-      : brandSettings?.logo_light || brandSettings?.logo_dark;
+      : brandSettings?.logo_light || brandSettings?.logo_dark)
+    : null;
   const activeLogoUrl = getPublicServeUrl(activeLogoPath);
 
   useEffect(() => {

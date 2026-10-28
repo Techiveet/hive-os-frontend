@@ -36,6 +36,7 @@ import { parkingModule } from "@/modules/parking/module";
 import type { FrontendModuleDefinition, ModuleId, ModuleNavItem } from "@/modules/types";
 
 export type { FrontendModuleDefinition, ModuleNavItem } from "@/modules/types";
+export { MODULE_ID_TO_SUBSCRIPTION_SLUG } from "@/modules/types";
 
 export const FEATURE_MODULES: FrontendModuleDefinition[] = [
   coreModule, identityModule, subscriptionModule, tenancyModule, hospitalityModule,

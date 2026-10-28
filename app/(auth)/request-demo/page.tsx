@@ -80,12 +80,19 @@ export default function RequestDemoPage() {
     retry: 1,
   });
 
-  const brandSettings = brandData?.data;
+  // Brand data (same query key as the layout's PublicBrandSyncProvider) can be
+  // cached before this page hydrates, while the server rendered the defaults —
+  // a hydration mismatch on the logo and portal name. Apply it after mount.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+
+  const brandSettings = mounted ? brandData?.data : undefined;
   const displayPortalName = brandSettings?.app_title || "HIVE.OS";
-  const activeLogoPath =
-    resolvedTheme === "dark"
+  const activeLogoPath = mounted
+    ? (resolvedTheme === "dark"
       ? brandSettings?.logo_dark || brandSettings?.logo_light
-      : brandSettings?.logo_light || brandSettings?.logo_dark;
+      : brandSettings?.logo_light || brandSettings?.logo_dark)
+    : null;
   const activeLogoUrl = getPublicServeUrl(activeLogoPath);
   const errorRef = React.useRef<HTMLDivElement>(null);
   const requestIdRef = React.useRef("");

@@ -54,6 +54,7 @@ import {
   DASHBOARD_MODULE_IDS,
   DASHBOARD_NAV,
   DASHBOARD_SECONDARY,
+  MODULE_ID_TO_SUBSCRIPTION_SLUG,
   isSubItemActive,
   type NavItem,
 } from "./nav";
@@ -355,11 +356,14 @@ function SidebarInner({
         !hasBusinessType(item.businessTypes)
       )
         return false;
-      if (isTenantNode && item.subscriptionSlug) {
-        const requiredModules = Array.isArray(item.subscriptionSlug)
-          ? item.subscriptionSlug
-          : [item.subscriptionSlug];
-        if (!requiredModules.some((slug) => hasModule(slug))) return false;
+      if (isTenantNode) {
+        const rawSlug = item.subscriptionSlug ?? MODULE_ID_TO_SUBSCRIPTION_SLUG[item.moduleId];
+        if (rawSlug) {
+          const requiredModules = Array.isArray(rawSlug)
+            ? rawSlug
+            : [rawSlug];
+          if (!requiredModules.some((slug) => hasModule(slug))) return false;
+        }
       }
       if (!item.permissions || item.permissions.length === 0) return true;
       return hasAnyPermission(item.permissions);

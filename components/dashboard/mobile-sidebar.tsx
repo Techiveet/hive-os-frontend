@@ -62,6 +62,7 @@ import {
   DASHBOARD_MODULE_IDS,
   DASHBOARD_NAV,
   DASHBOARD_SECONDARY,
+  MODULE_ID_TO_SUBSCRIPTION_SLUG,
   isSubItemActive,
   type NavItem,
 } from "./nav";
@@ -317,13 +318,16 @@ export function MobileSidebar() {
         return false;
       }
 
-      if (isTenantNode && item.subscriptionSlug) {
-        const requiredModules = Array.isArray(item.subscriptionSlug)
-          ? item.subscriptionSlug
-          : [item.subscriptionSlug];
+      if (isTenantNode) {
+        const rawSlug = item.subscriptionSlug ?? MODULE_ID_TO_SUBSCRIPTION_SLUG[item.moduleId];
+        if (rawSlug) {
+          const requiredModules = Array.isArray(rawSlug)
+            ? rawSlug
+            : [rawSlug];
 
-        if (!requiredModules.some((slug) => hasModule(slug))) {
-          return false;
+          if (!requiredModules.some((slug) => hasModule(slug))) {
+            return false;
+          }
         }
       }
 

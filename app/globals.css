@@ -168,6 +168,18 @@
     --input: 215 20% 65%;
   }
 
+  /* Tailwind resolves --color-* once at :root, so the overrides above only
+     reach utilities (border-input, bg-primary, ...) once rebound here. */
+  .signup-onboarding,
+  .tenant-operations,
+  .demo-lease {
+    --color-primary: hsl(var(--primary));
+    --color-primary-foreground: hsl(var(--primary-foreground));
+    --color-ring: hsl(var(--ring));
+    --color-border: hsl(var(--border));
+    --color-input: hsl(var(--input));
+  }
+
   .tenant-operations {
     --muted-foreground: 240 5% 40%;
   }
@@ -243,9 +255,11 @@
     outline-offset: 2px;
   }
 
-  .signup-onboarding button,
+  /* Checkboxes and radios are <button>s too; stretching them to 44px turns
+     them into empty bars. Their labels provide the touch target instead. */
+  .signup-onboarding button:not([role="checkbox"]):not([role="radio"]),
   .signup-onboarding a,
-  .demo-lease button,
+  .demo-lease button:not([role="checkbox"]):not([role="radio"]),
   .demo-lease a {
     min-height: 2.75rem;
   }

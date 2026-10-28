@@ -28,6 +28,7 @@ import { initEcho } from '@/lib/echo';
 import { getAccessToken, getBackendApiRoot, getTenantHeaders, getTenantId, isTenantSession } from '@/lib/runtime-context';
 import { DashboardOverviewPlaceholder } from "@/components/ui/loading-states";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
 import { handleAuthFailureResponse, isImpersonatingSession, stopImpersonation } from "@/lib/auth-sync";
 import {
     ALERTS_ROUTE_PERMISSIONS,
@@ -140,6 +141,12 @@ export default function DashboardHome() {
     const { t } = useTranslation();
     const { startTour } = useTour();
     const { permissions, roles, hasPermission, hasAnyPermission, hasRole, isLoaded } = usePermissions();
+    const { hasModule } = useTenantModuleAccess();
+    const isTenantNode = isTenantSession();
+    const hasInventory = !isTenantNode || hasModule("inventory_control");
+    const hasWarehouse = !isTenantNode || hasModule("warehouse_management");
+    const hasProjectManagement = !isTenantNode || hasModule("project_management");
+    const hasAuditLogs = !isTenantNode || hasModule("audit_logs");
 
     const [tenantName, setTenantName] = useState<string | null>(null);
     const [isMounted, setIsMounted] = useState(false);
@@ -447,16 +454,20 @@ export default function DashboardHome() {
                         {/* Regular Users: Quick personal navigation */}
                         {isRegularUser && (
                             <>
-                                <Link href="/dashboard/project-management/my-tasks">
-                                    <Button size="sm" className="rounded-full shadow-md bg-primary hover:bg-primary/90 text-primary-foreground font-bold">
-                                        <ListTodo className="w-4 h-4 mr-2" /> {t('dashboard.my_tasks', 'My Tasks')}
-                                    </Button>
-                                </Link>
-                                <Link href="/dashboard/audit-logs">
-                                    <Button variant="outline" size="sm" className="rounded-full bg-background/50 backdrop-blur-md text-muted-foreground hover:text-foreground">
-                                        <FileText className="w-4 h-4 mr-2 text-primary" /> {t('dashboard.my_logs', 'My Audit Trail')}
-                                    </Button>
-                                </Link>
+                                {hasProjectManagement && (
+                                    <Link href="/dashboard/project-management/my-tasks">
+                                        <Button size="sm" className="rounded-full shadow-md bg-primary hover:bg-primary/90 text-primary-foreground font-bold">
+                                            <ListTodo className="w-4 h-4 mr-2" /> {t('dashboard.my_tasks', 'My Tasks')}
+                                        </Button>
+                                    </Link>
+                                )}
+                                {hasAuditLogs && (
+                                    <Link href="/dashboard/audit-logs">
+                                        <Button variant="outline" size="sm" className="rounded-full bg-background/50 backdrop-blur-md text-muted-foreground hover:text-foreground">
+                                            <FileText className="w-4 h-4 mr-2 text-primary" /> {t('dashboard.my_logs', 'My Audit Trail')}
+                                        </Button>
+                                    </Link>
+                                )}
                             </>
                         )}
                     </div>
@@ -530,24 +541,48 @@ export default function DashboardHome() {
                             href={canViewUsers ? "/dashboard/security?tab=users" : undefined}
                             trend="up"
                         />
-                        <StatCard
-                            title={t('dashboard.catalog_items', 'Inventory Catalog')}
-                            value={data.stats.catalog_items ?? 0}
-                            subtext={t('dashboard.managed_skus', 'Active Stock SKUs')}
-                            icon={<Boxes className="text-indigo-500" />}
-                            bgClass="bg-indigo-500/10"
-                            href="/dashboard/inventory"
-                            trend="up"
-                        />
-                        <StatCard
-                            title={t('dashboard.warehouse_utilization', 'Warehouse Capacity')}
-                            value={data.stats.warehouse_capacity ?? "0%"}
-                            subtext={t('dashboard.slot_occupancy', 'Active Storage Occupancy')}
-                            icon={<WarehouseIcon className="text-sky-500" />}
-                            bgClass="bg-sky-500/10"
-                            href="/dashboard/warehouse"
-                            trend="up"
-                        />
+                        {hasInventory ? (
+                            <StatCard
+                                title={t('dashboard.catalog_items', 'Inventory Catalog')}
+                                value={data.stats.catalog_items ?? 0}
+                                subtext={t('dashboard.managed_skus', 'Active Stock SKUs')}
+                                icon={<Boxes className="text-indigo-500" />}
+                                bgClass="bg-indigo-500/10"
+                                href="/dashboard/inventory"
+                                trend="up"
+                            />
+                        ) : (
+                            <StatCard
+                                title={t('dashboard.active_roles', 'Security Roles')}
+                                value={data.stats.total_roles ?? 0}
+                                subtext="Configured Access Roles"
+                                icon={<Key className="text-indigo-500" />}
+                                bgClass="bg-indigo-500/10"
+                                href={canViewRoles ? "/dashboard/security?tab=roles" : undefined}
+                                trend="up"
+                            />
+                        )}
+                        {hasWarehouse ? (
+                            <StatCard
+                                title={t('dashboard.warehouse_utilization', 'Warehouse Capacity')}
+                                value={data.stats.warehouse_capacity ?? "0%"}
+                                subtext={t('dashboard.slot_occupancy', 'Active Storage Occupancy')}
+                                icon={<WarehouseIcon className="text-sky-500" />}
+                                bgClass="bg-sky-500/10"
+                                href="/dashboard/warehouse"
+                                trend="up"
+                            />
+                        ) : (
+                            <StatCard
+                                title="System Clearance"
+                                value={data.stats.total_permissions ?? 0}
+                                subtext="Authorized Capabilities"
+                                icon={<ShieldCheck className="text-sky-500" />}
+                                bgClass="bg-sky-500/10"
+                                href={canViewPermissions ? "/dashboard/security?tab=permissions" : undefined}
+                                trend="up"
+                            />
+                        )}
                         <StatCard
                             title={t('dashboard.operational_score', 'Operational SLA')}
                             value={`${data.stats.operational_score ?? 0}%`}
@@ -561,22 +596,33 @@ export default function DashboardHome() {
                 {/* 3. REGULAR USER / OPERATOR STATS (Non-admin) */}
                 {isRegularUser && (
                     <>
-                        <StatCard
-                            title={t('dashboard.my_tasks', 'My Assigned Work')}
-                            value={data.stats.assigned_tasks ?? 0}
-                            subtext={t('dashboard.active_queue', 'Active Task Queue')}
-                            icon={<Clock className="text-amber-500" />}
-                            bgClass="bg-amber-500/10"
-                            href="/dashboard/project-management/my-tasks"
-                            trend="up"
-                        />
+                        {hasProjectManagement ? (
+                            <StatCard
+                                title={t('dashboard.my_tasks', 'My Assigned Work')}
+                                value={data.stats.assigned_tasks ?? 0}
+                                subtext={t('dashboard.active_queue', 'Active Task Queue')}
+                                icon={<Clock className="text-amber-500" />}
+                                bgClass="bg-amber-500/10"
+                                href="/dashboard/project-management/my-tasks"
+                                trend="up"
+                            />
+                        ) : (
+                            <StatCard
+                                title="Role Capabilities"
+                                value={data.stats.role_capabilities ?? permissions.length ?? 0}
+                                subtext="Granted Operational Rights"
+                                icon={<Key className="text-amber-500" />}
+                                bgClass="bg-amber-500/10"
+                                trend="up"
+                            />
+                        )}
                         <StatCard
                             title={t('dashboard.my_actions_today', 'Executions Today')}
                             value={data.stats.my_actions_today ?? 0}
                             subtext={t('dashboard.audited_ops', 'Audited Operations')}
                             icon={<ActivitySquare className="text-emerald-500" />}
                             bgClass="bg-emerald-500/10"
-                            href="/dashboard/audit-logs"
+                            href={hasAuditLogs ? "/dashboard/audit-logs" : undefined}
                             trend="up"
                         />
                         <StatCard
@@ -612,10 +658,17 @@ export default function DashboardHome() {
                                         {t('dashboard.platform_telemetry', 'Live Platform Telemetry & Throughput')}
                                     </>
                                 ) : isTenantAdmin ? (
-                                    <>
-                                        <Boxes aria-hidden="true" className="h-4 w-4 text-emerald-500" />
-                                        {t('dashboard.stock_flow_title', 'Stock Movement & Inventory Flow')}
-                                    </>
+                                    hasInventory ? (
+                                        <>
+                                            <Boxes aria-hidden="true" className="h-4 w-4 text-emerald-500" />
+                                            {t('dashboard.stock_flow_title', 'Stock Movement & Inventory Flow')}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ActivitySquare aria-hidden="true" className="h-4 w-4 text-primary" />
+                                            {t('dashboard.platform_telemetry', '24H Activity & Throughput Flow')}
+                                        </>
+                                    )
                                 ) : (
                                     <>
                                         <Zap aria-hidden="true" className="h-4 w-4 text-primary" />
@@ -649,15 +702,27 @@ export default function DashboardHome() {
                             />
                         )}
                         {isTenantAdmin && (
-                            <EChart
-                                option={stockMovementFlowChart(tenantStockFlow)}
-                                height={280}
-                                ariaLabel="Enterprise stock movement flow during the last 24 hours"
-                                title="Stock Movement Flow"
-                                exportFilename="inventory-stock-flow"
-                                empty={tenantStockFlow.length === 0}
-                                emptyLabel="No stock movements recorded"
-                            />
+                            hasInventory ? (
+                                <EChart
+                                    option={stockMovementFlowChart(tenantStockFlow)}
+                                    height={280}
+                                    ariaLabel="Enterprise stock movement flow during the last 24 hours"
+                                    title="Stock Movement Flow"
+                                    exportFilename="inventory-stock-flow"
+                                    empty={tenantStockFlow.length === 0}
+                                    emptyLabel="No stock movements recorded"
+                                />
+                            ) : (
+                                <EChart
+                                    option={telemetryAreaChart(telemetry, t('dashboard.requests', 'Requests'))}
+                                    height={280}
+                                    ariaLabel="Live operational throughput during the last 24 hours"
+                                    title="Operational Throughput"
+                                    exportFilename="operational-throughput"
+                                    empty={telemetry.length === 0}
+                                    emptyLabel="No operational activity recorded"
+                                />
+                            )
                         )}
                         {isRegularUser && (
                             <EChart
@@ -684,10 +749,17 @@ export default function DashboardHome() {
                                         {t('dashboard.modules_matrix', 'Modules & Subscriptions')}
                                     </>
                                 ) : isTenantAdmin ? (
-                                    <>
-                                        <WarehouseIcon aria-hidden="true" className="h-4 w-4 text-sky-500" />
-                                        {t('dashboard.warehouse_zones', 'Warehouse Zone Capacity')}
-                                    </>
+                                    hasWarehouse ? (
+                                        <>
+                                            <WarehouseIcon aria-hidden="true" className="h-4 w-4 text-sky-500" />
+                                            {t('dashboard.warehouse_zones', 'Warehouse Zone Capacity')}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Layers3 aria-hidden="true" className="h-4 w-4 text-emerald-500" />
+                                            <span>{t('dashboard.dept_operations', 'Department Workload Matrix')}</span>
+                                        </>
+                                    )
                                 ) : (
                                     <>
                                         <Clock aria-hidden="true" className="h-4 w-4 text-amber-500" />
@@ -721,15 +793,27 @@ export default function DashboardHome() {
                             />
                         )}
                         {isTenantAdmin && (
-                            <EChart
-                                option={donutChartWithTotal(tenantWarehouseCapacity, "Capacity")}
-                                height={280}
-                                ariaLabel="Warehouse zone storage utilization"
-                                title="Warehouse Zone Capacity"
-                                exportFilename="warehouse-capacity"
-                                empty={tenantWarehouseCapacity.length === 0}
-                                emptyLabel="No warehouse zone data found"
-                            />
+                            hasWarehouse ? (
+                                <EChart
+                                    option={donutChartWithTotal(tenantWarehouseCapacity, "Capacity")}
+                                    height={280}
+                                    ariaLabel="Warehouse zone storage utilization"
+                                    title="Warehouse Zone Capacity"
+                                    exportFilename="warehouse-capacity"
+                                    empty={tenantWarehouseCapacity.length === 0}
+                                    emptyLabel="No warehouse zone data found"
+                                />
+                            ) : (
+                                <EChart
+                                    option={departmentActivityBarChart(tenantDepartmentActivity)}
+                                    height={280}
+                                    ariaLabel="Department operations distribution"
+                                    title="Department Operations Matrix"
+                                    exportFilename="department-activity"
+                                    empty={tenantDepartmentActivity.length === 0}
+                                    emptyLabel="No department activity recorded"
+                                />
+                            )
                         )}
                         {isRegularUser && (
                             <EChart
@@ -988,30 +1072,52 @@ export default function DashboardHome() {
                             <Badge variant="outline" className="font-mono text-[11px]">SLA {Number(data.stats.operational_score ?? 100).toFixed(1)}%</Badge>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <div className="p-3 rounded-xl border border-border/50 bg-background/50">
-                                <p className="text-xs text-muted-foreground">{t('dashboard.stock_on_hand', 'Stock on Hand')}</p>
-                                <p className="text-lg font-space font-bold mt-1 text-emerald-500">
-                                    {Number(data.tenant_health?.total_units_on_hand ?? 0).toLocaleString()}
-                                </p>
-                            </div>
-                            <div className="p-3 rounded-xl border border-border/50 bg-background/50">
-                                <p className="text-xs text-muted-foreground">{t('dashboard.warehouse_capacity', 'Warehouse Load')}</p>
-                                <p className="text-lg font-space font-bold mt-1 text-sky-500">
-                                    {data.stats.warehouse_capacity ?? "0%"}
-                                </p>
-                            </div>
-                            <div className="p-3 rounded-xl border border-border/50 bg-background/50">
-                                <p className="text-xs text-muted-foreground">{t('dashboard.stock_movements', 'Stock Movements')}</p>
-                                <p className="text-lg font-space font-bold mt-1 text-indigo-500">
-                                    {Number(data.tenant_health?.total_stock_movements ?? 0).toLocaleString()}
-                                </p>
-                            </div>
+                            {hasInventory && (
+                                <div className="p-3 rounded-xl border border-border/50 bg-background/50">
+                                    <p className="text-xs text-muted-foreground">{t('dashboard.stock_on_hand', 'Stock on Hand')}</p>
+                                    <p className="text-lg font-space font-bold mt-1 text-emerald-500">
+                                        {Number(data.tenant_health?.total_units_on_hand ?? 0).toLocaleString()}
+                                    </p>
+                                </div>
+                            )}
+                            {hasWarehouse && (
+                                <div className="p-3 rounded-xl border border-border/50 bg-background/50">
+                                    <p className="text-xs text-muted-foreground">{t('dashboard.warehouse_capacity', 'Warehouse Load')}</p>
+                                    <p className="text-lg font-space font-bold mt-1 text-sky-500">
+                                        {data.stats.warehouse_capacity ?? "0%"}
+                                    </p>
+                                </div>
+                            )}
+                            {hasInventory && (
+                                <div className="p-3 rounded-xl border border-border/50 bg-background/50">
+                                    <p className="text-xs text-muted-foreground">{t('dashboard.stock_movements', 'Stock Movements')}</p>
+                                    <p className="text-lg font-space font-bold mt-1 text-indigo-500">
+                                        {Number(data.tenant_health?.total_stock_movements ?? 0).toLocaleString()}
+                                    </p>
+                                </div>
+                            )}
                             <div className="p-3 rounded-xl border border-border/50 bg-background/50">
                                 <p className="text-xs text-muted-foreground">{t('dashboard.active_staff', 'Active Staff')}</p>
                                 <p className="text-lg font-space font-bold mt-1 text-amber-500">
                                     {data.tenant_health?.active_staff ?? data.stats.active_users ?? 0}
                                 </p>
                             </div>
+                            {!hasInventory && (
+                                <div className="p-3 rounded-xl border border-border/50 bg-background/50">
+                                    <p className="text-xs text-muted-foreground">Active Users</p>
+                                    <p className="text-lg font-space font-bold mt-1 text-emerald-500">
+                                        {data.stats.active_users ?? 0}
+                                    </p>
+                                </div>
+                            )}
+                            {!hasWarehouse && (
+                                <div className="p-3 rounded-xl border border-border/50 bg-background/50">
+                                    <p className="text-xs text-muted-foreground">Security Roles</p>
+                                    <p className="text-lg font-space font-bold mt-1 text-sky-500">
+                                        {data.stats.total_roles ?? 0}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                         <p className="mt-4 text-xs text-muted-foreground">{t('dashboard.operational_health_note', 'Live enterprise inventory, capacity utilization, and staff activity reported from PostgreSQL cluster.')}</p>
                     </div>
