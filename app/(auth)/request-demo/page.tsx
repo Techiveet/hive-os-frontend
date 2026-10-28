@@ -116,6 +116,9 @@ export default function RequestDemoPage() {
     queryFn: fetchPublicSubscriptionCatalog,
     staleTime: 60_000,
   });
+  // The browser can restore a catalog that the server did not have. Keep the
+  // initial render identical, then show cached results after hydration.
+  const catalogPending = !mounted || catalogLoading;
   const catalog = catalogResponse?.data ?? {};
   const modules = React.useMemo(
     () => (catalog.catalog ?? []) as SignupCatalogModule[],
@@ -280,7 +283,7 @@ export default function RequestDemoPage() {
                 <CardDescription>The options below come from the same live catalog used for subscriptions.</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-7">
-                {catalogLoading ? (
+                {catalogPending ? (
                   <div className="flex flex-col gap-3" aria-label="Loading module catalog"><Skeleton className="h-11 w-full" /><Skeleton className="h-40 w-full" /></div>
                 ) : catalogError ? (
                   <Alert variant="destructive"><AlertTitle>Catalog unavailable</AlertTitle><AlertDescription>Refresh the page before submitting a demo request.</AlertDescription></Alert>
@@ -322,7 +325,7 @@ export default function RequestDemoPage() {
               </Alert>
             ) : null}
 
-            <Button type="submit" size="lg" disabled={submitting || catalogLoading || catalogError} className="min-h-11 w-full sm:w-fit">
+            <Button type="submit" size="lg" disabled={submitting || catalogPending || catalogError} className="min-h-11 w-full sm:w-fit">
               {submitting ? <Spinner data-icon="inline-start" /> : <Send data-icon="inline-start" aria-hidden="true" />}
               {submitting ? "Submitting request" : "Request this demo"}
             </Button>
