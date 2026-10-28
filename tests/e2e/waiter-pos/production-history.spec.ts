@@ -38,8 +38,12 @@ test.describe("waiter POS production history navigation", () => {
     try {
       await loginAs(page, fixture, "waiter");
 
-      await page.goto(`${frontendBaseUrl(fixture)}/dashboard`);
+      // The fixture's waiter cannot open the generic ERP dashboard; its guard
+      // redirects to Subscription Required. Use the subscribed Hospitality
+      // landing page so Back exercises an allowed dashboard route.
+      await page.goto(`${frontendBaseUrl(fixture)}/dashboard/hospitality`);
       await expect.poll(visibleTextLength).toBeGreaterThan(0);
+      await page.waitForURL(/\/dashboard\/hospitality(?:$|\?)/, { timeout: 30_000 });
 
       await page.goto(`${frontendBaseUrl(fixture)}/dashboard/hospitality/waiter-pos`);
       await expect(page.getByRole("heading", { name: "Restaurant Waiter POS" })).toBeVisible();
@@ -47,14 +51,14 @@ test.describe("waiter POS production history navigation", () => {
       // The dev-server defect is a completely blank page, so "renders anything
       // at all, with the shell mounted" is the invariant worth pinning. Exact
       // text length is not: live counters make it vary between visits.
-      await page.goBack();
-      await page.waitForURL(/\/dashboard(?:$|\?)/, { timeout: 30_000 });
+      await page.goBack({ waitUntil: "domcontentloaded" });
+      await page.waitForURL(/\/dashboard\/hospitality(?:$|\?)/, { timeout: 30_000, waitUntil: "domcontentloaded" });
       await expect.poll(visibleTextLength, { timeout: 30_000 }).toBeGreaterThan(0);
       expect(await shellRendered()).toBe(true);
       await page.screenshot({ path: testInfo.outputPath("production-back.png") });
 
-      await page.goForward();
-      await page.waitForURL(/waiter-pos/, { timeout: 30_000 });
+      await page.goForward({ waitUntil: "domcontentloaded" });
+      await page.waitForURL(/waiter-pos/, { timeout: 30_000, waitUntil: "domcontentloaded" });
       await expect.poll(visibleTextLength, { timeout: 30_000 }).toBeGreaterThan(0);
       expect(await shellRendered()).toBe(true);
       await expect(page.getByRole("heading", { name: "Restaurant Waiter POS" })).toBeVisible();
