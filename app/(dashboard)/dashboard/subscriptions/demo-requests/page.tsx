@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getErrorMessage } from "@/lib/errors";
 import { isTenantSession } from "@/lib/runtime-context";
+import { tenantSignInUrl } from "@/modules/tenancy/components/tenant-activity-dashboard";
 import {
   expireDemoRequest,
   fetchDemoRequests,
@@ -116,6 +117,9 @@ export default function DemoRequestsPage() {
       per_page: 50,
     }),
     enabled: isLoaded && canView && !isTenantSession(),
+    refetchInterval: (query) => (query.state.data?.data ?? []).some(
+      (request: DemoRequest) => request.status === "provisioning",
+    ) ? 3000 : false,
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["demo-requests"] });
   const updateMutation = useMutation({ mutationFn: ({ id, payload }: { id: number; payload: Parameters<typeof updateDemoRequest>[1] }) => updateDemoRequest(id, payload), onSuccess: refresh });
@@ -161,7 +165,7 @@ export default function DemoRequestsPage() {
                 request={request}
                 catalog={catalog}
                 onSave={async (payload) => { try { await updateMutation.mutateAsync({ id: request.id, payload }); toast.success("Demo lease saved"); } catch (error) { toast.error(getErrorMessage(error, "Could not save demo lease.")); throw error; } }}
-                onProvision={async (payload) => { try { await provisionMutation.mutateAsync({ id: request.id, payload }); toast.success("Demo tenant is ready"); } catch (error) { toast.error(getErrorMessage(error, "Could not provision demo tenant.")); throw error; } }}
+                onProvision={async (payload) => { try { const result = await provisionMutation.mutateAsync({ id: request.id, payload }); toast.success(result.data?.status === "provisioning" ? "Demo setup is queued. This page will update when it is ready." : "Demo tenant is ready"); } catch (error) { toast.error(getErrorMessage(error, "Could not provision demo tenant.")); throw error; } }}
                 onExpire={async () => { try { await expireMutation.mutateAsync(request.id); toast.success("Demo access expired"); } catch (error) { toast.error(getErrorMessage(error, "Could not expire demo access.")); throw error; } }}
               />
             ))}
@@ -194,8 +198,15 @@ function DemoLeaseCard({ request, catalog, onSave, onProvision, onExpire }: {
   const [error, setError] = React.useState("");
   const errorRef = React.useRef<HTMLDivElement>(null);
   const provisioned = Boolean(request.demo_tenant_id);
+  const provisioning = request.status === "provisioning";
   const expired = request.status === "expired" || (request.demo_expires_at ? new Date(request.demo_expires_at) <= new Date() : false);
   const effectiveStatus = expired ? "expired" : request.status;
+
+  React.useEffect(() => {
+    if (request.status === "provisioned" || request.status === "expired") {
+      setStatus("provisioned");
+    }
+  }, [request.status]);
 
   const configuration = () => ({
     status,
@@ -266,24 +277,24 @@ function DemoLeaseCard({ request, catalog, onSave, onProvision, onExpire }: {
           <div className="flex flex-col gap-7 border-t p-4">
             <FieldGroup>
               <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-                <Field><FieldLabel htmlFor={`demo-status-${request.id}`}>Workflow status</FieldLabel><NativeSelect id={`demo-status-${request.id}`} className="h-11 w-full" value={status} onChange={(event) => setStatus(event.target.value)} disabled={busy}>{EDITABLE_STATUSES.map((key) => <NativeSelectOption key={key} value={key}>{STATUS_LABELS[key]}</NativeSelectOption>)}</NativeSelect></Field>
-                <Field><FieldLabel htmlFor={`demo-business-${request.id}`}>Business type</FieldLabel><NativeSelect id={`demo-business-${request.id}`} className="h-11 w-full" value={businessType} onChange={(event) => changeBusinessType(event.target.value)} disabled={busy}>{catalog.business_types.map((option) => <NativeSelectOption key={option.key} value={option.key}>{option.label}</NativeSelectOption>)}</NativeSelect></Field>
-                <Field><FieldLabel htmlFor={`demo-plan-${request.id}`}>Demo plan</FieldLabel><NativeSelect id={`demo-plan-${request.id}`} className="h-11 w-full" value={plan} onChange={(event) => setPlan(event.target.value)} disabled={busy}>{catalog.plans.map((option) => <NativeSelectOption key={option.key} value={option.key}>{option.name}</NativeSelectOption>)}</NativeSelect></Field>
-                <Field><FieldLabel htmlFor={`demo-expiry-${request.id}`}>Expires at</FieldLabel><Input id={`demo-expiry-${request.id}`} className="h-11" type="datetime-local" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} disabled={busy} /><FieldDescription>Uses your current browser time zone.</FieldDescription></Field>
-                <Field><FieldLabel htmlFor={`demo-tenant-${request.id}`}>Tenant ID</FieldLabel><Input id={`demo-tenant-${request.id}`} className="h-11" value={tenantId} onChange={(event) => { const next = slugify(event.target.value); setTenantId(next); if (!provisioned) setDomain(`${next}.localhost`); }} disabled={busy || provisioned} maxLength={20} /></Field>
-                <Field><FieldLabel htmlFor={`demo-domain-${request.id}`}>Domain</FieldLabel><Input id={`demo-domain-${request.id}`} className="h-11" value={domain} onChange={(event) => setDomain(event.target.value.toLowerCase().trim())} disabled={busy || provisioned} /></Field>
+                <Field><FieldLabel htmlFor={`demo-status-${request.id}`}>Workflow status</FieldLabel><NativeSelect id={`demo-status-${request.id}`} className="h-11 w-full" value={status} onChange={(event) => setStatus(event.target.value)} disabled={busy || provisioning}>{EDITABLE_STATUSES.map((key) => <NativeSelectOption key={key} value={key}>{STATUS_LABELS[key]}</NativeSelectOption>)}</NativeSelect></Field>
+                <Field><FieldLabel htmlFor={`demo-business-${request.id}`}>Business type</FieldLabel><NativeSelect id={`demo-business-${request.id}`} className="h-11 w-full" value={businessType} onChange={(event) => changeBusinessType(event.target.value)} disabled={busy || provisioning}>{catalog.business_types.map((option) => <NativeSelectOption key={option.key} value={option.key}>{option.label}</NativeSelectOption>)}</NativeSelect></Field>
+                <Field><FieldLabel htmlFor={`demo-plan-${request.id}`}>Demo plan</FieldLabel><NativeSelect id={`demo-plan-${request.id}`} className="h-11 w-full" value={plan} onChange={(event) => setPlan(event.target.value)} disabled={busy || provisioning}>{catalog.plans.map((option) => <NativeSelectOption key={option.key} value={option.key}>{option.name}</NativeSelectOption>)}</NativeSelect></Field>
+                <Field><FieldLabel htmlFor={`demo-expiry-${request.id}`}>Expires at</FieldLabel><Input id={`demo-expiry-${request.id}`} className="h-11" type="datetime-local" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} disabled={busy || provisioning} /><FieldDescription>Uses your current browser time zone.</FieldDescription></Field>
+                <Field><FieldLabel htmlFor={`demo-tenant-${request.id}`}>Tenant ID</FieldLabel><Input id={`demo-tenant-${request.id}`} className="h-11" value={tenantId} onChange={(event) => { const next = slugify(event.target.value); setTenantId(next); if (!provisioned) setDomain(`${next}.localhost`); }} disabled={busy || provisioning || provisioned} maxLength={20} /></Field>
+                <Field><FieldLabel htmlFor={`demo-domain-${request.id}`}>Domain</FieldLabel><Input id={`demo-domain-${request.id}`} className="h-11" value={domain} onChange={(event) => setDomain(event.target.value.toLowerCase().trim())} disabled={busy || provisioning || provisioned} /></Field>
               </div>
-              <Field><FieldLabel htmlFor={`demo-notes-${request.id}`}>Internal notes</FieldLabel><Textarea id={`demo-notes-${request.id}`} rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} disabled={busy} /></Field>
+              <Field><FieldLabel htmlFor={`demo-notes-${request.id}`}>Internal notes</FieldLabel><Textarea id={`demo-notes-${request.id}`} rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} disabled={busy || provisioning} /></Field>
             </FieldGroup>
 
-            <DemoScopeSelector modules={catalog.modules} businessType={businessType} selectedModules={modules} selectedSubmodules={submodules} onChange={(nextModules, nextSubmodules) => { setModules(nextModules); setSubmodules(nextSubmodules); }} disabled={busy} idPrefix={`admin-demo-${request.id}`} />
+            <DemoScopeSelector modules={catalog.modules} businessType={businessType} selectedModules={modules} selectedSubmodules={submodules} onChange={(nextModules, nextSubmodules) => { setModules(nextModules); setSubmodules(nextSubmodules); }} disabled={busy || provisioning} idPrefix={`admin-demo-${request.id}`} />
 
             {error ? <Alert ref={errorRef} tabIndex={-1} variant="destructive"><AlertTitle>Check the lease configuration</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
 
             <div className="flex flex-wrap gap-3">
-              <Button variant="outline" disabled={busy} onClick={() => run(() => onSave(configuration()))}>{busy ? <Spinner data-icon="inline-start" /> : null}Save changes</Button>
-              <Button disabled={busy} onClick={() => run(() => onProvision({ ...configuration(), tenant_id: tenantId, tenant_name: request.company, domain }))}>{busy ? <Spinner data-icon="inline-start" /> : <ShieldCheck data-icon="inline-start" aria-hidden="true" />}{expired ? "Reactivate demo access" : (provisioned ? "Apply access and expiry" : "Provision demo tenant")}</Button>
-              {request.demo_domain ? <Button variant="outline" asChild><a href={`//${request.demo_domain}`} target="_blank" rel="noreferrer">Open demo<ExternalLink data-icon="inline-end" aria-hidden="true" /></a></Button> : null}
+              <Button variant="outline" disabled={busy || provisioning} onClick={() => run(() => onSave(configuration()))}>{busy ? <Spinner data-icon="inline-start" /> : null}Save changes</Button>
+              <Button disabled={busy || provisioning} onClick={() => run(() => onProvision({ ...configuration(), tenant_id: tenantId, tenant_name: request.company, domain }))}>{busy || provisioning ? <Spinner data-icon="inline-start" /> : <ShieldCheck data-icon="inline-start" aria-hidden="true" />}{provisioning ? "Provisioning demo…" : expired ? "Reactivate demo access" : (provisioned ? "Apply access and expiry" : "Provision demo tenant")}</Button>
+              {request.demo_domain ? <Button variant="outline" asChild><a href={tenantSignInUrl(request.demo_domain) ?? `//${request.demo_domain}/sign-in`} target="_blank" rel="noreferrer">Open demo<ExternalLink data-icon="inline-end" aria-hidden="true" /></a></Button> : null}
             </div>
           </div>
         </details>
@@ -293,7 +304,7 @@ function DemoLeaseCard({ request, catalog, onSave, onProvision, onExpire }: {
         <CardFooter className="flex flex-wrap justify-between gap-3 border-t">
           <p className="text-sm text-muted-foreground">Immediate expiration blocks protected tenant functionality on the next request.</p>
           {confirmExpire ? (
-            <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setConfirmExpire(false)} disabled={busy}>Cancel</Button><Button variant="destructive" disabled={busy} onClick={async () => { setBusy(true); setError(""); try { await onExpire(); } catch (caught: unknown) { setError(getErrorMessage(caught, "Demo access could not be expired.")); requestAnimationFrame(() => errorRef.current?.focus()); } finally { setBusy(false); setConfirmExpire(false); } }}>{busy ? <Spinner data-icon="inline-start" /> : null}Confirm expiration</Button></div>
+            <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setConfirmExpire(false)} disabled={busy || provisioning}>Cancel</Button><Button variant="destructive" disabled={busy || provisioning} onClick={async () => { setBusy(true); setError(""); try { await onExpire(); } catch (caught: unknown) { setError(getErrorMessage(caught, "Demo access could not be expired.")); requestAnimationFrame(() => errorRef.current?.focus()); } finally { setBusy(false); setConfirmExpire(false); } }}>{busy ? <Spinner data-icon="inline-start" /> : null}Confirm expiration</Button></div>
           ) : <Button variant="destructive" onClick={() => setConfirmExpire(true)}>Expire now</Button>}
         </CardFooter>
       ) : null}

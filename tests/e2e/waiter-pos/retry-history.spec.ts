@@ -106,11 +106,13 @@ test.describe("waiter POS retry and history browser acceptance", () => {
       // defect in waiter-pos-phase-4c-results.md. What matters for retry
       // semantics is that traversing history creates no second order.
       await page.goto(`${frontendBaseUrl(fixture)}/dashboard`);
-      await page.goBack();
+      // The dev server can abort Playwright's navigation wait after restoring
+      // the history entry. Check the resulting URL directly instead.
+      await page.evaluate(() => window.history.back());
       await page.waitForURL(/waiter-pos/, { timeout: 30_000 });
-      await page.goForward();
+      await page.evaluate(() => window.history.forward());
       await page.waitForURL(/\/dashboard(?:$|\?)/, { timeout: 30_000 });
-      await page.goBack();
+      await page.evaluate(() => window.history.back());
       await page.waitForURL(/waiter-pos/, { timeout: 30_000 });
 
       const afterHistory = await post(page, idempotencyKey, orderPayload(fixture, 2));
