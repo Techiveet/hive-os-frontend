@@ -1,5 +1,6 @@
 "use client";
 
+import { AnnualPrice } from "@/modules/subscription/components/annual-price";
 import Link from "next/link";
 import { Check, ExternalLink, Layers3, LayoutTemplate, LockKeyhole, Puzzle } from "lucide-react";
 
@@ -50,6 +51,7 @@ type ModuleSelectionProps = {
   plan: string;
   businessType: string;
   planDefaults: Record<string, string[]>;
+  yearlyDiscountPercent?: number;
   selectedModules: string[];
   onSelectedModulesChange: (modules: string[]) => void;
 };
@@ -91,6 +93,7 @@ export function SignupModuleSelection({
   planDefaults,
   selectedModules,
   onSelectedModulesChange,
+  yearlyDiscountPercent,
 }: ModuleSelectionProps) {
   const includedSlugs = new Set(planDefaults[plan] ?? []);
   const compatibleModules = modules.filter((module) => supportsBusinessType(module, businessType));
@@ -153,7 +156,7 @@ export function SignupModuleSelection({
         <fieldset className="mt-5">
           <legend className="text-sm font-black text-foreground">Optional modules</legend>
           <p id="optional-modules-help" className="mt-1 text-xs leading-5 text-muted-foreground">
-            Prices are added to the monthly plan total. Choices incompatible with the selected business type are excluded automatically.
+            Monthly prices are added to the plan total; annual prices include the annual billing discount. Choices incompatible with the selected business type are excluded automatically.
           </p>
           <ul className="mt-3 grid gap-3 md:grid-cols-2" aria-describedby="optional-modules-help">
             {optionalModules.map((module) => {
@@ -198,6 +201,7 @@ export function SignupModuleSelection({
                         </span>
                         <span className="mt-1 block text-xs leading-5 text-muted-foreground">{module.description}</span>
                         <span className="mt-2 block text-xs font-bold text-foreground">{formatModulePrice(module)}</span>
+                        {Number(module.monthly_price_etb ?? 0) > 0 ? <AnnualPrice monthlyPrice={Number(module.monthly_price_etb)} discountPercent={yearlyDiscountPercent} /> : null}
                         <SubmoduleList module={module} />
                       </span>
                     </span>

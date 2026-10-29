@@ -1,5 +1,6 @@
 "use client";
 
+import { AnnualPrice } from "@/modules/subscription/components/annual-price";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -987,6 +988,7 @@ export default function TenantSignupPage() {
                       <div className="mb-3">
                         <span className="text-2xl font-black text-foreground">{meta.price}</span>
                         <span className="text-[11px] text-muted-foreground ml-1">{meta.priceNote}</span>
+                        <AnnualPrice monthlyPrice={meta.monthlyPriceEtb} discountPercent={billingPolicy?.yearly_discount_percent} />
                       </div>
 
                       <div className={cn("rounded-lg px-2 py-1 mb-3 text-[11px] font-bold flex items-center gap-1.5", meta.color, `bg-gradient-to-br ${meta.bg}`)}>
@@ -1040,6 +1042,7 @@ export default function TenantSignupPage() {
                   <div className="text-right shrink-0">
                     <p className="text-2xl font-black text-foreground">{planMeta.price}</p>
                     <p className="text-xs text-muted-foreground">{planMeta.priceNote}</p>
+                    <AnnualPrice monthlyPrice={planMeta.monthlyPriceEtb} discountPercent={billingPolicy?.yearly_discount_percent} />
                     {isFree && <Badge className="mt-1 border-none bg-emerald-500/10 text-[11px] text-emerald-700 dark:text-emerald-300">No card required</Badge>}
                   </div>
                 </div>
@@ -1054,6 +1057,7 @@ export default function TenantSignupPage() {
                     planDefaults={planDefaults}
                     selectedModules={selectedModules}
                     onSelectedModulesChange={setSelectedModules}
+                    yearlyDiscountPercent={billingPolicy?.yearly_discount_percent}
                   />
                 </div>
               ) : null}

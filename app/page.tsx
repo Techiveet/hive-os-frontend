@@ -47,6 +47,7 @@ import { ErpSubdomainChecker } from "@/modules/landing/components/erp-subdomain-
 import { HiveIntro } from "@/modules/landing/components/hive-intro";
 import { HiveBeacon, HiveLockup, HiveMark } from "@/modules/landing/components/hive-mark";
 import { HiveModuleMap } from "@/modules/landing/components/hive-module-map";
+import { AnnualPrice } from "@/modules/subscription/components/annual-price";
 import { fetchPublicSubscriptionCatalog } from "@/modules/subscription/api";
 import type { SignupCatalogModule } from "@/modules/subscription/components/signup-catalog-selector";
 import { Reveal, RevealGroup, RevealItem, SpotlightCard } from "@/modules/landing/components/reveal";
@@ -559,6 +560,7 @@ function LandingUI({
     [catalogPayload.catalog],
   );
   const planPricing = (catalogPayload.plan_pricing ?? {}) as Record<string, CatalogPlan>;
+  const annualDiscount = catalogPayload.billing_policy?.yearly_discount_percent;
   const planDefaults = (catalogPayload.plan_defaults ?? {}) as Record<string, string[]>;
 
   const dynamicPlans = useMemo(() => {
@@ -1670,12 +1672,14 @@ function LandingUI({
                       </div>
                       <p className="mb-5 text-xs text-muted-foreground min-h-[32px] line-clamp-2">{plan.tagline}</p>
 
-                      <div className="mb-5 flex items-baseline gap-1">
+                      <div className="flex items-baseline gap-1">
                         <span className="whitespace-nowrap font-space text-2xl font-bold leading-none tracking-tight">
                           {plan.price}
                         </span>
                         <span className="text-[11px] text-muted-foreground">{plan.priceNote}</span>
                       </div>
+
+                      <div className="mb-5"><AnnualPrice monthlyPrice={plan.monthlyPriceEtb} discountPercent={annualDiscount} /></div>
 
                       <div className="mb-5 flex items-center gap-2 rounded-xl border border-border/60 bg-background/50 px-3 py-2 font-mono text-[11px] font-bold text-muted-foreground">
                         <HardDrive className="h-3.5 w-3.5 shrink-0 text-primary" />
