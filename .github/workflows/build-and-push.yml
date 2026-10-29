@@ -2,7 +2,7 @@ name: Build, Push & Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/annual-pricing-loading-state]
   workflow_dispatch:
 
 concurrency:
