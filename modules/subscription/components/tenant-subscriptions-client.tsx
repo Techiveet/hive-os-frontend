@@ -169,7 +169,7 @@ function PlanCard({
       <h3 className={cn("mt-3 text-xl font-black uppercase tracking-tight", meta.color)}>{meta.label}</h3>
       <p className="text-xs text-muted-foreground mt-0.5">{meta.tagline}</p>
       <p className="mt-3 text-2xl font-black tracking-tight text-foreground">{formatMoney(planPrice)}</p>
-      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">per month from included modules</p>
+      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">per month; extra modules are billed separately</p>
 
       <div className="mt-4 space-y-2">
         <div className="flex items-center gap-2 text-xs text-foreground/80">
