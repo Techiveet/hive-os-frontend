@@ -1,33 +1,23 @@
-name: Signup hydration diagnosis
+name: Live annual pricing verification
 on:
   push:
+  workflow_dispatch:
 jobs:
-  diagnose:
+  verify-live:
     runs-on: ubuntu-22.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Diagnose detailed hydration error
-        env:
-          INTERNAL_API_URL: https://hive.techiveet.com/api/v1
-          NEXT_PUBLIC_API_URL: http://127.0.0.1:3099/api/v1
-          NEXT_TELEMETRY_DISABLED: "1"
-        run: |
-          npx next dev --webpack -p 3099 > /tmp/annual-dev.log 2>&1 &
-          for attempt in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:3099/auth/signup -o /tmp/signup-server.html; then break; fi
-            sleep 2
-          done
-          node <<'JS'
-          const {chromium}=require('playwright');
-          (async()=>{const b=await chromium.launch();const p=await b.newPage();p.on('console',m=>{if(['error','warning'].includes(m.type()))console.log(m.type(),m.text())});p.on('pageerror',e=>console.log('PAGEERROR',e.message));await p.goto('http://127.0.0.1:3099/auth/signup',{waitUntil:'domcontentloaded',timeout:90000});await p.waitForTimeout(12000);await b.close()})().catch(e=>{console.error(e);process.exit(1)});
-          JS
-          tail -40 /tmp/annual-dev.log
+      - run: node scripts/verify-annual-pricing-live.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: annual-pricing-live-evidence
+          path: annual-pricing-evidence/
+          if-no-files-found: ignore
