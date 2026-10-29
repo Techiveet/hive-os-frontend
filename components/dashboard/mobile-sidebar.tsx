@@ -72,6 +72,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { useBusinessType } from "@/hooks/use-business-type";
 import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
+import { requiredSubscriptionModules } from "@/lib/subscription-module-scope";
 import { cn } from "@/lib/utils";
 import {
   getAuthHeaders,
@@ -199,7 +200,7 @@ export function MobileSidebar() {
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
   const { hasAnyPermission } = usePermissions();
-  const { hasModule } = useTenantModuleAccess();
+  const { hasModule, moduleAccess } = useTenantModuleAccess();
   const { hasChatWorkspace, hasMailboxModule } = useChatAccess();
   const { hasBusinessType } = useBusinessType();
   const { t } = useTranslation();
@@ -321,9 +322,10 @@ export function MobileSidebar() {
       if (isTenantNode) {
         const rawSlug = item.subscriptionSlug ?? MODULE_ID_TO_SUBSCRIPTION_SLUG[item.moduleId];
         if (rawSlug) {
-          const requiredModules = Array.isArray(rawSlug)
-            ? rawSlug
-            : [rawSlug];
+          const requiredModules = requiredSubscriptionModules(
+            rawSlug,
+            moduleAccess?.submodule_mode === "selected",
+          );
 
           if (!requiredModules.some((slug) => hasModule(slug))) {
             return false;
@@ -337,7 +339,7 @@ export function MobileSidebar() {
 
       return hasAnyPermission(item.permissions);
     },
-    [hasAnyPermission, hasBusinessType, hasModule, isTenantNode],
+    [hasAnyPermission, hasBusinessType, hasModule, isTenantNode, moduleAccess?.submodule_mode],
   );
 
   const matchesSearch = useCallback(

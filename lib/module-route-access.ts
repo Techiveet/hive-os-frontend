@@ -1,7 +1,8 @@
 import { FEATURE_MODULES } from "@/modules/index";
-import type { ModuleNavItem } from "@/modules/types";
+import { MODULE_ID_TO_SUBSCRIPTION_SLUG, type ModuleNavItem } from "@/modules/types";
 import type { RoutePermissionAccess } from "@/lib/route-permissions";
 import { isTenantSession } from "@/lib/runtime-context";
+import { requiredSubscriptionModules } from "@/lib/subscription-module-scope";
 
 /**
  * Access for dashboard routes that lib/route-permissions has no explicit rule
@@ -67,7 +68,8 @@ function moduleRequirementFor(path: string): ModuleNavItem | null {
   const permissions = new Set<string>();
   let anyUnrestricted = false;
   for (const item of module.navItems) {
-    const itemSlugs = item.subscriptionSlug ? ([] as string[]).concat(item.subscriptionSlug) : [];
+    const rawSlugs = item.subscriptionSlug ?? MODULE_ID_TO_SUBSCRIPTION_SLUG[item.moduleId];
+    const itemSlugs = rawSlugs ? ([] as string[]).concat(rawSlugs) : [];
     itemSlugs.forEach((slug) => slugs.add(slug));
     if (!item.permissions?.length) anyUnrestricted = true;
     item.permissions?.forEach((permission) => permissions.add(permission));
@@ -104,8 +106,9 @@ export function canAccessModuleRoute(
     return false;
   }
 
-  if (tenant && item.subscriptionSlug && !access.canBypassModuleSubscriptions && access.hasModule) {
-    const required = ([] as string[]).concat(item.subscriptionSlug);
+  const rawSlugs = item.subscriptionSlug ?? MODULE_ID_TO_SUBSCRIPTION_SLUG[item.moduleId];
+  if (tenant && rawSlugs && !access.canBypassModuleSubscriptions && access.hasModule) {
+    const required = requiredSubscriptionModules(rawSlugs, Boolean(access.exactModuleScope));
     if (!required.some((slug) => access.hasModule?.(slug))) return false;
   }
 
