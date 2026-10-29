@@ -254,6 +254,8 @@ function createClientRequestId() {
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function TenantSignupPage() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // State
   const [step, setStep] = useState<Step>("plan");
@@ -316,7 +318,9 @@ export default function TenantSignupPage() {
     refetchOnWindowFocus: true,
   });
 
-  const catalogPayload = catalogData?.data ?? {};
+  // Match the server fallback until hydration finishes, even if the catalog
+  // request or shared query cache resolves before the first client render.
+  const catalogPayload = (mounted ? catalogData?.data : undefined) ?? {};
   const catalogModules = useMemo(
     () => (catalogPayload.catalog ?? []) as CatalogModule[],
     [catalogPayload.catalog],
