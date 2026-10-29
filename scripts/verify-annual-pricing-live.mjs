@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 await mkdir('annual-pricing-evidence',{recursive:true});
 const browser=await chromium.launch({headless:true});
-const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+const page=await browser.newPage({viewport:{width:1440,height:1000}});
 const errors=[];page.on('pageerror',e=>errors.push({url:page.url(),message:e.message}));
 const catalog=page.waitForResponse(r=>r.url().includes('/public/subscriptions/catalog')&&r.status()===200,{timeout:90000});
 const home=await page.goto('https://hive.techiveet.com',{waitUntil:'domcontentloaded',timeout:60000});
