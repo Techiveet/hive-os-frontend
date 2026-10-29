@@ -324,6 +324,7 @@ export type TenantSubscriptionOrder = {
 
 export type TenantModuleAccessState = {
   plan: string;
+  submodule_mode?: "all" | "selected";
   subscription_status?: string;
   expires_at?: string | null;
   grace_ends_at?: string | null;

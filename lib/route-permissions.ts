@@ -1,4 +1,5 @@
 import { isTenantSession } from "@/lib/runtime-context";
+import { requiredSubscriptionModules } from "@/lib/subscription-module-scope";
 
 export const PROFILE_ROUTE_PERMISSIONS = [
   "view_profile",
@@ -428,6 +429,7 @@ export type RoutePermissionAccess = {
   hasAnyPermission: (permissions: string[]) => boolean;
   hasModule?: (slug: string) => boolean;
   canBypassModuleSubscriptions?: boolean;
+  exactModuleScope?: boolean;
 };
 
 const normalizePath = (path: string): string => {
@@ -454,7 +456,7 @@ const hasSubscribedModule = (
     return true;
   }
 
-  const modules = Array.isArray(module) ? module : [module];
+  const modules = requiredSubscriptionModules(module, Boolean(access.exactModuleScope));
 
   return modules.some((slug) => access.hasModule?.(slug));
 };
