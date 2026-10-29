@@ -908,12 +908,12 @@ export default function TenantSignupPage() {
           {/* ─── STEP 1: PLAN SELECTION ─────────────────────────────────── */}
           {step === "plan" && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {catalogLoading ? (
+              {!mounted || catalogLoading ? (
                 <p role="status" className="mb-6 rounded-2xl border border-slate-500 bg-card p-4 text-sm text-foreground">
                   Loading the live subscription and template catalog…
                 </p>
               ) : null}
-              {catalogError ? (
+              {mounted && catalogError ? (
                 <Alert variant="destructive" className="mb-6 border-destructive bg-destructive/10">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
