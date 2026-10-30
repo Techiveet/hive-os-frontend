@@ -11,6 +11,9 @@ export type SubscriptionBillingPolicy = {
   renewal_warning_days: number;
   reminder_interval_hours: number;
   reminder_max_displays: number;
+  public_catalog_mode: "self_service" | "quote_only";
+  public_show_all_modules: boolean;
+  public_quote_message: string;
   hybrid_enabled: boolean;
   hybrid_signup_notice: string;
   billing_cycles?: SubscriptionBillingCycle[];
@@ -173,9 +176,10 @@ export type TenantResolvedModuleSubscriptions = TenantModuleSubscriptionPayload 
 export type TenantPlanPricing = {
   name: string;
   description: string;
-  monthly_price_etb: number;
+  monthly_price_etb: number | null;
   mail_storage_quota_mb: number;
   is_disabled?: boolean;
+  is_hidden?: boolean;
   is_free?: boolean;
 };
 
@@ -252,6 +256,7 @@ export type SubscriptionAdminPlan = {
   name: string;
   description?: string | null;
   status: "active" | "inactive";
+  is_hidden?: boolean;
   billing_cycle: string;
   monthly_price_etb: number;
   mail_storage_quota_mb: number;
