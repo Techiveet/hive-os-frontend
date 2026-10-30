@@ -332,6 +332,8 @@ export default function TenantSignupPage() {
   const planPricing = (catalogPayload.plan_pricing ?? {}) as Record<string, CatalogPlan>;
   const planDefaults = (catalogPayload.plan_defaults ?? {}) as Record<string, string[]>;
   const billingPolicy = catalogPayload.billing_policy as SubscriptionBillingPolicy | undefined;
+  const quoteOnly = billingPolicy?.public_catalog_mode !== "self_service";
+  const quoteMessage = billingPolicy?.public_quote_message || "Contact customer service for a tailored quote.";
   const businessTypes = useMemo(
     () => resolveBusinessTypeCatalog(catalogPayload.business_types ?? FALLBACK_TENANT_BUSINESS_TYPES),
     [catalogPayload.business_types]
@@ -773,7 +775,7 @@ export default function TenantSignupPage() {
 
   // ── Validation ──────────────────────────────────────────────────────────
   const canGoToWorkspace = availablePlanKeys.includes(selectedPlan);
-  const canGoToCheckout = orgName.trim().length >= 2 && tenantId.length >= 3 && !tenantIdError
+  const canGoToCheckout = !quoteOnly && orgName.trim().length >= 2 && tenantId.length >= 3 && !tenantIdError
     && adminName.trim().length >= 2 && adminEmail.includes("@") && adminPassword.length >= 8;
   const directTransferSelected = requiresSignupPayment && checkoutChannel === "direct_transfer";
   const gatewaySelected = requiresSignupPayment && checkoutChannel !== "direct_transfer";
@@ -785,6 +787,11 @@ export default function TenantSignupPage() {
     && (!directTransferSelected || manualTransactionReference.trim().length >= 4);
 
   const handleCheckout = () => {
+    if (quoteOnly) {
+      setError(quoteMessage);
+      return;
+    }
+
     setError("");
     clearStoredCheckoutReturnContext();
     setOrderToken(null);
@@ -917,7 +924,17 @@ export default function TenantSignupPage() {
                 <Alert variant="destructive" className="mb-6 border-destructive bg-destructive/10">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    The live catalog could not be loaded. Refresh before starting a paid registration so the price and template eligibility are current.
+                    The live catalog could not be loaded. Refresh before choosing modules or requesting a quote.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
+              {mounted && !catalogLoading && quoteOnly ? (
+                <Alert className="mb-6 border-primary/40 bg-primary/5">
+                  <ShieldCheck className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong className="block text-foreground">Tailored quotes are active</strong>
+                    <span className="mt-1 block">{quoteMessage} Browse every module below, then send customer service your requirements.</span>
                   </AlertDescription>
                 </Alert>
               ) : null}
@@ -990,9 +1007,15 @@ export default function TenantSignupPage() {
                       <p className="text-[11px] text-muted-foreground mb-3">{meta.tagline}</p>
 
                       <div className="mb-3">
-                        <span className="text-2xl font-black text-foreground">{meta.price}</span>
-                        <span className="text-[11px] text-muted-foreground ml-1">{meta.priceNote}</span>
-                        <AnnualPrice monthlyPrice={meta.monthlyPriceEtb} discountPercent={billingPolicy?.yearly_discount_percent} />
+                        {quoteOnly ? (
+                          <span className="text-lg font-black text-foreground">Custom quote</span>
+                        ) : (
+                          <>
+                            <span className="text-2xl font-black text-foreground">{meta.price}</span>
+                            <span className="text-[11px] text-muted-foreground ml-1">{meta.priceNote}</span>
+                            <AnnualPrice monthlyPrice={meta.monthlyPriceEtb} discountPercent={billingPolicy?.yearly_discount_percent} />
+                          </>
+                        )}
                       </div>
 
                       <div className={cn("rounded-lg px-2 py-1 mb-3 text-[11px] font-bold flex items-center gap-1.5", meta.color, `bg-gradient-to-br ${meta.bg}`)}>
@@ -1044,10 +1067,16 @@ export default function TenantSignupPage() {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-2xl font-black text-foreground">{planMeta.price}</p>
-                    <p className="text-xs text-muted-foreground">{planMeta.priceNote}</p>
-                    <AnnualPrice monthlyPrice={planMeta.monthlyPriceEtb} discountPercent={billingPolicy?.yearly_discount_percent} />
-                    {isFree && <Badge className="mt-1 border-none bg-emerald-500/10 text-[11px] text-emerald-700 dark:text-emerald-300">No card required</Badge>}
+                    {quoteOnly ? (
+                      <p className="text-lg font-black text-foreground">Tailored quote</p>
+                    ) : (
+                      <>
+                        <p className="text-2xl font-black text-foreground">{planMeta.price}</p>
+                        <p className="text-xs text-muted-foreground">{planMeta.priceNote}</p>
+                        <AnnualPrice monthlyPrice={planMeta.monthlyPriceEtb} discountPercent={billingPolicy?.yearly_discount_percent} />
+                      </>
+                    )}
+                    {!quoteOnly && isFree && <Badge className="mt-1 border-none bg-emerald-500/10 text-[11px] text-emerald-700 dark:text-emerald-300">No card required</Badge>}
                   </div>
                 </div>
               )}
@@ -1062,19 +1091,28 @@ export default function TenantSignupPage() {
                     selectedModules={selectedModules}
                     onSelectedModulesChange={setSelectedModules}
                     yearlyDiscountPercent={billingPolicy?.yearly_discount_percent}
+                    quoteOnly={quoteOnly}
                   />
                 </div>
               ) : null}
 
               <div className="flex justify-end">
-                <Button
-                  onClick={() => setStep("workspace")}
-                  disabled={!canGoToWorkspace}
-                  className="rounded-full px-8 font-bold gap-2 shadow-lg shadow-primary/20"
-                  size="lg"
-                >
-                  Continue to Workspace Setup <ArrowRight className="h-4 w-4" />
-                </Button>
+                {quoteOnly ? (
+                  <Button asChild className="rounded-full px-8 font-bold gap-2 shadow-lg shadow-primary/20" size="lg">
+                    <Link href="/request-demo">
+                      Contact customer service for a quote <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setStep("workspace")}
+                    disabled={!canGoToWorkspace}
+                    className="rounded-full px-8 font-bold gap-2 shadow-lg shadow-primary/20"
+                    size="lg"
+                  >
+                    Continue to Workspace Setup <ArrowRight className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -1265,7 +1303,7 @@ export default function TenantSignupPage() {
           )}
 
           {/* ─── STEP 3: CHECKOUT ──────────────────────────────────────── */}
-          {step === "checkout" && (
+          {!quoteOnly && step === "checkout" && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto">
               {error && (
                 <div ref={checkoutErrorRef} tabIndex={-1} className="mb-6 flex gap-3 rounded-lg border border-destructive bg-destructive/5 p-4 text-destructive outline-none focus-visible:ring-2 focus-visible:ring-primary">
