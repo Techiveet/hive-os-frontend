@@ -12,6 +12,7 @@ export type SubscriptionBillingPolicy = {
   reminder_interval_hours: number;
   reminder_max_displays: number;
   public_catalog_mode: "self_service" | "quote_only";
+  public_show_subscription_types: boolean;
   public_show_all_modules: boolean;
   public_quote_message: string;
   hybrid_enabled: boolean;
