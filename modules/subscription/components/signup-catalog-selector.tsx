@@ -52,6 +52,7 @@ type ModuleSelectionProps = {
   businessType: string;
   planDefaults: Record<string, string[]>;
   yearlyDiscountPercent?: number;
+  quoteOnly?: boolean;
   selectedModules: string[];
   onSelectedModulesChange: (modules: string[]) => void;
 };
@@ -60,7 +61,9 @@ function supportsBusinessType(module: SignupCatalogModule, businessType: string)
   return !module.business_types?.length || module.business_types.includes(businessType);
 }
 
-function formatModulePrice(module: SignupCatalogModule) {
+function formatModulePrice(module: SignupCatalogModule, quoteOnly = false) {
+  if (quoteOnly) return "Included in your tailored quote";
+
   const price = Number(module.monthly_price_etb ?? 0);
   return price > 0 ? `ETB ${price.toLocaleString()}/month` : "Included at no extra cost";
 }
@@ -94,9 +97,10 @@ export function SignupModuleSelection({
   selectedModules,
   onSelectedModulesChange,
   yearlyDiscountPercent,
+  quoteOnly = false,
 }: ModuleSelectionProps) {
   const includedSlugs = new Set(planDefaults[plan] ?? []);
-  const compatibleModules = modules.filter((module) => supportsBusinessType(module, businessType));
+  const compatibleModules = quoteOnly ? modules : modules.filter((module) => supportsBusinessType(module, businessType));
   const includedModules = compatibleModules.filter((module) => includedSlugs.has(module.slug));
   const optionalModules = compatibleModules
     .filter((module) => !includedSlugs.has(module.slug))
@@ -124,12 +128,14 @@ export function SignupModuleSelection({
             Modules and sub-modules
           </h3>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            Your plan includes {includedModules.length} compatible modules. Add optional capabilities now or later from Module Subscriptions.
+            {quoteOnly
+              ? `Browse all ${compatibleModules.length} modules. Customer service will tailor the final package to your organization.`
+              : `Your plan includes ${includedModules.length} compatible modules. Add optional capabilities now or later from Module Subscriptions.`}
           </p>
         </div>
       </div>
 
-      <details className="group mt-5 rounded-2xl border border-slate-500 bg-background">
+      <details open={quoteOnly} className="group mt-5 rounded-2xl border border-slate-500 bg-background">
         <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
           <span>Review included modules and sub-modules</span>
           <Badge variant="outline" className="border-slate-500 bg-background text-foreground">
@@ -156,7 +162,9 @@ export function SignupModuleSelection({
         <fieldset className="mt-5">
           <legend className="text-sm font-black text-foreground">Optional modules</legend>
           <p id="optional-modules-help" className="mt-1 text-xs leading-5 text-muted-foreground">
-            Monthly prices are added to the plan total; annual prices include the annual billing discount. Choices incompatible with the selected business type are excluded automatically.
+            {quoteOnly
+              ? "Select any modules you want to discuss. Prices stay private until customer service prepares your quote."
+              : "Monthly prices are added to the plan total; annual prices include the annual billing discount. Choices incompatible with the selected business type are excluded automatically."}
           </p>
           <ul className="mt-3 grid gap-3 md:grid-cols-2" aria-describedby="optional-modules-help">
             {optionalModules.map((module) => {
@@ -200,8 +208,8 @@ export function SignupModuleSelection({
                           ) : null}
                         </span>
                         <span className="mt-1 block text-xs leading-5 text-muted-foreground">{module.description}</span>
-                        <span className="mt-2 block text-xs font-bold text-foreground">{formatModulePrice(module)}</span>
-                        {Number(module.monthly_price_etb ?? 0) > 0 ? <AnnualPrice monthlyPrice={Number(module.monthly_price_etb)} discountPercent={yearlyDiscountPercent} /> : null}
+                        <span className="mt-2 block text-xs font-bold text-foreground">{formatModulePrice(module, quoteOnly)}</span>
+                        {!quoteOnly && Number(module.monthly_price_etb ?? 0) > 0 ? <AnnualPrice monthlyPrice={Number(module.monthly_price_etb)} discountPercent={yearlyDiscountPercent} /> : null}
                         <SubmoduleList module={module} />
                       </span>
                     </span>
