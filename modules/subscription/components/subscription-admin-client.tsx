@@ -227,6 +227,7 @@ type PlanDraft = {
   mail_storage_quota_mb: number;
   trial_days: number;
   status: "active" | "inactive";
+  is_hidden: boolean;
   enabled_modules: string[];
 };
 
@@ -1159,6 +1160,7 @@ function PlanMatrix({
           mail_storage_quota_mb: plan.mail_storage_quota_mb,
           trial_days: plan.trial_days ?? 0,
           status: plan.status,
+          is_hidden: plan.is_hidden ?? false,
           enabled_modules: planDefaults[plan.slug] ?? [],
         },
       ])
@@ -1349,11 +1351,20 @@ function PlanMatrix({
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center justify-between gap-1">
                         <span className="font-bold text-foreground">{plan.name}</span>
+                        <div className="flex items-center gap-1">
+                          {(drafts[plan.slug]?.is_hidden ?? plan.is_hidden) ? (
+                            <Badge variant="secondary" className="px-1.5 py-0 text-[9px]">Hidden</Badge>
+                          ) : null}
+                          {(drafts[plan.slug]?.status ?? plan.status) === "inactive" ? (
+                            <Badge variant="outline" className="px-1.5 py-0 text-[9px]">Disabled</Badge>
+                          ) : null}
+                        </div>
                         <button
                           type="button"
                           onClick={() => setEditingPlan(plan)}
                           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                          title={`Edit ${plan.name} quotas & price`}
+                          aria-label={`Edit ${plan.name} subscription settings`}
+                          title={`Edit ${plan.name} subscription settings`}
                         >
                           <Edit3 className="h-3.5 w-3.5" />
                         </button>
@@ -1556,6 +1567,30 @@ function PlanMatrix({
                   <option value="inactive">Inactive</option>
                 </select>
               </label>
+
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border p-4">
+                <div>
+                  <label htmlFor={`plan-hidden-${editingPlan.slug}`} className="font-semibold text-foreground">
+                    Hide from public catalogue
+                  </label>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Hidden plans disappear publicly. Disabled plans can remain visible but cannot be selected.
+                  </p>
+                </div>
+                <Switch
+                  id={`plan-hidden-${editingPlan.slug}`}
+                  checked={drafts[editingPlan.slug]?.is_hidden ?? editingPlan.is_hidden ?? false}
+                  onCheckedChange={(checked) =>
+                    setDrafts((curr) => ({
+                      ...curr,
+                      [editingPlan.slug]: {
+                        ...curr[editingPlan.slug],
+                        is_hidden: checked,
+                      },
+                    }))
+                  }
+                />
+              </div>
             </div>
 
             <DialogFooter>

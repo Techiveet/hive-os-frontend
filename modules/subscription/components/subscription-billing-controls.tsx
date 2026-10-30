@@ -83,7 +83,7 @@ export function SubscriptionBillingControls({ policy, coupons, plans }: Props) {
   const policyMutation = useMutation({
     mutationFn: () => updateSubscriptionBillingPolicy(draft),
     onSuccess: async () => {
-      toast.success("Billing policy saved.");
+      toast.success("Subscription policy saved.");
       await queryClient.invalidateQueries({ queryKey: ["subscription-admin"] });
     },
     onError: (error) => toast.error(errorMessage(error, "Could not save the billing policy.")),
@@ -158,6 +158,66 @@ export function SubscriptionBillingControls({ policy, coupons, plans }: Props) {
         </AlertDescription>
       </Alert>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Public subscription catalogue</CardTitle>
+          <CardDescription>Choose what visitors can see and whether they can start checkout without customer service.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FieldGroup>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="public-catalog-mode">Public subscription mode</FieldLabel>
+                <NativeSelect
+                  id="public-catalog-mode"
+                  value={draft.public_catalog_mode}
+                  onChange={(event) => setDraft((current) => ({
+                    ...current,
+                    public_catalog_mode: event.target.value as SubscriptionBillingPolicy["public_catalog_mode"],
+                  }))}
+                  className="w-full"
+                >
+                  <NativeSelectOption value="quote_only">Quote only — hide prices and checkout</NativeSelectOption>
+                  <NativeSelectOption value="self_service">Self-service — show prices and checkout</NativeSelectOption>
+                </NativeSelect>
+                <FieldDescription>Quote-only mode is also enforced by the API, so direct checkout requests are rejected.</FieldDescription>
+              </Field>
+
+              <Field orientation="horizontal" className="rounded-xl border p-4">
+                <div className="flex-1">
+                  <FieldLabel htmlFor="public-show-all-modules">Show every module publicly</FieldLabel>
+                  <FieldDescription>Visitors can browse the complete module catalogue before requesting a quote.</FieldDescription>
+                </div>
+                <Switch
+                  id="public-show-all-modules"
+                  checked={draft.public_show_all_modules}
+                  onCheckedChange={(checked) => setDraft((current) => ({ ...current, public_show_all_modules: checked }))}
+                />
+              </Field>
+            </div>
+
+            <Field>
+              <FieldLabel htmlFor="public-quote-message">Customer-service quote message</FieldLabel>
+              <Textarea
+                id="public-quote-message"
+                value={draft.public_quote_message}
+                onChange={(event) => setDraft((current) => ({ ...current, public_quote_message: event.target.value }))}
+                maxLength={500}
+              />
+              <FieldDescription>This message appears on the public catalogue and is returned when quote-only checkout is attempted.</FieldDescription>
+            </Field>
+
+            {draft.public_catalog_mode === "quote_only" ? (
+              <Alert>
+                <CreditCard aria-hidden="true" />
+                <AlertTitle>Quote-only mode is selected</AlertTitle>
+                <AlertDescription>Public prices and payment controls stay hidden. Visitors can review modules and contact customer service for a tailored quote.</AlertDescription>
+              </Alert>
+            ) : null}
+          </FieldGroup>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.6fr)]">
         <Card>
           <CardHeader>
@@ -223,7 +283,7 @@ export function SubscriptionBillingControls({ policy, coupons, plans }: Props) {
 
               <Button type="button" onClick={() => policyMutation.mutate()} disabled={policyMutation.isPending} className="w-fit">
                 {policyMutation.isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Save aria-hidden="true" />}
-                Save billing policy
+                Save subscription policy
               </Button>
             </FieldGroup>
           </CardContent>
