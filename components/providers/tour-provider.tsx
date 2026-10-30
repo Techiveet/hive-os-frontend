@@ -26,13 +26,15 @@ export const useTour = () => {
 
 const CustomTooltip = React.forwardRef<HTMLDivElement, TooltipRenderProps & { totalSteps?: number }>(
     ({ index, step, backProps, closeProps, primaryProps, skipProps, tooltipProps, isLastStep, totalSteps }, ref) => {
-        const { t, locale } = useTranslation();
+        const { t } = useTranslation();
 
         if (!step) return null;
 
         const total = totalSteps ?? 0;
         const current = index + 1;
         const progress = total > 0 ? Math.round((current / total) * 100) : 0;
+        const titleId = `hive-tour-step-${index}-title`;
+        const contentId = `hive-tour-step-${index}-content`;
 
         const safeTooltipProps = tooltipProps as React.HTMLAttributes<HTMLDivElement>;
 
@@ -50,7 +52,9 @@ const CustomTooltip = React.forwardRef<HTMLDivElement, TooltipRenderProps & { to
                 {...tooltipProps}
                 ref={ref}
                 style={combinedStyle}
-                className="w-[380px] p-6 border-2 border-primary/30 flex flex-col relative overflow-hidden bg-card text-card-foreground shadow-2xl"
+                aria-labelledby={step.title ? titleId : undefined}
+                aria-describedby={contentId}
+                className="w-[min(380px,calc(100vw-2rem))] p-5 sm:p-6 border-2 border-primary/30 flex flex-col relative overflow-hidden bg-card text-card-foreground shadow-2xl"
             >
                 {/* 🚀 BRANDED GLOW ACCENT */}
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary to-transparent opacity-60" />
@@ -68,22 +72,22 @@ const CustomTooltip = React.forwardRef<HTMLDivElement, TooltipRenderProps & { to
 
                 <div className="mb-6 mt-2 pr-6">
                     {total > 0 && (
-                        <p className="mb-3 text-[11px] font-black uppercase tracking-[0.2em] text-primary">
+                        <p className="mb-3 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400">
                             {t("tour.step_counter", "Step {current} of {total}")
                                 .replace("{current}", String(current))
                                 .replace("{total}", String(total))}
                         </p>
                     )}
                     {step.title && (
-                        <h3 className="font-space font-black text-xl tracking-tight mb-3 text-foreground flex items-center gap-3">
-                            <span className="relative flex h-3 w-3 shrink-0">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <h2 id={titleId} className="font-space font-black text-xl tracking-tight mb-3 text-foreground flex items-center gap-3">
+                            <span aria-hidden="true" className="relative flex h-3 w-3 shrink-0">
+                                <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
                             </span>
                             {step.title}
-                        </h3>
+                        </h2>
                     )}
-                    <div className="text-sm text-muted-foreground font-medium leading-relaxed tracking-wide">
+                    <div id={contentId} className="text-sm text-muted-foreground font-medium leading-relaxed tracking-wide">
                         {step.content}
                     </div>
                 </div>
@@ -98,7 +102,7 @@ const CustomTooltip = React.forwardRef<HTMLDivElement, TooltipRenderProps & { to
                         aria-label={t("tour.progress", "Tour progress")}
                     >
                         <div
-                            className="h-full rounded-full bg-primary transition-all duration-300"
+                            className="h-full rounded-full bg-primary transition-all duration-300 motion-reduce:transition-none"
                             style={{ width: `${progress}%` }}
                         />
                     </div>
@@ -122,7 +126,7 @@ const CustomTooltip = React.forwardRef<HTMLDivElement, TooltipRenderProps & { to
                                 className="h-9 rounded-xl text-xs font-bold px-4 border-border/60 hover:bg-muted/50 transition-colors active:scale-95 flex items-center gap-1.5"
                                 {...backProps}
                             >
-                                <ArrowLeft className="h-3.5 w-3.5" />
+                                <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
                                 {t("tour.back", "Back")}
                             </Button>
                         )}
@@ -133,13 +137,13 @@ const CustomTooltip = React.forwardRef<HTMLDivElement, TooltipRenderProps & { to
                         >
                             {isLastStep ? (
                                 <>
-                                    <Check className="h-3.5 w-3.5" />
+                                    <Check aria-hidden="true" className="h-3.5 w-3.5" />
                                     {t("tour.finish", "Finish")}
                                 </>
                             ) : (
                                 <>
                                     {t("tour.next", "Next")}
-                                    <ArrowRight className="h-3.5 w-3.5" />
+                                    <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
                                 </>
                             )}
                         </Button>
@@ -166,50 +170,12 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
             const el = typeof target === "string" ? document.querySelector<HTMLElement>(target) : target;
             if (!el || !(el instanceof HTMLElement) || !el.isConnected) return;
 
-            // 1. If element is inside the sidebar navigation container, scroll that container smoothly
-            const sidebarNav = document.querySelector<HTMLElement>("#tour-sidebar-nav");
-            if (sidebarNav && sidebarNav.contains(el)) {
-                const navRect = sidebarNav.getBoundingClientRect();
-                const elRect = el.getBoundingClientRect();
-                // Check if element is already comfortably visible inside the sidebar viewport
-                const isComfortablyVisible =
-                    elRect.top >= navRect.top + 30 && elRect.bottom <= navRect.bottom - 30;
-
-                if (!isComfortablyVisible) {
-                    const offset = elRect.top - navRect.top - (navRect.height / 2) + (elRect.height / 2);
-                    sidebarNav.scrollBy({
-                        top: offset,
-                        behavior: "smooth",
-                    });
-                }
-                return;
-            }
-
-            // 2. If element is inside the main scroll container, scroll it smoothly
-            const mainContent =
-                document.querySelector<HTMLElement>("main.overflow-y-auto") ||
-                document.querySelector<HTMLElement>("main");
-            if (mainContent && mainContent.contains(el)) {
-                const mainRect = mainContent.getBoundingClientRect();
-                const elRect = el.getBoundingClientRect();
-                const isComfortablyVisible =
-                    elRect.top >= mainRect.top + 40 && elRect.bottom <= mainRect.bottom - 40;
-
-                if (!isComfortablyVisible) {
-                    const offset = elRect.top - mainRect.top - (mainRect.height / 2) + (elRect.height / 2);
-                    mainContent.scrollBy({
-                        top: offset,
-                        behavior: "smooth",
-                    });
-                }
-                return;
-            }
-
-            // 3. Fallback for topbar / body elements: minimal scroll to avoid viewport jitter
+            // Synchronous positioning lets Joyride measure the final geometry. Native
+            // scrolling also handles nested vertical and horizontal containers.
             el.scrollIntoView({
-                behavior: "smooth",
-                block: "nearest",
-                inline: "nearest",
+                behavior: "auto",
+                block: "center",
+                inline: "center",
             });
         } catch {
             // Ignore selector syntax errors if any
@@ -263,6 +229,14 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const startTour = useCallback((newSteps: Step[], type: 'welcome' | 'system' = 'system') => {
+        if (newSteps.length === 0) {
+            setRun(false);
+            setSteps([]);
+            setStepIndex(0);
+            safeLocalStorageRemoveItem('hive_tour_running');
+            return;
+        }
+
         // Immediately record tour state so background timers and auto-scrolls stand down
         safeLocalStorageSetItem('hive_tour_running', 'true');
         safeLocalStorageSetItem('hive_welcome_tour_completed', 'true');
@@ -277,13 +251,17 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
             const didSwitch = switchTabSync(stepData?.switchTab, stepData?.tabSelector);
 
             if (didSwitch) {
-                setTimeout(() => setRun(true), 350);
+                setTimeout(() => {
+                    scrollTargetIntoView(firstStep.target as string | HTMLElement);
+                    setRun(true);
+                }, 350);
                 return;
             }
+            scrollTargetIntoView(firstStep.target as string | HTMLElement);
         }
 
         setTimeout(() => setRun(true), 150);
-    }, [switchTabSync]);
+    }, [scrollTargetIntoView, switchTabSync]);
 
     const stopTour = useCallback(() => {
         setRun(false);
@@ -318,8 +296,29 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
     const handleJoyrideEvent = (data: EventData) => {
         const { status, type, action, index, step } = data;
 
+        const finishCurrentTour = (isFinished: boolean) => {
+            setRun(false);
+            setStepIndex(0);
+            safeLocalStorageRemoveItem('hive_tour_running');
+            if (tabTransitionTimer.current) clearTimeout(tabTransitionTimer.current);
+
+            if (tourType === 'welcome') {
+                safeLocalStorageSetItem('hive_welcome_tour_completed', 'true');
+                if (isFinished) syncTourCompletion();
+            } else {
+                safeLocalStorageSetItem('hive_tour_completed', 'true');
+            }
+        };
+
         if (action === ACTIONS.CLOSE) {
             stopTour();
+            return;
+        }
+
+        // The final step can be reported either as a terminal status or as a
+        // STEP_AFTER event beyond the controlled step range.
+        if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
+            finishCurrentTour(status === STATUS.FINISHED);
             return;
         }
 
@@ -329,6 +328,11 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
             }
         } else if (type === EVENTS.STEP_AFTER) {
             const nextIndex = index + (action === 'prev' ? -1 : 1);
+
+            if (action !== 'prev' && nextIndex >= steps.length) {
+                finishCurrentTour(true);
+                return;
+            }
 
             if (nextIndex >= 0 && nextIndex < steps.length) {
                 const nextStep = steps[nextIndex];
@@ -390,19 +394,6 @@ export const TourProvider = ({ children }: { children: React.ReactNode }) => {
                 setStepIndex(nextIdx);
             } else {
                 stopTour();
-            }
-        } else if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
-            const isFinished = status === STATUS.FINISHED;
-            setRun(false);
-            setStepIndex(0);
-            safeLocalStorageRemoveItem('hive_tour_running');
-            if (tabTransitionTimer.current) clearTimeout(tabTransitionTimer.current);
-
-            if (tourType === 'welcome') {
-                safeLocalStorageSetItem('hive_welcome_tour_completed', 'true');
-                if (isFinished) syncTourCompletion();
-            } else {
-                safeLocalStorageSetItem('hive_tour_completed', 'true');
             }
         }
     };
