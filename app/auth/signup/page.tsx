@@ -333,6 +333,8 @@ export default function TenantSignupPage() {
   const planDefaults = (catalogPayload.plan_defaults ?? {}) as Record<string, string[]>;
   const billingPolicy = catalogPayload.billing_policy as SubscriptionBillingPolicy | undefined;
   const quoteOnly = billingPolicy?.public_catalog_mode !== "self_service";
+  const showSubscriptionTypes = billingPolicy?.public_show_subscription_types ?? false;
+  const publicQuoteExperience = quoteOnly || !showSubscriptionTypes;
   const quoteMessage = billingPolicy?.public_quote_message || "Contact customer service for a tailored quote.";
   const businessTypes = useMemo(
     () => resolveBusinessTypeCatalog(catalogPayload.business_types ?? FALLBACK_TENANT_BUSINESS_TYPES),
@@ -344,6 +346,8 @@ export default function TenantSignupPage() {
   );
   const activeBusinessType = businessTypeMap[businessType] ?? businessTypes[0] ?? FALLBACK_TENANT_BUSINESS_TYPES[0];
   const planOptions = useMemo<SignupPlan[]>(() => {
+    if (!showSubscriptionTypes) return [];
+
     const hasLivePlans = Object.keys(planPricing).length > 0;
 
     return PLAN_ORDER.flatMap((planKey) => {
@@ -373,7 +377,7 @@ export default function TenantSignupPage() {
         features: buildPlanFeatures(planKey, fallback, planDefaults, catalogModules, storageLabel),
       }];
     });
-  }, [catalogModules, planDefaults, planPricing]);
+  }, [catalogModules, planDefaults, planPricing, showSubscriptionTypes]);
 
   const planMap = useMemo(
     () => Object.fromEntries(planOptions.map((plan) => [plan.key, plan])),
@@ -775,7 +779,7 @@ export default function TenantSignupPage() {
 
   // ── Validation ──────────────────────────────────────────────────────────
   const canGoToWorkspace = availablePlanKeys.includes(selectedPlan);
-  const canGoToCheckout = !quoteOnly && orgName.trim().length >= 2 && tenantId.length >= 3 && !tenantIdError
+  const canGoToCheckout = !publicQuoteExperience && orgName.trim().length >= 2 && tenantId.length >= 3 && !tenantIdError
     && adminName.trim().length >= 2 && adminEmail.includes("@") && adminPassword.length >= 8;
   const directTransferSelected = requiresSignupPayment && checkoutChannel === "direct_transfer";
   const gatewaySelected = requiresSignupPayment && checkoutChannel !== "direct_transfer";
@@ -787,7 +791,7 @@ export default function TenantSignupPage() {
     && (!directTransferSelected || manualTransactionReference.trim().length >= 4);
 
   const handleCheckout = () => {
-    if (quoteOnly) {
+    if (publicQuoteExperience) {
       setError(quoteMessage);
       return;
     }
@@ -870,14 +874,15 @@ export default function TenantSignupPage() {
                 Deploy Your <span className="text-primary">Hive Node</span>
               </h1>
               <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base">
-                Choose a plan, configure your workspace, and get your isolated tenant environment
-                provisioned in minutes through {providerLabel}.
+                {publicQuoteExperience
+                  ? "Browse every Hive module, then contact customer service for a rollout-ready quote."
+                  : `Choose a plan, configure your workspace, and provision your isolated tenant through ${providerLabel}.`}
               </p>
             </div>
           )}
 
           {/* Step indicator */}
-          {step !== "confirm" && (
+          {!publicQuoteExperience && step !== "confirm" && (
             <div className="mb-10">
               <div className="flex items-center justify-center gap-0 mb-4">
                 {STEPS.map((s, i) => {
@@ -899,7 +904,7 @@ export default function TenantSignupPage() {
                         </div>
                         <span className={cn("text-[11px] font-bold uppercase tracking-widest hidden sm:block",
                           active ? "text-foreground" : "text-muted-foreground"
-                        )}>{s.label}</span>
+                        )}>{!showSubscriptionTypes && s.key === "plan" ? "Explore Modules" : s.label}</span>
                       </div>
                       {i < STEPS.length - 1 && (
                         <div className={cn("flex-1 max-w-16 h-0.5 transition-all", i < stepIndex ? "bg-emerald-700 dark:bg-emerald-300" : "bg-border")} />
@@ -929,7 +934,7 @@ export default function TenantSignupPage() {
                 </Alert>
               ) : null}
 
-              {mounted && !catalogLoading && quoteOnly ? (
+              {mounted && !catalogLoading && publicQuoteExperience ? (
                 <Alert className="mb-6 border-primary/40 bg-primary/5">
                   <ShieldCheck className="h-4 w-4" />
                   <AlertDescription>
@@ -944,7 +949,9 @@ export default function TenantSignupPage() {
                   What kind of business are you registering? <span aria-hidden="true">*</span>
                 </Label>
                 <p id="signup-business-type-help" className="mt-1 text-xs leading-5 text-muted-foreground">
-                  This filters compatible modules and templates. Central administrators manage these choices in Business Types.
+                  {publicQuoteExperience
+                    ? "This helps customer service understand your organization. The complete module catalogue remains visible below."
+                    : "This filters compatible modules and templates. Central administrators manage these choices in Business Types."}
                 </p>
                 <Select value={businessType} onValueChange={setBusinessType}>
                   <SelectTrigger id="signup-business-type" aria-describedby="signup-business-type-help" className="mt-3 h-12 border-slate-500 bg-background focus:ring-2 focus:ring-primary">
@@ -959,7 +966,8 @@ export default function TenantSignupPage() {
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">{activeBusinessType.description}</p>
               </div>
 
-              <fieldset className="mb-8">
+              {showSubscriptionTypes ? (
+                <fieldset className="mb-8">
                 <legend className="sr-only">Subscription plan</legend>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 {planOptions.map(meta => {
@@ -1007,7 +1015,7 @@ export default function TenantSignupPage() {
                       <p className="text-[11px] text-muted-foreground mb-3">{meta.tagline}</p>
 
                       <div className="mb-3">
-                        {quoteOnly ? (
+                        {publicQuoteExperience ? (
                           <span className="text-lg font-black text-foreground">Custom quote</span>
                         ) : (
                           <>
@@ -1036,8 +1044,9 @@ export default function TenantSignupPage() {
                   );
                 })}
                 </div>
-              </fieldset>
-              {planOptions.length === 0 && (
+                </fieldset>
+              ) : null}
+              {showSubscriptionTypes && planOptions.length === 0 && (
                 <Alert variant="destructive" className="mb-8 bg-destructive/5 border-destructive/20">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription className="text-xs font-mono">
@@ -1047,7 +1056,7 @@ export default function TenantSignupPage() {
               )}
 
               {/* Selected plan summary */}
-              {canGoToWorkspace && (
+              {showSubscriptionTypes && canGoToWorkspace && (
                 <div className={cn(
                   "rounded-[2rem] border p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5 mb-6",
                   `ring-1 ${planMeta.ring} border-transparent bg-gradient-to-br ${planMeta.bg}`
@@ -1067,7 +1076,7 @@ export default function TenantSignupPage() {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    {quoteOnly ? (
+                    {publicQuoteExperience ? (
                       <p className="text-lg font-black text-foreground">Tailored quote</p>
                     ) : (
                       <>
@@ -1076,12 +1085,12 @@ export default function TenantSignupPage() {
                         <AnnualPrice monthlyPrice={planMeta.monthlyPriceEtb} discountPercent={billingPolicy?.yearly_discount_percent} />
                       </>
                     )}
-                    {!quoteOnly && isFree && <Badge className="mt-1 border-none bg-emerald-500/10 text-[11px] text-emerald-700 dark:text-emerald-300">No card required</Badge>}
+                    {!publicQuoteExperience && isFree && <Badge className="mt-1 border-none bg-emerald-500/10 text-[11px] text-emerald-700 dark:text-emerald-300">No card required</Badge>}
                   </div>
                 </div>
               )}
 
-              {canGoToWorkspace ? (
+              {(!showSubscriptionTypes || canGoToWorkspace) ? (
                 <div className="mb-6">
                   <SignupModuleSelection
                     modules={catalogModules}
@@ -1091,13 +1100,13 @@ export default function TenantSignupPage() {
                     selectedModules={selectedModules}
                     onSelectedModulesChange={setSelectedModules}
                     yearlyDiscountPercent={billingPolicy?.yearly_discount_percent}
-                    quoteOnly={quoteOnly}
+                    quoteOnly={publicQuoteExperience}
                   />
                 </div>
               ) : null}
 
               <div className="flex justify-end">
-                {quoteOnly ? (
+                {publicQuoteExperience ? (
                   <Button asChild className="rounded-full px-8 font-bold gap-2 shadow-lg shadow-primary/20" size="lg">
                     <Link href="/request-demo">
                       Contact customer service for a quote <ArrowRight className="h-4 w-4" />
@@ -1303,7 +1312,7 @@ export default function TenantSignupPage() {
           )}
 
           {/* ─── STEP 3: CHECKOUT ──────────────────────────────────────── */}
-          {!quoteOnly && step === "checkout" && (
+          {!publicQuoteExperience && step === "checkout" && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto">
               {error && (
                 <div ref={checkoutErrorRef} tabIndex={-1} className="mb-6 flex gap-3 rounded-lg border border-destructive bg-destructive/5 p-4 text-destructive outline-none focus-visible:ring-2 focus-visible:ring-primary">

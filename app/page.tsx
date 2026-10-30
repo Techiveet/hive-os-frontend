@@ -562,10 +562,14 @@ function LandingUI({
   const planPricing = (catalogPayload.plan_pricing ?? {}) as Record<string, CatalogPlan>;
   const annualDiscount = catalogPayload.billing_policy?.yearly_discount_percent;
   const quoteOnly = catalogPayload.billing_policy?.public_catalog_mode !== "self_service";
+  const showSubscriptionTypes = catalogPayload.billing_policy?.public_show_subscription_types ?? false;
+  const publicQuoteExperience = quoteOnly || !showSubscriptionTypes;
   const quoteMessage = catalogPayload.billing_policy?.public_quote_message || "Contact customer service for a tailored quote.";
   const planDefaults = (catalogPayload.plan_defaults ?? {}) as Record<string, string[]>;
 
   const dynamicPlans = useMemo(() => {
+    if (!showSubscriptionTypes) return [];
+
     const hasLivePlans = Object.keys(planPricing).length > 0;
 
     return PLAN_ORDER.flatMap((planKey) => {
@@ -596,7 +600,7 @@ function LandingUI({
         isDisabled: Boolean(pricing?.is_disabled),
       }];
     });
-  }, [catalogModules, planDefaults, planPricing]);
+  }, [catalogModules, planDefaults, planPricing, showSubscriptionTypes]);
 
   // Same reason as catalogPayload above: brand data can land before this tree
   // hydrates, and the server rendered the defaults (title, footer text, logo).
@@ -1628,9 +1632,9 @@ function LandingUI({
         <SectionShell id="pricing" tone="raised" glow="primary" innerClassName="max-w-7xl">
           <SectionHeading
             eyebrow={t("landing.pricing.badge", "Subscription plans")}
-            title={quoteOnly ? "Every module." : t("landing.pricing.title_part1", "Transparent")}
-            accent={quoteOnly ? "Tailored quote." : t("landing.pricing.title_part2", "Pricing")}
-            description={quoteOnly
+            title={publicQuoteExperience ? "Every module." : t("landing.pricing.title_part1", "Transparent")}
+            accent={publicQuoteExperience ? "Tailored quote." : t("landing.pricing.title_part2", "Pricing")}
+            description={publicQuoteExperience
               ? quoteMessage
               : t(
                   "landing.pricing.desc",
@@ -1640,7 +1644,8 @@ function LandingUI({
 
           <div>
             {/* Plan grid */}
-            <RevealGroup step={0.07} className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
+            {showSubscriptionTypes ? (
+              <RevealGroup step={0.07} className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
               {dynamicPlans.map((plan) => {
                 const PlanIcon = plan.icon;
                 return (
@@ -1678,7 +1683,7 @@ function LandingUI({
                       <p className="mb-5 text-xs text-muted-foreground min-h-[32px] line-clamp-2">{plan.tagline}</p>
 
                       <div className="flex items-baseline gap-1">
-                        {quoteOnly ? (
+                        {publicQuoteExperience ? (
                           <span className="font-space text-xl font-bold leading-none tracking-tight">Custom quote</span>
                         ) : (
                           <>
@@ -1691,7 +1696,7 @@ function LandingUI({
                       </div>
 
                       <div className="mb-5">
-                        {quoteOnly ? (
+                        {publicQuoteExperience ? (
                           <p className="mt-2 text-xs leading-5 text-muted-foreground">Customer service will tailor modules, capacity, and support to your organization.</p>
                         ) : (
                           <AnnualPrice monthlyPrice={plan.monthlyPriceEtb} discountPercent={annualDiscount} />
@@ -1717,7 +1722,7 @@ function LandingUI({
                           Temporarily unavailable
                         </Button>
                       ) : (
-                        <Link href={quoteOnly ? "/request-demo" : `/auth/signup?plan=${plan.key}`} className="mt-auto block">
+                        <Link href={publicQuoteExperience ? "/request-demo" : `/auth/signup?plan=${plan.key}`} className="mt-auto block">
                           <Button
                             size="sm"
                             className={cn(
@@ -1728,7 +1733,7 @@ function LandingUI({
                             )}
                             variant={plan.highlight ? "default" : "outline"}
                           >
-                            {quoteOnly ? "Request a quote" : t("landing.pricing.get_started", "Get Started")}
+                            {publicQuoteExperience ? "Request a quote" : t("landing.pricing.get_started", "Get Started")}
                             <ArrowRight className="h-3 w-3" />
                           </Button>
                         </Link>
@@ -1737,9 +1742,10 @@ function LandingUI({
                   </RevealItem>
                 );
               })}
-            </RevealGroup>
+              </RevealGroup>
+            ) : null}
 
-            {quoteOnly && catalogModules.length > 0 ? (
+            {publicQuoteExperience && catalogModules.length > 0 ? (
               <section aria-labelledby="all-modules-heading" className="mt-10 rounded-3xl border border-border/60 bg-card/30 p-6 backdrop-blur-sm">
                 <div className="max-w-3xl">
                   <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Complete module catalogue</p>

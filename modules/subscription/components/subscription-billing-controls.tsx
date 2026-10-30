@@ -166,6 +166,18 @@ export function SubscriptionBillingControls({ policy, coupons, plans }: Props) {
         <CardContent>
           <FieldGroup>
             <div className="grid gap-4 md:grid-cols-2">
+              <Field orientation="horizontal" className="rounded-xl border p-4">
+                <div className="flex-1">
+                  <FieldLabel htmlFor="public-show-subscription-types">Show subscription types publicly</FieldLabel>
+                  <FieldDescription>Turn this off during rollout to hide every plan card while keeping the module catalogue and quote request available.</FieldDescription>
+                </div>
+                <Switch
+                  id="public-show-subscription-types"
+                  checked={draft.public_show_subscription_types}
+                  onCheckedChange={(checked) => setDraft((current) => ({ ...current, public_show_subscription_types: checked }))}
+                />
+              </Field>
+
               <Field>
                 <FieldLabel htmlFor="public-catalog-mode">Public subscription mode</FieldLabel>
                 <NativeSelect
@@ -207,7 +219,13 @@ export function SubscriptionBillingControls({ policy, coupons, plans }: Props) {
               <FieldDescription>This message appears on the public catalogue and is returned when quote-only checkout is attempted.</FieldDescription>
             </Field>
 
-            {draft.public_catalog_mode === "quote_only" ? (
+            {!draft.public_show_subscription_types ? (
+              <Alert>
+                <CreditCard aria-hidden="true" />
+                <AlertTitle>Subscription types are hidden</AlertTitle>
+                <AlertDescription>Visitors will see the complete module catalogue and customer-service quote action without any plan cards or public checkout.</AlertDescription>
+              </Alert>
+            ) : draft.public_catalog_mode === "quote_only" ? (
               <Alert>
                 <CreditCard aria-hidden="true" />
                 <AlertTitle>Quote-only mode is selected</AlertTitle>
