@@ -406,12 +406,32 @@ export default function InventoryProductsPage() {
     () => {
       const cols: ColumnDef<ProductRecord>[] = [
       {
+        id: "incremental_id",
+        header: "#",
+        size: 56,
+        enableSorting: false,
+        enableHiding: false,
+        meta: {
+          sticky: "left" as const,
+          stickyOffset: 48,
+          className: "w-[56px] min-w-[56px] max-w-[56px] text-center font-mono text-xs font-semibold text-muted-foreground",
+        },
+        cell: ({ row }) => {
+          const index = (tableQuery.page - 1) * tableQuery.pageSize + row.index + 1;
+          return (
+            <div className="flex items-center justify-center font-mono text-xs font-bold text-muted-foreground">
+              {index}
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: "name",
         header: () => <span id="tour-products-table-anchor">{t("inventory.products.col_name", "Product")}</span>,
         size: 340,
         meta: {
           sticky: "left" as const,
-          stickyOffset: 48,
+          stickyOffset: 104,
           className: "w-[340px] min-w-[340px] max-w-[340px] overflow-hidden",
         },
         cell: ({ row }) => {
@@ -795,7 +815,7 @@ export default function InventoryProductsPage() {
     }
     return cols;
   },
-  [deleteMutation, openDetailSheet, openEdit, openQaDialog, queryClient, t, hasModule, hasBusinessType]
+  [deleteMutation, openDetailSheet, openEdit, openQaDialog, queryClient, t, hasModule, hasBusinessType, tableQuery.page, tableQuery.pageSize]
 );
 
   const resetAllFilters = React.useCallback(() => {
