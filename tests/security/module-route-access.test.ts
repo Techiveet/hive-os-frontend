@@ -21,10 +21,18 @@ type User = Parameters<typeof import("../../lib/dashboard-access").canAccessDash
 void (async () => {
 const { canAccessDashboardPath } = await import("../../lib/dashboard-access");
 
-const tenantUser = (modules: string[], permissions: string[], roles: string[] = ["Accountant"]): User => ({
+const tenantUser = (
+  modules: string[],
+  permissions: string[],
+  roles: string[] = ["Accountant"],
+  mode: "all" | "selected" = "all",
+): User => ({
   roles,
   permissions,
-  module_access: { statuses: Object.fromEntries(modules.map((slug) => [slug, { active: true }])) },
+  module_access: {
+    submodule_mode: mode,
+    statuses: Object.fromEntries(modules.map((slug) => [slug, { active: true }])),
+  },
 });
 
 // ── Tenant without the finance module ────────────────────────────────────
@@ -52,12 +60,30 @@ assert.equal(canAccessDashboardPath("/dashboard/finance/journals", journalClerk)
 const superAdminWithFinance = tenantUser(["financial_management"], [], ["Super Admin"]);
 assert.equal(canAccessDashboardPath("/dashboard/finance/settings", superAdminWithFinance), true);
 
-// Central-control override (impersonating admin) bypasses the subscription check.
+// A tenant cannot bypass its module subscription with a central-control flag.
 assert.equal(
   canAccessDashboardPath("/dashboard/finance", { ...noFinance, central_control_override: true }),
-  true,
-  "central override bypasses module subscriptions",
+  false,
+  "tenant override cannot bypass module subscriptions",
 );
+
+// An explicitly selected demo lease must not inherit independent HR modules.
+const exactDemo = tenantUser(
+  ["inventory_control", "warehouse_management", "attendance_management", "human_resources"],
+  [],
+  ["Super Admin"],
+  "selected",
+);
+for (const path of ["/dashboard/identity-cards", "/dashboard/payroll", "/dashboard/daily-reports"]) {
+  assert.equal(canAccessDashboardPath(path, exactDemo), false, `${path} needs its own selected module`);
+}
+for (const path of ["/dashboard/inventory", "/dashboard/warehouse", "/dashboard/attendance", "/dashboard/human-resources"]) {
+  assert.equal(canAccessDashboardPath(path, exactDemo), true, `${path} remains available`);
+}
+const legacyHr = tenantUser(["human_resources"], [], ["Super Admin"]);
+for (const path of ["/dashboard/identity-cards", "/dashboard/payroll", "/dashboard/daily-reports"]) {
+  assert.equal(canAccessDashboardPath(path, legacyHr), true, `${path} keeps legacy HR access`);
+}
 
 // ── Central workspace: no subscription gating, permissions still apply ──
 asCentral();

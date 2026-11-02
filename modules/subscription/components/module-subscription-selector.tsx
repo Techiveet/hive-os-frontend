@@ -1,7 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { Check, Layers, PlusCircle, Sparkles, Trash2 } from "lucide-react";
+import {
+  Check,
+  CheckCheck,
+  Filter,
+  Layers,
+  PlusCircle,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +36,8 @@ type Props = {
   purchaseLockedModules?: boolean;
   onLockedModuleRequest?: (module: TenantCatalogModule) => void;
   showCustomModules?: boolean;
+  planDefaultsList?: string[];
+  onResetToPlanDefaults?: () => void;
 };
 
 const toneClasses: Record<string, string> = {
@@ -58,15 +71,96 @@ export function ModuleSubscriptionSelector({
   purchaseLockedModules = false,
   onLockedModuleRequest,
   showCustomModules = true,
+  planDefaultsList,
+  onResetToPlanDefaults,
 }: Props) {
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedCategory, setSelectedCategory] = React.useState<string>("all");
+  const [statusFilter, setStatusFilter] = React.useState<"all" | "selected" | "unselected" | "included" | "addon">("selected");
+
+  const categories = React.useMemo(() => {
+    const set = new Set<string>();
+    catalog.forEach((m) => {
+      if (m.category) set.add(m.category);
+    });
+    return Array.from(set).sort();
+  }, [catalog]);
+
+  const filteredCatalog = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return catalog.filter((module) => {
+      // 1. Category filter
+      if (selectedCategory !== "all" && module.category !== selectedCategory) {
+        return false;
+      }
+
+      // 2. Status filter
+      const isSelected = selectedModules.includes(module.slug);
+      if (statusFilter === "selected" && !isSelected) return false;
+      if (statusFilter === "unselected" && isSelected) return false;
+      if (statusFilter === "included" && !module.included_in_plan) return false;
+      if (statusFilter === "addon" && (module.included_in_plan || Number(module.monthly_price_etb ?? 0) <= 0)) return false;
+
+      // 3. Search query
+      if (q) {
+        const matchName = module.name?.toLowerCase().includes(q);
+        const matchDesc = module.description?.toLowerCase().includes(q);
+        const matchSlug = module.slug?.toLowerCase().includes(q);
+        const matchCat = module.category?.toLowerCase().includes(q);
+        if (!matchName && !matchDesc && !matchSlug && !matchCat) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [catalog, searchQuery, selectedCategory, selectedModules, statusFilter]);
+
   const groupedCatalog = React.useMemo(() => {
-    return catalog.reduce<Record<string, TenantCatalogModule[]>>((groups, module) => {
+    const seen = new Set<string>();
+    return filteredCatalog.reduce<Record<string, TenantCatalogModule[]>>((groups, module) => {
+      if (!module?.slug || seen.has(module.slug)) return groups;
+      seen.add(module.slug);
       const group = groups[module.category] ?? [];
       group.push(module);
       groups[module.category] = group;
       return groups;
     }, {});
-  }, [catalog]);
+  }, [filteredCatalog]);
+
+  const stats = React.useMemo(() => {
+    const totalSelected = selectedModules.length;
+    const includedCount = catalog.filter((m) => selectedModules.includes(m.slug) && m.included_in_plan).length;
+    const addonsCount = totalSelected - includedCount;
+    const addonCostEtb = catalog
+      .filter((m) => selectedModules.includes(m.slug) && !m.included_in_plan)
+      .reduce((sum, m) => sum + Number(m.monthly_price_etb ?? 0), 0);
+
+    return { totalSelected, includedCount, addonsCount, addonCostEtb };
+  }, [catalog, selectedModules]);
+
+  const handleSelectAllFiltered = () => {
+    if (disabled) return;
+    const freeOrPlanSlugs = filteredCatalog
+      .filter((m) => m.included_in_plan || !purchaseLockedModules || Number(m.monthly_price_etb ?? 0) <= 0 || m.status === "active")
+      .map((m) => m.slug);
+    const merged = Array.from(new Set([...selectedModules, ...freeOrPlanSlugs]));
+    onSelectedModulesChange(merged);
+  };
+
+  const handleDeselectAllFiltered = () => {
+    if (disabled) return;
+    const filteredSlugs = new Set(filteredCatalog.map((m) => m.slug));
+    onSelectedModulesChange(selectedModules.filter((s) => !filteredSlugs.has(s)));
+  };
+
+  const hasActiveFilters = searchQuery.trim() !== "" || selectedCategory !== "all" || statusFilter !== "all";
+
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setSelectedCategory("all");
+    setStatusFilter("all");
+  };
 
   const toggleModule = (module: TenantCatalogModule) => {
     if (disabled) return;
@@ -130,28 +224,205 @@ export function ModuleSubscriptionSelector({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
+      {/* ── Header & Live Stat Strip ── */}
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h5 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <h5 className="flex items-center gap-2 text-base font-bold text-foreground">
               <Layers className="h-4 w-4 text-primary" /> Included Catalog Modules
             </h5>
             <p className="text-xs text-muted-foreground">
-              Choose the built-in modules this tenant should be able to use.
+              Choose the built-in modules this tenant should be able to use. Free modules activate immediately.
             </p>
           </div>
-          <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-widest">
-            {selectedModules.length} selected
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="rounded-full border-primary/30 bg-primary/5 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-primary">
+              {stats.totalSelected} of {catalog.length} Active
+            </Badge>
+            {stats.includedCount > 0 ? (
+              <Badge variant="outline" className="rounded-full border-sky-300/60 bg-sky-50/70 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700 dark:border-sky-800/40 dark:bg-sky-950/20 dark:text-sky-300">
+                {stats.includedCount} Plan Included
+              </Badge>
+            ) : null}
+            {stats.addonsCount > 0 ? (
+              <Badge variant="outline" className="rounded-full border-amber-300/60 bg-amber-50/70 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-300">
+                {stats.addonsCount} Add-on{stats.addonsCount > 1 ? "s" : ""} (+ETB {stats.addonCostEtb}/mo)
+              </Badge>
+            ) : null}
+          </div>
         </div>
 
+        {/* ── Filters & Search Controls ── */}
+        <div className="rounded-2xl border border-border/60 bg-card/50 p-3 shadow-xs space-y-3">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search modules by name, slug, or keywords..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 w-full rounded-full border-border/70 bg-background/80 pl-9 pr-8 text-xs focus-visible:ring-1"
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+              {onResetToPlanDefaults ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onResetToPlanDefaults}
+                  disabled={disabled}
+                  className="h-8 rounded-full px-3 text-xs gap-1.5 font-medium hover:bg-muted"
+                  title="Reset to modules included with your current plan"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" /> Reset Plan Defaults
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSelectAllFiltered}
+                disabled={disabled || filteredCatalog.length === 0}
+                className="h-8 rounded-full px-3 text-xs gap-1 font-medium hover:bg-muted"
+              >
+                <CheckCheck className="h-3.5 w-3.5 text-primary" /> Select Free
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDeselectAllFiltered}
+                disabled={disabled || filteredCatalog.length === 0}
+                className="h-8 rounded-full px-3 text-xs font-medium hover:bg-muted"
+              >
+                Deselect Filtered
+              </Button>
+            </div>
+          </div>
+
+          {/* Category & Status Filter Pills */}
+          <div className="flex flex-col gap-2 pt-1 border-t border-border/40 sm:flex-row sm:items-center sm:justify-between text-xs">
+            {/* Status Filters */}
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="font-semibold text-muted-foreground mr-1 flex items-center gap-1">
+                <Filter className="h-3 w-3" /> Status:
+              </span>
+              {[
+                { key: "all", label: `All (${catalog.length})` },
+                { key: "selected", label: `Active (${selectedModules.length})` },
+                { key: "unselected", label: `Inactive (${catalog.length - selectedModules.length})` },
+                { key: "included", label: `Plan Included (${catalog.filter(m => m.included_in_plan).length})` },
+                { key: "addon", label: `Add-ons (${catalog.filter(m => !m.included_in_plan).length})` },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setStatusFilter(key as typeof statusFilter)}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 font-medium transition-colors",
+                    statusFilter === key
+                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                      : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Clear All Filter Action */}
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="flex items-center gap-1 font-semibold text-primary hover:underline self-start sm:self-center"
+              >
+                <X className="h-3 w-3" /> Clear filters
+              </button>
+            ) : null}
+          </div>
+
+          {/* Category Tabs */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs scrollbar-none">
+            <span className="font-semibold text-muted-foreground shrink-0 mr-1">Category:</span>
+            <button
+              type="button"
+              onClick={() => setSelectedCategory("all")}
+              className={cn(
+                "rounded-full px-2.5 py-0.5 shrink-0 transition-colors",
+                selectedCategory === "all"
+                  ? "bg-foreground text-background font-semibold"
+                  : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              All Categories
+            </button>
+            {categories.map((cat) => {
+              const countInCat = catalog.filter((m) => m.category === cat).length;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 shrink-0 transition-colors",
+                    selectedCategory === cat
+                      ? "bg-foreground text-background font-semibold"
+                      : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  {cat} ({countInCat})
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Empty Search State */}
+        {filteredCatalog.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-[1.5rem] border border-dashed border-border/70 bg-card/30 p-8 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <Search className="h-6 w-6" />
+            </div>
+            <h6 className="mt-3 font-semibold text-foreground">No matching modules found</h6>
+            <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+              No modules match your search query &quot;{searchQuery}&quot; or the selected status and category filters.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={clearAllFilters}
+              className="mt-4 rounded-full"
+            >
+              Reset Filters
+            </Button>
+          </div>
+        ) : null}
+
+        {/* ── Catalog Cards Grouped By Category ── */}
         <div className="space-y-4">
           {Object.entries(groupedCatalog).map(([category, modules]) => (
             <div key={category} className="space-y-3">
               <div className="flex items-center gap-2">
                 <div className="h-px flex-1 bg-border/60" />
                 <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
-                  {category}
+                  {category} ({modules.length})
                 </p>
                 <div className="h-px flex-1 bg-border/60" />
               </div>

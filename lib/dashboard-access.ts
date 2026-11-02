@@ -8,6 +8,7 @@ export type DashboardUserAccess = {
   module_access?: {
     statuses?: Record<string, { active?: boolean }>;
     bypass_checks?: boolean;
+    submodule_mode?: "all" | "selected";
   } | null;
   central_control_override?: boolean;
   business_type?: string | null;
@@ -51,8 +52,9 @@ export const buildRoutePermissionAccess = (user: DashboardUserAccess): RoutePerm
     hasAnyPermission: (requestedPermissions) =>
       privileged || requestedPermissions.some((permission) => permissions.includes(permission)),
     hasModule: (slug) => Boolean(user.module_access?.statuses?.[slug]?.active),
+    exactModuleScope: user.module_access?.submodule_mode === "selected",
     canBypassModuleSubscriptions: Boolean(
-      user.central_control_override || user.module_access?.bypass_checks
+      !isTenantSession() && (user.central_control_override || user.module_access?.bypass_checks)
     ),
   };
 };

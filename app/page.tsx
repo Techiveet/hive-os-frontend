@@ -47,6 +47,7 @@ import { ErpSubdomainChecker } from "@/modules/landing/components/erp-subdomain-
 import { HiveIntro } from "@/modules/landing/components/hive-intro";
 import { HiveBeacon, HiveLockup, HiveMark } from "@/modules/landing/components/hive-mark";
 import { HiveModuleMap } from "@/modules/landing/components/hive-module-map";
+import { AnnualPrice } from "@/modules/subscription/components/annual-price";
 import { fetchPublicSubscriptionCatalog } from "@/modules/subscription/api";
 import type { SignupCatalogModule } from "@/modules/subscription/components/signup-catalog-selector";
 import { Reveal, RevealGroup, RevealItem, SpotlightCard } from "@/modules/landing/components/reveal";
@@ -350,11 +351,11 @@ const PLAN_META: Record<string, PlanMeta> = {
   },
   startup: {
     label: "Startup",
-    tagline: "Launch your operations",
+    tagline: "Low-cost bundle for microbusinesses",
     color: "text-sky-500",
     bg: "from-sky-500/10 to-cyan-400/5",
     ring: "ring-sky-500/30",
-    price: "Free",
+    price: "ETB 1,199",
     priceNote: "/month",
     storageMb: 2048,
     storageLabel: "2 GB",
@@ -373,7 +374,7 @@ const PLAN_META: Record<string, PlanMeta> = {
     color: "text-indigo-500",
     bg: "from-indigo-500/10 to-violet-400/5",
     ring: "ring-indigo-500/30",
-    price: "ETB 3,499",
+    price: "ETB 2,999",
     priceNote: "/month",
     storageMb: 10240,
     storageLabel: "10 GB",
@@ -395,7 +396,7 @@ const PLAN_META: Record<string, PlanMeta> = {
     color: "text-violet-500",
     bg: "from-violet-500/10 to-purple-400/5",
     ring: "ring-violet-500/30",
-    price: "ETB 7,999",
+    price: "ETB 6,999",
     priceNote: "/month",
     storageMb: 51200,
     storageLabel: "50 GB",
@@ -416,7 +417,7 @@ const PLAN_META: Record<string, PlanMeta> = {
     color: "text-amber-500",
     bg: "from-amber-500/10 to-orange-400/5",
     ring: "ring-amber-500/30",
-    price: "ETB 12,999",
+    price: "ETB 9,999",
     priceNote: "/month",
     storageMb: 204800,
     storageLabel: "200 GB",
@@ -559,16 +560,23 @@ function LandingUI({
     [catalogPayload.catalog],
   );
   const planPricing = (catalogPayload.plan_pricing ?? {}) as Record<string, CatalogPlan>;
+  const annualDiscount = catalogPayload.billing_policy?.yearly_discount_percent;
+  const quoteOnly = catalogPayload.billing_policy?.public_catalog_mode !== "self_service";
+  const showSubscriptionTypes = catalogPayload.billing_policy?.public_show_subscription_types ?? false;
+  const publicQuoteExperience = quoteOnly || !showSubscriptionTypes;
+  const quoteMessage = catalogPayload.billing_policy?.public_quote_message || "Contact customer service for a tailored quote.";
   const planDefaults = (catalogPayload.plan_defaults ?? {}) as Record<string, string[]>;
 
   const dynamicPlans = useMemo(() => {
+    if (!showSubscriptionTypes) return [];
+
     const hasLivePlans = Object.keys(planPricing).length > 0;
 
     return PLAN_ORDER.flatMap((planKey) => {
       const fallback = PLAN_META[planKey];
       const pricing = planPricing[planKey];
 
-      if (!fallback || (hasLivePlans && !pricing) || pricing?.is_disabled) {
+      if (!fallback || (hasLivePlans && !pricing)) {
         return [];
       }
 
@@ -589,9 +597,10 @@ function LandingUI({
         storageMb,
         storageLabel,
         features: buildPlanFeatures(planKey, fallback, planDefaults, catalogModules, storageLabel),
+        isDisabled: Boolean(pricing?.is_disabled),
       }];
     });
-  }, [catalogModules, planDefaults, planPricing]);
+  }, [catalogModules, planDefaults, planPricing, showSubscriptionTypes]);
 
   // Same reason as catalogPayload above: brand data can land before this tree
   // hydrates, and the server rendered the defaults (title, footer text, logo).
@@ -1623,17 +1632,20 @@ function LandingUI({
         <SectionShell id="pricing" tone="raised" glow="primary" innerClassName="max-w-7xl">
           <SectionHeading
             eyebrow={t("landing.pricing.badge", "Subscription plans")}
-            title={t("landing.pricing.title_part1", "Transparent")}
-            accent={t("landing.pricing.title_part2", "Pricing")}
-            description={t(
-              "landing.pricing.desc",
-              "Every plan includes an isolated tenant workspace, secure mailbox, and a bundled module stack. Add more modules anytime via ArifPay checkout.",
-            )}
+            title={publicQuoteExperience ? "Every module." : t("landing.pricing.title_part1", "Transparent")}
+            accent={publicQuoteExperience ? "Tailored quote." : t("landing.pricing.title_part2", "Pricing")}
+            description={publicQuoteExperience
+              ? quoteMessage
+              : t(
+                  "landing.pricing.desc",
+                  "Every plan includes an isolated tenant workspace, secure mailbox, and a bundled module stack. Add more modules anytime via ArifPay checkout.",
+                )}
           />
 
           <div>
             {/* Plan grid */}
-            <RevealGroup step={0.07} className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
+            {showSubscriptionTypes ? (
+              <RevealGroup step={0.07} className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
               {dynamicPlans.map((plan) => {
                 const PlanIcon = plan.icon;
                 return (
@@ -1670,11 +1682,25 @@ function LandingUI({
                       </div>
                       <p className="mb-5 text-xs text-muted-foreground min-h-[32px] line-clamp-2">{plan.tagline}</p>
 
-                      <div className="mb-5 flex items-baseline gap-1">
-                        <span className="whitespace-nowrap font-space text-2xl font-bold leading-none tracking-tight">
-                          {plan.price}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground">{plan.priceNote}</span>
+                      <div className="flex items-baseline gap-1">
+                        {publicQuoteExperience ? (
+                          <span className="font-space text-xl font-bold leading-none tracking-tight">Custom quote</span>
+                        ) : (
+                          <>
+                            <span className="whitespace-nowrap font-space text-2xl font-bold leading-none tracking-tight">
+                              {plan.price}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">{plan.priceNote}</span>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="mb-5">
+                        {publicQuoteExperience ? (
+                          <p className="mt-2 text-xs leading-5 text-muted-foreground">Customer service will tailor modules, capacity, and support to your organization.</p>
+                        ) : (
+                          <AnnualPrice monthlyPrice={plan.monthlyPriceEtb} discountPercent={annualDiscount} />
+                        )}
                       </div>
 
                       <div className="mb-5 flex items-center gap-2 rounded-xl border border-border/60 bg-background/50 px-3 py-2 font-mono text-[11px] font-bold text-muted-foreground">
@@ -1691,26 +1717,61 @@ function LandingUI({
                         ))}
                       </ul>
 
-                      <Link href={`/auth/signup?plan=${plan.key}`} className="mt-auto block">
-                        <Button
-                          size="sm"
-                          className={cn(
-                            "w-full gap-1.5 rounded-xl font-space text-xs font-bold uppercase tracking-wider transition-all",
-                            plan.highlight
-                              ? "border-none bg-primary text-primary-foreground shadow-md shadow-primary/30 hover:bg-primary/90"
-                              : "border-border/70 bg-transparent hover:border-primary/50 hover:bg-primary/10 hover:text-primary",
-                          )}
-                          variant={plan.highlight ? "default" : "outline"}
-                        >
-                          {t("landing.pricing.get_started", "Get Started")}
-                          <ArrowRight className="h-3 w-3" />
+                      {plan.isDisabled ? (
+                        <Button size="sm" disabled className="mt-auto w-full rounded-xl font-space text-xs font-bold uppercase tracking-wider">
+                          Temporarily unavailable
                         </Button>
-                      </Link>
+                      ) : (
+                        <Link href={publicQuoteExperience ? "/request-demo" : `/auth/signup?plan=${plan.key}`} className="mt-auto block">
+                          <Button
+                            size="sm"
+                            className={cn(
+                              "w-full gap-1.5 rounded-xl font-space text-xs font-bold uppercase tracking-wider transition-all",
+                              plan.highlight
+                                ? "border-none bg-primary text-primary-foreground shadow-md shadow-primary/30 hover:bg-primary/90"
+                                : "border-border/70 bg-transparent hover:border-primary/50 hover:bg-primary/10 hover:text-primary",
+                            )}
+                            variant={plan.highlight ? "default" : "outline"}
+                          >
+                            {publicQuoteExperience ? "Request a quote" : t("landing.pricing.get_started", "Get Started")}
+                            <ArrowRight className="h-3 w-3" />
+                          </Button>
+                        </Link>
+                      )}
                     </SpotlightCard>
                   </RevealItem>
                 );
               })}
-            </RevealGroup>
+              </RevealGroup>
+            ) : null}
+
+            {publicQuoteExperience && catalogModules.length > 0 ? (
+              <section aria-labelledby="all-modules-heading" className="mt-10 rounded-3xl border border-border/60 bg-card/30 p-6 backdrop-blur-sm">
+                <div className="max-w-3xl">
+                  <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Complete module catalogue</p>
+                  <h3 id="all-modules-heading" className="mt-2 font-space text-2xl font-bold text-foreground">
+                    Explore all {catalogModules.length} modules
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Nothing is hidden behind a price card. Review every capability, then customer service will prepare the right package and quote.
+                  </p>
+                </div>
+                <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {catalogModules.map((module) => (
+                    <li key={module.slug} className="rounded-2xl border border-border/60 bg-background/60 p-4">
+                      <p className="font-space font-bold text-foreground">{module.name}</p>
+                      {module.category ? <p className="mt-1 text-xs font-bold uppercase tracking-wider text-primary">{module.category}</p> : null}
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{module.description}</p>
+                    </li>
+                  ))}
+                </ul>
+                <Button asChild className="mt-6 rounded-xl font-space font-bold">
+                  <Link href="/request-demo">
+                    Contact customer service for a quote <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </section>
+            ) : null}
 
             {/* Admin-provision callout */}
             <Reveal variant="scale" className="mt-8">

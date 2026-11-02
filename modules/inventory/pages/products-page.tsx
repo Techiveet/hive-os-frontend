@@ -406,12 +406,32 @@ export default function InventoryProductsPage() {
     () => {
       const cols: ColumnDef<ProductRecord>[] = [
       {
-        accessorKey: "name",
-        header: t("inventory.products.col_name", "Product"),
-        size: 340,
+        id: "incremental_id",
+        header: "#",
+        size: 56,
+        enableSorting: false,
+        enableHiding: false,
         meta: {
           sticky: "left" as const,
           stickyOffset: 48,
+          className: "w-[56px] min-w-[56px] max-w-[56px] text-center font-mono text-xs font-semibold text-muted-foreground",
+        },
+        cell: ({ row }) => {
+          const index = (tableQuery.page - 1) * tableQuery.pageSize + row.index + 1;
+          return (
+            <div className="flex items-center justify-center font-mono text-xs font-bold text-muted-foreground">
+              {index}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "name",
+        header: () => <span id="tour-products-table-anchor">{t("inventory.products.col_name", "Product")}</span>,
+        size: 340,
+        meta: {
+          sticky: "left" as const,
+          stickyOffset: 104,
           className: "w-[340px] min-w-[340px] max-w-[340px] overflow-hidden",
         },
         cell: ({ row }) => {
@@ -795,7 +815,7 @@ export default function InventoryProductsPage() {
     }
     return cols;
   },
-  [deleteMutation, openDetailSheet, openEdit, openQaDialog, queryClient, t, hasModule, hasBusinessType]
+  [deleteMutation, openDetailSheet, openEdit, openQaDialog, queryClient, t, hasModule, hasBusinessType, tableQuery.page, tableQuery.pageSize]
 );
 
   const resetAllFilters = React.useCallback(() => {
@@ -851,7 +871,7 @@ export default function InventoryProductsPage() {
         skipBeacon: true,
       },
       {
-        target: "#tour-products-table",
+        target: "#tour-products-table-anchor",
         title: t("inventory.tour.products.table_title", "Products Master Table"),
         content: t(
           "inventory.tour.products.table_desc",
@@ -998,6 +1018,7 @@ export default function InventoryProductsPage() {
         {/* Total Products */}
         <button
           type="button"
+          aria-pressed={!statusFilter && !stockStatusFilter && !productTypeFilter}
           onClick={() => {
             setStatusFilter("");
             setStockStatusFilter("");
@@ -1030,6 +1051,7 @@ export default function InventoryProductsPage() {
         {/* Published Live */}
         <button
           type="button"
+          aria-pressed={statusFilter === "published"}
           onClick={() => {
             setStatusFilter(statusFilter === "published" ? "" : "published");
             applyTableQuery({ page: 1 });
@@ -1060,6 +1082,7 @@ export default function InventoryProductsPage() {
         {/* Low Stock Breaches */}
         <button
           type="button"
+          aria-pressed={stockStatusFilter === "low_stock"}
           onClick={() => {
             setStockStatusFilter(stockStatusFilter === "low_stock" ? "" : "low_stock");
             applyTableQuery({ page: 1 });
@@ -1090,6 +1113,7 @@ export default function InventoryProductsPage() {
         {/* Product Variants */}
         <button
           type="button"
+          aria-pressed={productTypeFilter === "variant"}
           onClick={() => {
             setProductTypeFilter(productTypeFilter === "variant" ? "" : "variant");
             applyTableQuery({ page: 1 });
@@ -1157,11 +1181,12 @@ export default function InventoryProductsPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
             {/* Status Filter */}
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <label htmlFor="products-status-filter" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 {t("inventory.common.status", "Status")}
               </label>
               <select
-                className="h-9 w-full rounded-xl border border-border/50 bg-background/50 px-3 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary/40"
+                id="products-status-filter"
+                className="h-9 w-full rounded-xl border border-muted-foreground/80 bg-background/50 px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
                 value={statusFilter}
                 onChange={(e) => {
                   setStatusFilter(e.target.value);
@@ -1180,11 +1205,12 @@ export default function InventoryProductsPage() {
 
             {/* Category Filter */}
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <label htmlFor="products-category-filter" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 {t("inventory.products.category", "Category")}
               </label>
               <select
-                className="h-9 w-full rounded-xl border border-border/50 bg-background/50 px-3 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary/40"
+                id="products-category-filter"
+                className="h-9 w-full rounded-xl border border-muted-foreground/80 bg-background/50 px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
                 value={categoryFilter}
                 onChange={(e) => {
                   setCategoryFilter(e.target.value);
@@ -1203,11 +1229,12 @@ export default function InventoryProductsPage() {
 
             {/* Stock Level Filter */}
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <label htmlFor="products-stock-filter" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 {t("inventory.products.stock_level", "Stock Level")}
               </label>
               <select
-                className="h-9 w-full rounded-xl border border-border/50 bg-background/50 px-3 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary/40"
+                id="products-stock-filter"
+                className="h-9 w-full rounded-xl border border-muted-foreground/80 bg-background/50 px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
                 value={stockStatusFilter}
                 onChange={(e) => {
                   setStockStatusFilter(e.target.value);
@@ -1224,11 +1251,12 @@ export default function InventoryProductsPage() {
 
             {/* Product Type Filter */}
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <label htmlFor="products-type-filter" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 {t("inventory.products.product_type", "Product Type")}
               </label>
               <select
-                className="h-9 w-full rounded-xl border border-border/50 bg-background/50 px-3 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary/40"
+                id="products-type-filter"
+                className="h-9 w-full rounded-xl border border-muted-foreground/80 bg-background/50 px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
                 value={productTypeFilter}
                 onChange={(e) => {
                   setProductTypeFilter(e.target.value);
@@ -1244,11 +1272,12 @@ export default function InventoryProductsPage() {
 
             {/* Unit of Measure (UOM) Filter */}
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <label htmlFor="products-uom-filter" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 {t("inventory.products.uom", "Unit of Measure")}
               </label>
               <select
-                className="h-9 w-full rounded-xl border border-border/50 bg-background/50 px-3 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary/40"
+                id="products-uom-filter"
+                className="h-9 w-full rounded-xl border border-muted-foreground/80 bg-background/50 px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
                 value={uomFilter}
                 onChange={(e) => {
                   setUomFilter(e.target.value);
@@ -1273,40 +1302,65 @@ export default function InventoryProductsPage() {
               {statusFilter ? (
                 <Badge variant="outline" className="rounded-full bg-background/70 gap-1 text-[11px] font-semibold">
                   Status: {statusFilter}
-                  <button type="button" onClick={() => { setStatusFilter(""); applyTableQuery({ page: 1 }); }} className="hover:text-foreground">
-                    <X className="h-3 w-3" />
+                  <button
+                    type="button"
+                    aria-label={t("inventory.products.remove_status_filter", "Remove status filter")}
+                    onClick={() => { setStatusFilter(""); applyTableQuery({ page: 1 }); }}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+                  >
+                    <X aria-hidden="true" className="h-3 w-3" />
                   </button>
                 </Badge>
               ) : null}
               {categoryFilter ? (
                 <Badge variant="outline" className="rounded-full bg-background/70 gap-1 text-[11px] font-semibold">
                   Category: {optionsQuery.data?.categories?.find((c) => String(c.id) === categoryFilter)?.name ?? categoryFilter}
-                  <button type="button" onClick={() => { setCategoryFilter(""); applyTableQuery({ page: 1 }); }} className="hover:text-foreground">
-                    <X className="h-3 w-3" />
+                  <button
+                    type="button"
+                    aria-label={t("inventory.products.remove_category_filter", "Remove category filter")}
+                    onClick={() => { setCategoryFilter(""); applyTableQuery({ page: 1 }); }}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+                  >
+                    <X aria-hidden="true" className="h-3 w-3" />
                   </button>
                 </Badge>
               ) : null}
               {stockStatusFilter ? (
                 <Badge variant="outline" className="rounded-full bg-background/70 gap-1 text-[11px] font-semibold">
                   Stock: {stockStatusFilter.replace("_", " ")}
-                  <button type="button" onClick={() => { setStockStatusFilter(""); applyTableQuery({ page: 1 }); }} className="hover:text-foreground">
-                    <X className="h-3 w-3" />
+                  <button
+                    type="button"
+                    aria-label={t("inventory.products.remove_stock_filter", "Remove stock filter")}
+                    onClick={() => { setStockStatusFilter(""); applyTableQuery({ page: 1 }); }}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+                  >
+                    <X aria-hidden="true" className="h-3 w-3" />
                   </button>
                 </Badge>
               ) : null}
               {productTypeFilter ? (
                 <Badge variant="outline" className="rounded-full bg-background/70 gap-1 text-[11px] font-semibold">
                   Type: {productTypeFilter}
-                  <button type="button" onClick={() => { setProductTypeFilter(""); applyTableQuery({ page: 1 }); }} className="hover:text-foreground">
-                    <X className="h-3 w-3" />
+                  <button
+                    type="button"
+                    aria-label={t("inventory.products.remove_product_type_filter", "Remove product type filter")}
+                    onClick={() => { setProductTypeFilter(""); applyTableQuery({ page: 1 }); }}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+                  >
+                    <X aria-hidden="true" className="h-3 w-3" />
                   </button>
                 </Badge>
               ) : null}
               {uomFilter ? (
                 <Badge variant="outline" className="rounded-full bg-background/70 gap-1 text-[11px] font-semibold">
                   UOM: {uomFilter}
-                  <button type="button" onClick={() => { setUomFilter(""); applyTableQuery({ page: 1 }); }} className="hover:text-foreground">
-                    <X className="h-3 w-3" />
+                  <button
+                    type="button"
+                    aria-label={t("inventory.products.remove_uom_filter", "Remove unit of measure filter")}
+                    onClick={() => { setUomFilter(""); applyTableQuery({ page: 1 }); }}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+                  >
+                    <X aria-hidden="true" className="h-3 w-3" />
                   </button>
                 </Badge>
               ) : null}
@@ -1403,6 +1457,7 @@ export default function InventoryProductsPage() {
           exportEndpoint={exportUrl}
           pageIndex={tableQuery.page}
           pageSize={tableQuery.pageSize}
+          pageSizeOptions={[5, 10, 25, 50, 100]}
           enableRowSelection
           selectedRowIds={selectedRowIds}
           tableClassName="min-w-[1800px]"

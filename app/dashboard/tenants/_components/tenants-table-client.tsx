@@ -7,7 +7,7 @@ import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import type { Step } from "react-joyride";
 import { useTour } from "@/components/providers/tour-provider";
-import { HelpCircle, Server, PlusCircle, Pencil, Trash2, Loader2, Calendar, Globe, AlertCircle, Power, UserX, UserPlus, Mail, Eye, UserCheck, Layers, LayoutTemplate } from "lucide-react";
+import { HelpCircle, Server, PlusCircle, Pencil, Trash2, Loader2, Calendar, Globe, AlertCircle, Power, UserX, UserPlus, Mail, Eye, UserCheck, Layers, LayoutTemplate, Filter, RotateCcw } from "lucide-react";
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -173,7 +173,12 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
     const [search, setSearch] = React.useState("");
     const [sortCol, setSortCol] = React.useState<string>("created_at");
     const [sortDir, setSortDir] = React.useState<string>("desc");
+    const [filterPlan, setFilterPlan] = React.useState<string>("all");
+    const [filterStatus, setFilterStatus] = React.useState<string>("all");
+    const [filterBusinessType, setFilterBusinessType] = React.useState<string>("all");
     const [tableKey, setTableKey] = React.useState(0);
+
+    const hasActiveFilters = filterPlan !== "all" || filterStatus !== "all" || filterBusinessType !== "all" || Boolean(search);
 
     const [dialogOpen, setDialogOpen] = React.useState(false);
     const [editingTenant, setEditingTenant] = React.useState<TenantRecord | null>(null);
@@ -235,9 +240,18 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
     }, []);
 
     const { data: tenantsData, isLoading, isFetching } = useQuery({
-        queryKey: ["tenants", page, pageSize, search, sortCol, sortDir],
+        queryKey: ["tenants", page, pageSize, search, sortCol, sortDir, filterPlan, filterStatus, filterBusinessType],
         queryFn: async () => {
-            const res = await fetchTenants({ page, pageSize, search: search.trim(), sort_by: sortCol, sort_direction: sortDir });
+            const res = await fetchTenants({
+                page,
+                pageSize,
+                search: search.trim(),
+                sort_by: sortCol,
+                sort_direction: sortDir,
+                plan: filterPlan !== "all" ? filterPlan : undefined,
+                status: filterStatus !== "all" ? filterStatus : undefined,
+                business_type: filterBusinessType !== "all" ? filterBusinessType : undefined,
+            });
             return { rows: res?.data || [], total: res?.meta?.total || 0 };
         },
         placeholderData: (prev) => prev,
@@ -627,8 +641,33 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
         queryClient.invalidateQueries({ queryKey: ["tenants"] });
     }, [queryClient, triggerAudit]);
 
+    const handleFilterPlanChange = (val: string) => {
+        setFilterPlan(val);
+        setPage(1);
+        triggerAudit('filtered', `Filtered tenants by capacity plan: ${val}`);
+    };
+
+    const handleFilterStatusChange = (val: string) => {
+        setFilterStatus(val);
+        setPage(1);
+        triggerAudit('filtered', `Filtered tenants by network status: ${val}`);
+    };
+
+    const handleFilterBusinessTypeChange = (val: string) => {
+        setFilterBusinessType(val);
+        setPage(1);
+        triggerAudit('filtered', `Filtered tenants by business type: ${val}`);
+    };
+
     const resetFilters = React.useCallback(() => {
-        setSearch(""); setSortCol("created_at"); setSortDir("desc"); setPage(1); setTableKey(prev => prev + 1);
+        setSearch("");
+        setSortCol("created_at");
+        setSortDir("desc");
+        setPage(1);
+        setFilterPlan("all");
+        setFilterStatus("all");
+        setFilterBusinessType("all");
+        setTableKey(prev => prev + 1);
         triggerAudit('filtered', 'Operator reset all Node Matrix active filters');
     }, [triggerAudit]);
 
@@ -956,7 +995,7 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
         startTour(steps);
     }, [startTour, t]);
 
-    const exportUrl = `${getBackendApiRoot()}/tenants/export?search=${encodeURIComponent(search || "")}&sortCol=${sortCol}&sortDir=${sortDir}&locale=${locale}`;
+    const exportUrl = `${getBackendApiRoot()}/tenants/export?search=${encodeURIComponent(search || "")}&sortCol=${sortCol}&sortDir=${sortDir}&locale=${locale}${filterPlan !== 'all' ? `&plan=${encodeURIComponent(filterPlan)}` : ''}${filterStatus !== 'all' ? `&status=${encodeURIComponent(filterStatus)}` : ''}${filterBusinessType !== 'all' ? `&business_type=${encodeURIComponent(filterBusinessType)}` : ''}`;
 
     return (
         <div className="tenant-operations flex flex-col gap-6">
@@ -980,6 +1019,72 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
                         </div>
                     )}
                 </div>
+            </div>
+
+            {/* FILTER TOOLBAR */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-card/40 p-4 rounded-2xl border border-border/50 backdrop-blur-md shadow-sm">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        <Filter className="h-3.5 w-3.5 text-primary" />
+                        <span>Filter:</span>
+                    </div>
+
+                    {/* Capacity Plan Filter */}
+                    <div className="w-44">
+                        <Select value={filterPlan} onValueChange={handleFilterPlanChange}>
+                            <SelectTrigger aria-label="Filter by Capacity Plan" className="h-9 text-xs rounded-xl bg-background/60">
+                                <SelectValue placeholder="All Plans" />
+                            </SelectTrigger>
+                            <SelectContent className="tenant-operations rounded-xl">
+                                <SelectItem value="all">All Plans</SelectItem>
+                                {Object.entries(planOptions).map(([key, plan]) => (
+                                    <SelectItem key={key} value={key}>{plan.name || key}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* Node Status Filter */}
+                    <div className="w-40">
+                        <Select value={filterStatus} onValueChange={handleFilterStatusChange}>
+                            <SelectTrigger aria-label="Filter by Node Status" className="h-9 text-xs rounded-xl bg-background/60">
+                                <SelectValue placeholder="All Statuses" />
+                            </SelectTrigger>
+                            <SelectContent className="tenant-operations rounded-xl">
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                <SelectItem value="active">Online</SelectItem>
+                                <SelectItem value="suspended">Suspended</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* Business Type Filter */}
+                    <div className="w-52">
+                        <Select value={filterBusinessType} onValueChange={handleFilterBusinessTypeChange}>
+                            <SelectTrigger aria-label="Filter by Business Type" className="h-9 text-xs rounded-xl bg-background/60">
+                                <SelectValue placeholder="All Business Types" />
+                            </SelectTrigger>
+                            <SelectContent className="tenant-operations rounded-xl">
+                                <SelectItem value="all">All Business Types</SelectItem>
+                                {businessTypes.map((bt) => (
+                                    <SelectItem key={bt.key} value={bt.key}>{bt.label || bt.key}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+
+                {hasActiveFilters && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={resetFilters}
+                        className="h-9 text-xs text-muted-foreground hover:text-foreground rounded-xl gap-1.5"
+                    >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Reset Filters
+                    </Button>
+                )}
             </div>
 
             <div id="tour-tenant-table">

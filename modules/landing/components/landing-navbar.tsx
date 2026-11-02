@@ -249,7 +249,7 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
                   <Button className="group relative h-9 overflow-hidden rounded-full border-none bg-primary px-5 font-space text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-lg shadow-primary/25">
                     {/* Specular sweep on hover */}
                     <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-                    <span className="relative">{t("landing.nav.deploy", "Get Started Free")}</span>
+                    <span className="relative">{t("landing.hero.cta_free", "Get Started Free")}</span>
                   </Button>
                 </motion.span>
               </Link>

@@ -408,7 +408,7 @@ const MODULE_TOUR_REGISTRY: Record<string, ModuleTourMeta> = {
         placement: "bottom",
       },
       {
-        target: "#tour-products-table",
+        target: "#tour-products-table-anchor",
         title: t("inventory.tour.products.table_title", "Products Master Table"),
         content: t(
           "inventory.tour.products.table_desc",

@@ -1,5 +1,6 @@
 "use client";
 
+import { AnnualPrice } from "@/modules/subscription/components/annual-price";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -103,30 +104,30 @@ const PLAN_META: Record<string, PlanMeta> = {
     features: ["Internal Mailbox", "512 MB mailbox quota", "Up to 5 users", "Shared DB instance", "Dashboard overview"],
   },
   startup: {
-    label: "Startup", tagline: "Launch your operations",
+    label: "Startup", tagline: "Low-cost bundle for microbusinesses",
     color: "text-sky-700 dark:text-sky-300", bg: "from-sky-500/10 to-cyan-400/5", ring: "ring-sky-700 dark:ring-sky-300",
-    price: "Free", priceNote: "/month", storageMb: 2048, storageLabel: "2 GB",
+    price: "ETB 1,199", priceNote: "/month", storageMb: 2048, storageLabel: "2 GB",
     icon: Rocket,
     features: ["Mailbox + File Manager", "Image Editor", "Document Converter", "2 GB storage quota", "Isolated DB schema"],
   },
   business: {
     label: "Business", tagline: "Full productivity suite",
     color: "text-indigo-700 dark:text-indigo-300", bg: "from-indigo-500/10 to-violet-400/5", ring: "ring-indigo-700 dark:ring-indigo-300",
-    price: "ETB 3,499", priceNote: "/month", storageMb: 10240, storageLabel: "10 GB",
+    price: "ETB 2,999", priceNote: "/month", storageMb: 10240, storageLabel: "10 GB",
     icon: Layers, highlight: true,
     features: ["All Startup modules", "Media Library + Video Player", "Advanced Analytics", "Audit Logs + Alerts", "Invoice & Billing + Inventory", "Security Management", "10 GB storage quota"],
   },
   enterprise: {
     label: "Enterprise", tagline: "Large-scale operations",
     color: "text-violet-700 dark:text-violet-300", bg: "from-violet-500/10 to-purple-400/5", ring: "ring-violet-700 dark:ring-violet-300",
-    price: "ETB 7,999", priceNote: "/month", storageMb: 51200, storageLabel: "50 GB",
+    price: "ETB 6,999", priceNote: "/month", storageMb: 51200, storageLabel: "50 GB",
     icon: Star,
     features: ["All Business modules", "Workflow Automation", "API Access + API Docs", "Fleet Management", "Developer tools", "50 GB storage quota", "Priority support"],
   },
   overlord: {
     label: "Overlord", tagline: "All-inclusive power",
     color: "text-amber-800 dark:text-amber-300", bg: "from-amber-500/10 to-orange-400/5", ring: "ring-amber-800 dark:ring-amber-300",
-    price: "ETB 12,999", priceNote: "/month", storageMb: 204800, storageLabel: "200 GB",
+    price: "ETB 9,999", priceNote: "/month", storageMb: 204800, storageLabel: "200 GB",
     icon: Crown,
     features: ["Every module unlocked", "200 GB storage quota", "Custom integrations", "Dedicated SLA", "Techive engineering support"],
   },
@@ -253,6 +254,8 @@ function createClientRequestId() {
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function TenantSignupPage() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // State
   const [step, setStep] = useState<Step>("plan");
@@ -315,7 +318,9 @@ export default function TenantSignupPage() {
     refetchOnWindowFocus: true,
   });
 
-  const catalogPayload = catalogData?.data ?? {};
+  // Match the server fallback until hydration finishes, even if the catalog
+  // request or shared query cache resolves before the first client render.
+  const catalogPayload = (mounted ? catalogData?.data : undefined) ?? {};
   const catalogModules = useMemo(
     () => (catalogPayload.catalog ?? []) as CatalogModule[],
     [catalogPayload.catalog],
@@ -327,6 +332,10 @@ export default function TenantSignupPage() {
   const planPricing = (catalogPayload.plan_pricing ?? {}) as Record<string, CatalogPlan>;
   const planDefaults = (catalogPayload.plan_defaults ?? {}) as Record<string, string[]>;
   const billingPolicy = catalogPayload.billing_policy as SubscriptionBillingPolicy | undefined;
+  const quoteOnly = billingPolicy?.public_catalog_mode !== "self_service";
+  const showSubscriptionTypes = billingPolicy?.public_show_subscription_types ?? false;
+  const publicQuoteExperience = quoteOnly || !showSubscriptionTypes;
+  const quoteMessage = billingPolicy?.public_quote_message || "Contact customer service for a tailored quote.";
   const businessTypes = useMemo(
     () => resolveBusinessTypeCatalog(catalogPayload.business_types ?? FALLBACK_TENANT_BUSINESS_TYPES),
     [catalogPayload.business_types]
@@ -337,6 +346,8 @@ export default function TenantSignupPage() {
   );
   const activeBusinessType = businessTypeMap[businessType] ?? businessTypes[0] ?? FALLBACK_TENANT_BUSINESS_TYPES[0];
   const planOptions = useMemo<SignupPlan[]>(() => {
+    if (!showSubscriptionTypes) return [];
+
     const hasLivePlans = Object.keys(planPricing).length > 0;
 
     return PLAN_ORDER.flatMap((planKey) => {
@@ -366,7 +377,7 @@ export default function TenantSignupPage() {
         features: buildPlanFeatures(planKey, fallback, planDefaults, catalogModules, storageLabel),
       }];
     });
-  }, [catalogModules, planDefaults, planPricing]);
+  }, [catalogModules, planDefaults, planPricing, showSubscriptionTypes]);
 
   const planMap = useMemo(
     () => Object.fromEntries(planOptions.map((plan) => [plan.key, plan])),
@@ -768,7 +779,7 @@ export default function TenantSignupPage() {
 
   // ── Validation ──────────────────────────────────────────────────────────
   const canGoToWorkspace = availablePlanKeys.includes(selectedPlan);
-  const canGoToCheckout = orgName.trim().length >= 2 && tenantId.length >= 3 && !tenantIdError
+  const canGoToCheckout = !publicQuoteExperience && orgName.trim().length >= 2 && tenantId.length >= 3 && !tenantIdError
     && adminName.trim().length >= 2 && adminEmail.includes("@") && adminPassword.length >= 8;
   const directTransferSelected = requiresSignupPayment && checkoutChannel === "direct_transfer";
   const gatewaySelected = requiresSignupPayment && checkoutChannel !== "direct_transfer";
@@ -780,6 +791,11 @@ export default function TenantSignupPage() {
     && (!directTransferSelected || manualTransactionReference.trim().length >= 4);
 
   const handleCheckout = () => {
+    if (publicQuoteExperience) {
+      setError(quoteMessage);
+      return;
+    }
+
     setError("");
     clearStoredCheckoutReturnContext();
     setOrderToken(null);
@@ -858,14 +874,15 @@ export default function TenantSignupPage() {
                 Deploy Your <span className="text-primary">Hive Node</span>
               </h1>
               <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base">
-                Choose a plan, configure your workspace, and get your isolated tenant environment
-                provisioned in minutes through {providerLabel}.
+                {publicQuoteExperience
+                  ? "Browse every Hive module, then contact customer service for a rollout-ready quote."
+                  : `Choose a plan, configure your workspace, and provision your isolated tenant through ${providerLabel}.`}
               </p>
             </div>
           )}
 
           {/* Step indicator */}
-          {step !== "confirm" && (
+          {!publicQuoteExperience && step !== "confirm" && (
             <div className="mb-10">
               <div className="flex items-center justify-center gap-0 mb-4">
                 {STEPS.map((s, i) => {
@@ -887,7 +904,7 @@ export default function TenantSignupPage() {
                         </div>
                         <span className={cn("text-[11px] font-bold uppercase tracking-widest hidden sm:block",
                           active ? "text-foreground" : "text-muted-foreground"
-                        )}>{s.label}</span>
+                        )}>{!showSubscriptionTypes && s.key === "plan" ? "Explore Modules" : s.label}</span>
                       </div>
                       {i < STEPS.length - 1 && (
                         <div className={cn("flex-1 max-w-16 h-0.5 transition-all", i < stepIndex ? "bg-emerald-700 dark:bg-emerald-300" : "bg-border")} />
@@ -903,16 +920,26 @@ export default function TenantSignupPage() {
           {/* ─── STEP 1: PLAN SELECTION ─────────────────────────────────── */}
           {step === "plan" && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {catalogLoading ? (
+              {!mounted || catalogLoading ? (
                 <p role="status" className="mb-6 rounded-2xl border border-slate-500 bg-card p-4 text-sm text-foreground">
                   Loading the live subscription and template catalog…
                 </p>
               ) : null}
-              {catalogError ? (
+              {mounted && catalogError ? (
                 <Alert variant="destructive" className="mb-6 border-destructive bg-destructive/10">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    The live catalog could not be loaded. Refresh before starting a paid registration so the price and template eligibility are current.
+                    The live catalog could not be loaded. Refresh before choosing modules or requesting a quote.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
+              {mounted && !catalogLoading && publicQuoteExperience ? (
+                <Alert className="mb-6 border-primary/40 bg-primary/5">
+                  <ShieldCheck className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong className="block text-foreground">Tailored quotes are active</strong>
+                    <span className="mt-1 block">{quoteMessage} Browse every module below, then send customer service your requirements.</span>
                   </AlertDescription>
                 </Alert>
               ) : null}
@@ -922,7 +949,9 @@ export default function TenantSignupPage() {
                   What kind of business are you registering? <span aria-hidden="true">*</span>
                 </Label>
                 <p id="signup-business-type-help" className="mt-1 text-xs leading-5 text-muted-foreground">
-                  This filters compatible modules and templates. Central administrators manage these choices in Business Types.
+                  {publicQuoteExperience
+                    ? "This helps customer service understand your organization. The complete module catalogue remains visible below."
+                    : "This filters compatible modules and templates. Central administrators manage these choices in Business Types."}
                 </p>
                 <Select value={businessType} onValueChange={setBusinessType}>
                   <SelectTrigger id="signup-business-type" aria-describedby="signup-business-type-help" className="mt-3 h-12 border-slate-500 bg-background focus:ring-2 focus:ring-primary">
@@ -937,7 +966,8 @@ export default function TenantSignupPage() {
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">{activeBusinessType.description}</p>
               </div>
 
-              <fieldset className="mb-8">
+              {showSubscriptionTypes ? (
+                <fieldset className="mb-8">
                 <legend className="sr-only">Subscription plan</legend>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 {planOptions.map(meta => {
@@ -985,8 +1015,15 @@ export default function TenantSignupPage() {
                       <p className="text-[11px] text-muted-foreground mb-3">{meta.tagline}</p>
 
                       <div className="mb-3">
-                        <span className="text-2xl font-black text-foreground">{meta.price}</span>
-                        <span className="text-[11px] text-muted-foreground ml-1">{meta.priceNote}</span>
+                        {publicQuoteExperience ? (
+                          <span className="text-lg font-black text-foreground">Custom quote</span>
+                        ) : (
+                          <>
+                            <span className="text-2xl font-black text-foreground">{meta.price}</span>
+                            <span className="text-[11px] text-muted-foreground ml-1">{meta.priceNote}</span>
+                            <AnnualPrice monthlyPrice={meta.monthlyPriceEtb} discountPercent={billingPolicy?.yearly_discount_percent} />
+                          </>
+                        )}
                       </div>
 
                       <div className={cn("rounded-lg px-2 py-1 mb-3 text-[11px] font-bold flex items-center gap-1.5", meta.color, `bg-gradient-to-br ${meta.bg}`)}>
@@ -1007,8 +1044,9 @@ export default function TenantSignupPage() {
                   );
                 })}
                 </div>
-              </fieldset>
-              {planOptions.length === 0 && (
+                </fieldset>
+              ) : null}
+              {showSubscriptionTypes && planOptions.length === 0 && (
                 <Alert variant="destructive" className="mb-8 bg-destructive/5 border-destructive/20">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription className="text-xs font-mono">
@@ -1018,7 +1056,7 @@ export default function TenantSignupPage() {
               )}
 
               {/* Selected plan summary */}
-              {canGoToWorkspace && (
+              {showSubscriptionTypes && canGoToWorkspace && (
                 <div className={cn(
                   "rounded-[2rem] border p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5 mb-6",
                   `ring-1 ${planMeta.ring} border-transparent bg-gradient-to-br ${planMeta.bg}`
@@ -1038,14 +1076,21 @@ export default function TenantSignupPage() {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-2xl font-black text-foreground">{planMeta.price}</p>
-                    <p className="text-xs text-muted-foreground">{planMeta.priceNote}</p>
-                    {isFree && <Badge className="mt-1 border-none bg-emerald-500/10 text-[11px] text-emerald-700 dark:text-emerald-300">No card required</Badge>}
+                    {publicQuoteExperience ? (
+                      <p className="text-lg font-black text-foreground">Tailored quote</p>
+                    ) : (
+                      <>
+                        <p className="text-2xl font-black text-foreground">{planMeta.price}</p>
+                        <p className="text-xs text-muted-foreground">{planMeta.priceNote}</p>
+                        <AnnualPrice monthlyPrice={planMeta.monthlyPriceEtb} discountPercent={billingPolicy?.yearly_discount_percent} />
+                      </>
+                    )}
+                    {!publicQuoteExperience && isFree && <Badge className="mt-1 border-none bg-emerald-500/10 text-[11px] text-emerald-700 dark:text-emerald-300">No card required</Badge>}
                   </div>
                 </div>
               )}
 
-              {canGoToWorkspace ? (
+              {(!showSubscriptionTypes || canGoToWorkspace) ? (
                 <div className="mb-6">
                   <SignupModuleSelection
                     modules={catalogModules}
@@ -1054,19 +1099,29 @@ export default function TenantSignupPage() {
                     planDefaults={planDefaults}
                     selectedModules={selectedModules}
                     onSelectedModulesChange={setSelectedModules}
+                    yearlyDiscountPercent={billingPolicy?.yearly_discount_percent}
+                    quoteOnly={publicQuoteExperience}
                   />
                 </div>
               ) : null}
 
               <div className="flex justify-end">
-                <Button
-                  onClick={() => setStep("workspace")}
-                  disabled={!canGoToWorkspace}
-                  className="rounded-full px-8 font-bold gap-2 shadow-lg shadow-primary/20"
-                  size="lg"
-                >
-                  Continue to Workspace Setup <ArrowRight className="h-4 w-4" />
-                </Button>
+                {publicQuoteExperience ? (
+                  <Button asChild className="rounded-full px-8 font-bold gap-2 shadow-lg shadow-primary/20" size="lg">
+                    <Link href="/request-demo">
+                      Contact customer service for a quote <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setStep("workspace")}
+                    disabled={!canGoToWorkspace}
+                    className="rounded-full px-8 font-bold gap-2 shadow-lg shadow-primary/20"
+                    size="lg"
+                  >
+                    Continue to Workspace Setup <ArrowRight className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -1257,7 +1312,7 @@ export default function TenantSignupPage() {
           )}
 
           {/* ─── STEP 3: CHECKOUT ──────────────────────────────────────── */}
-          {step === "checkout" && (
+          {!publicQuoteExperience && step === "checkout" && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto">
               {error && (
                 <div ref={checkoutErrorRef} tabIndex={-1} className="mb-6 flex gap-3 rounded-lg border border-destructive bg-destructive/5 p-4 text-destructive outline-none focus-visible:ring-2 focus-visible:ring-primary">

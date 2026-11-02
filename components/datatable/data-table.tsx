@@ -546,7 +546,7 @@ function DataTableInner<TData, TValue>({
   loading = false,
   pageIndex = 1,
   pageSize = 10,
-  pageSizeOptions = [10, 25, 50, 100],
+  pageSizeOptions = [5, 10, 25, 50, 100],
   onQueryChange,
   title,
   description,

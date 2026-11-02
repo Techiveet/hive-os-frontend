@@ -1,0 +1,16 @@
+{
+  "checks": [
+    {
+      "id": "annual-light",
+      "foreground": "#1e293b",
+      "background": "#ffffff",
+      "type": "text-normal"
+    },
+    {
+      "id": "annual-dark",
+      "foreground": "#e2e8f0",
+      "background": "#18181b",
+      "type": "text-normal"
+    }
+  ]
+}

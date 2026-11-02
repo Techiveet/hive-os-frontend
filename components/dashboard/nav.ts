@@ -4,6 +4,7 @@ export {
   DASHBOARD_MODULE_IDS,
   DASHBOARD_NAV,
   DASHBOARD_SECONDARY,
+  MODULE_ID_TO_SUBSCRIPTION_SLUG,
 } from "@/modules";
 export type { ModuleNavItem as NavItem } from "@/modules";
 

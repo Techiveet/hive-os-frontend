@@ -11,7 +11,7 @@ import {
   FileText, Download, Printer, Filter, Archive, Clock,
   UserPlus, ShieldAlert, Trash2, Pencil, VenetianMask, PlusCircle,
   Mail, ArrowRight, Building2, Factory, QrCode, SlidersHorizontal,
-  HardDrive, Cpu, Package, CheckCircle
+  HardDrive, Cpu, Package, CheckCircle, LayoutTemplate, Power, UserX
 } from "lucide-react";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Badge } from "@/components/ui/badge";
@@ -3719,129 +3719,416 @@ export default function UserManualPage() {
                 </div>
               </div>
 
-              {/* Screenshot Frame */}
-              <div className="space-y-3">
+              {/* ========================================================== */}
+              {/* SECTION 1: PLATFORM PULSE & TELEMETRY OBSERVABILITY         */}
+              {/* ========================================================== */}
+              <div className="space-y-4 pt-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
-                    Figure 4.1: Central Multi-Tenant Workspace Directory & Node Provisioning Cockpit
-                  </span>
+                  <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-indigo-400" />
+                    1. Platform Pulse & Real-Time Cluster Telemetry
+                  </h3>
                   <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
-                    CENTRAL COMMAND
+                    FIGURE 4.1
                   </Badge>
                 </div>
 
                 <div className="rounded-2xl border border-border/80 overflow-hidden shadow-2xl bg-black/40 group relative">
                   <img
-                    src="/manual-screenshots/04-tenants-main.png"
-                    alt="Multi-Tenant Management Console on Hive.OS"
+                    src="/manual-screenshots/04-tenants-cockpit-overview.png"
+                    alt="Platform Pulse Telemetry and Global Activity Feed"
                     className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.01]"
                   />
                 </div>
                 <p className="text-xs text-muted-foreground italic text-center">
-                  Live snapshot of the Central Multi-Tenant console displaying active organizations, database sharding status, subscription tiers, and node provisioning controls.
+                  Figure 4.1: Instantaneous cluster telemetry displaying active node tallies, 24-hour transaction frequency, authentication health, and global audit stream.
                 </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs pt-2">
+                  <div className="p-3.5 rounded-xl border border-border/60 bg-muted/20 space-y-1">
+                    <p className="font-bold text-foreground">Tenant Workspaces</p>
+                    <p className="text-muted-foreground text-[11px] leading-relaxed">Total enrolled organization shards broken down by enabled versus suspended count.</p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-border/60 bg-muted/20 space-y-1">
+                    <p className="font-bold text-foreground">Active in 24h</p>
+                    <p className="text-muted-foreground text-[11px] leading-relaxed">Workspaces with live HTTP transactions, staff logins, or API calls recorded within 24 hours.</p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-border/60 bg-muted/20 space-y-1">
+                    <p className="font-bold text-foreground">Successful Sign-ins</p>
+                    <p className="text-muted-foreground text-[11px] leading-relaxed">Aggregated operational logins across all tenant organizations within the current day.</p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-border/60 bg-muted/20 space-y-1">
+                    <p className="font-bold text-foreground">Failed Sign-ins</p>
+                    <p className="text-muted-foreground text-[11px] leading-relaxed">Security challenge tracker identifying brute-force attempts or expired credential locks.</p>
+                  </div>
+                </div>
               </div>
 
-              {/* Step-by-Step Instructions */}
-              <div className="space-y-6 pt-4 border-t border-border/50">
-                <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-indigo-400" />
-                  Step-by-Step Node Provisioning Workflow
-                </h3>
+              {/* ========================================================== */}
+              {/* SECTION 2: TENANT DIRECTORY & MULTI-CRITERIA FILTERING      */}
+              {/* ========================================================== */}
+              <div className="space-y-4 pt-6 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
+                    <Server className="w-5 h-5 text-indigo-400" />
+                    2. Central Directory Cockpit & Multi-Criteria Filtering
+                  </h3>
+                  <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
+                    FIGURE 4.2 & 4.3
+                  </Badge>
+                </div>
 
-                <div className="space-y-6 text-sm leading-relaxed text-foreground/90">
-                  <div className="flex gap-4 items-start">
-                    <div className="h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-indigo-500/20">
-                      1
-                    </div>
-                    <div className="space-y-2 flex-1">
-                      <h4 className="font-bold text-foreground">Open the Tenants Directory</h4>
-                      <p className="text-muted-foreground text-xs leading-relaxed">
-                        Navigate to <code className="text-primary font-mono bg-muted/50 px-1 py-0.5 rounded">{origin}/dashboard/tenants</code> from the left navigation sidebar or by clicking the &ldquo;Provision Node&rdquo; quick action on the central executive dashboard.
-                      </p>
+                <p className="text-sm text-foreground/90 leading-relaxed">
+                  The Tenant Directory operates as the central control plane for every registered enterprise workspace. Operators can search, filter by capacity plan, network status, or industry vertical, and execute direct management workflows.
+                </p>
+
+                <div className="rounded-2xl border border-border/80 overflow-hidden shadow-2xl bg-black/40 group relative">
+                  <img
+                    src="/manual-screenshots/04-tenants-cockpit-main.png"
+                    alt="Complete Central Multi-Tenant Directory with Filter Bar"
+                    className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.01]"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground italic text-center">
+                  Figure 4.2: Central Multi-Tenant Cockpit featuring the integrated filter toolbar, capacity badges, and action triggers.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
+                      Figure 4.3: Table Registry & Action Columns
+                    </span>
+                    <div className="rounded-xl border border-border/70 overflow-hidden bg-black/40">
+                      <img
+                        src="/manual-screenshots/04-tenants-directory-table.png"
+                        alt="Tenant Directory Registry Columns"
+                        className="w-full h-auto"
+                      />
                     </div>
                   </div>
 
-                  <div className="flex gap-4 items-start">
-                    <div className="h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-indigo-500/20">
-                      2
-                    </div>
-                    <div className="space-y-2 flex-1">
-                      <h4 className="font-bold text-foreground">Click &ldquo;+ Provision Node&rdquo;</h4>
-                      <p className="text-muted-foreground text-xs leading-relaxed">
-                        Click the primary creation button in the top-right header to launch the secure node provisioning drawer.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4 items-start">
-                    <div className="h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-indigo-500/20">
-                      3
-                    </div>
-                    <div className="space-y-2 flex-1">
-                      <h4 className="font-bold text-foreground">Configure Tenant Identity & Subdomain</h4>
-                      <p className="text-muted-foreground text-xs leading-relaxed">
-                        Enter the organization&apos;s legal entity name (e.g. <code>Acme Logistics Ltd</code>) and system slug (e.g. <code>acme</code>). This slug automatically dictates the subdomain address: <code className="text-primary font-mono">https://acme.techiveet.com</code>.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4 items-start">
-                    <div className="h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-indigo-500/20">
-                      4
-                    </div>
-                    <div className="space-y-2 flex-1">
-                      <h4 className="font-bold text-foreground">Assign Subscription Tier & Resource Limits</h4>
-                      <p className="text-muted-foreground text-xs leading-relaxed">
-                        Select the appropriate subscription tier (Starter, Business, Enterprise) and define maximum storage quotas, permitted operator seat counts, and allowed warehouse locations.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4 items-start">
-                    <div className="h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-mono font-bold shrink-0 mt-0.5 border border-indigo-500/20">
-                      5
-                    </div>
-                    <div className="space-y-2 flex-1">
-                      <h4 className="font-bold text-foreground">Automatic Schema Migration & Admin Invitation</h4>
-                      <p className="text-muted-foreground text-xs leading-relaxed">
-                        Click <strong className="text-foreground">Provision Workspace</strong>. The backend asynchronous worker automatically establishes the database schema, runs database migrations, creates the default tenant roles, and dispatches an encrypted invitation email to the tenant&apos;s lead administrator.
-                      </p>
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
+                      Figure 4.4: Multi-Criteria Filter Bar in Action
+                    </span>
+                    <div className="rounded-xl border border-border/70 overflow-hidden bg-black/40">
+                      <img
+                        src="/manual-screenshots/04-tenants-filtered-search.png"
+                        alt="Filtered Tenant Registry View"
+                        className="w-full h-auto"
+                      />
                     </div>
                   </div>
                 </div>
 
-                {/* Workspace Lifecycle Statuses */}
-                <div className="p-5 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 space-y-4">
-                  <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-indigo-400" />
-                    Understanding Tenant Lifecycle Statuses
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                    <div className="p-3 rounded-xl border border-border/60 bg-background/60 space-y-1">
-                      <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono">ACTIVE</Badge>
-                      <p className="text-muted-foreground">Full read/write operational access for all tenant staff.</p>
+                <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-2 text-xs text-muted-foreground">
+                  <p className="font-bold text-foreground">Available Multi-Criteria Filters:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li><strong className="text-foreground">Capacity Plan:</strong> Filter nodes by tier (<code className="text-primary font-mono">Startup</code>, <code className="text-primary font-mono">Business</code>, <code className="text-primary font-mono">Enterprise</code>).</li>
+                    <li><strong className="text-foreground">Node Status:</strong> Filter between operational nodes (<code className="text-primary font-mono">Online</code>) and restricted nodes (<code className="text-primary font-mono">Suspended</code>).</li>
+                    <li><strong className="text-foreground">Business Type:</strong> Select from 9 verticals including Restaurant, Hospitality, Retail, Clinic, Real Estate, LMS, and Car Parking.</li>
+                    <li><strong className="text-foreground">Matrix Search:</strong> Debounced query instantly matching organization names, slugs, admin emails, and custom domains.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* ========================================================== */}
+              {/* SECTION 3: STEP-BY-STEP LONG-FORM PROVISIONING WORKFLOW    */}
+              {/* ========================================================== */}
+              <div className="space-y-6 pt-6 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-indigo-400" />
+                    3. Step-by-Step Node Provisioning Workflow (Long-Form Wizard)
+                  </h3>
+                  <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
+                    FIGURE 4.5 – 4.8
+                  </Badge>
+                </div>
+
+                <p className="text-sm text-foreground/90 leading-relaxed">
+                  Launching a new tenant node is an atomic, multi-phase procedure executed through the secure provisioning drawer. Because the provisioning form includes infrastructure parameters, live Monaco JSON editing, and admin credential generation, review each phase below:
+                </p>
+
+                {/* Phase 1 */}
+                <div className="space-y-3 p-5 rounded-2xl border border-indigo-500/20 bg-indigo-500/5">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-indigo-500 text-white flex items-center justify-center font-mono font-bold text-xs">
+                      1
                     </div>
-                    <div className="p-3 rounded-xl border border-border/60 bg-background/60 space-y-1">
-                      <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-mono">MAINTENANCE</Badge>
-                      <p className="text-muted-foreground">Read-only mode during automated database schema updates.</p>
-                    </div>
-                    <div className="p-3 rounded-xl border border-border/60 bg-background/60 space-y-1">
-                      <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-mono">SUSPENDED</Badge>
-                      <p className="text-muted-foreground">Temporarily locked due to billing or compliance verification.</p>
-                    </div>
-                    <div className="p-3 rounded-xl border border-border/60 bg-background/60 space-y-1">
-                      <Badge className="bg-muted text-muted-foreground border border-border text-[10px] font-mono">ARCHIVED</Badge>
-                      <p className="text-muted-foreground">Cold storage archive ready for export or permanent purge.</p>
-                    </div>
+                    <h4 className="font-bold text-sm text-foreground">Phase 1: Node Infrastructure & Wildcard Subdomain Routing</h4>
                   </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Define the organization&apos;s legal name and system Node ID. The Node ID automatically generates the primary wildcard routing address (e.g., <code className="text-primary font-mono">starlight.techiveet.com</code>).
+                  </p>
+                  <div className="rounded-xl border border-border/70 overflow-hidden shadow-lg bg-black/40">
+                    <img
+                      src="/manual-screenshots/04-tenants-provision-modal-top.png"
+                      alt="Provision Modal - Infrastructure Parameters"
+                      className="w-full h-auto"
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground italic text-center">
+                    Figure 4.5: Long Form Phase 1 - Organization Name, Node ID (slug), Capacity Plan selector, and Wildcard Subdomain DNS advisory.
+                  </p>
+                </div>
+
+                {/* Phase 2 */}
+                <div className="space-y-3 p-5 rounded-2xl border border-purple-500/20 bg-purple-500/5">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-purple-500 text-white flex items-center justify-center font-mono font-bold text-xs">
+                      2
+                    </div>
+                    <h4 className="font-bold text-sm text-foreground">Phase 2: Business Landing Customization & Monaco JSON Editor</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Select the vertical business type and preset variant. The embedded Monaco Code Editor provides live JSON syntax verification, schema validation, and real-time iframe previews.
+                  </p>
+                  <div className="rounded-xl border border-border/70 overflow-hidden shadow-lg bg-black/40">
+                    <img
+                      src="/manual-screenshots/04-tenants-provision-modal-landing.png"
+                      alt="Provision Modal - Business Landing & Template Editor"
+                      className="w-full h-auto"
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground italic text-center">
+                    Figure 4.6: Long Form Phase 2 - Industry vertical selector, preset variant picker, Monaco virtual code editor, and live preview toggle.
+                  </p>
+                </div>
+
+                {/* Phase 3 */}
+                <div className="space-y-3 p-5 rounded-2xl border border-blue-500/20 bg-blue-500/5">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-blue-500 text-white flex items-center justify-center font-mono font-bold text-xs">
+                      3
+                    </div>
+                    <h4 className="font-bold text-sm text-foreground">Phase 3: Landing Template Library Picker</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Click &ldquo;Choose from Library&rdquo; to browse master templates curated for specific verticals, inspect compatibility scores, and apply them with one click.
+                  </p>
+                  <div className="rounded-xl border border-border/70 overflow-hidden shadow-lg bg-black/40">
+                    <img
+                      src="/manual-screenshots/04-tenants-template-library-picker.png"
+                      alt="Landing Template Library Picker"
+                      className="w-full h-auto"
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground italic text-center">
+                    Figure 4.7: Master Landing Template Library dialog showcasing framework compatibility, tags, and one-click selection.
+                  </p>
+                </div>
+
+                {/* Phase 4 */}
+                <div className="space-y-3 p-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-emerald-500 text-white flex items-center justify-center font-mono font-bold text-xs">
+                      4
+                    </div>
+                    <h4 className="font-bold text-sm text-foreground">Phase 4: Super Administrator Credentials & Automated Dispatch</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Set the primary tenant administrator&apos;s name, corporate email, and initial password. Clicking &ldquo;Provision&rdquo; dispatches the background worker queue to establish the schema, run migrations, and seed default RBAC roles.
+                  </p>
+                  <div className="rounded-xl border border-border/70 overflow-hidden shadow-lg bg-black/40">
+                    <img
+                      src="/manual-screenshots/04-tenants-provision-modal-admin.png"
+                      alt="Provision Modal - Super Admin Settings"
+                      className="w-full h-auto"
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground italic text-center">
+                    Figure 4.8: Long Form Phase 4 - Super Admin credentials, password security constraints, and asynchronous Provision action button.
+                  </p>
+                </div>
+              </div>
+
+              {/* ========================================================== */}
+              {/* SECTION 4: NODE RECONFIGURATION & DIRTY-STATE SAFETY        */}
+              {/* ========================================================== */}
+              <div className="space-y-4 pt-6 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
+                    <Pencil className="w-5 h-5 text-indigo-400" />
+                    4. Node Reconfiguration & Capacity Scaling
+                  </h3>
+                  <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
+                    FIGURE 4.9
+                  </Badge>
+                </div>
+
+                <p className="text-sm text-foreground/90 leading-relaxed">
+                  Clicking the Edit button (<code className="text-primary font-mono">Pencil</code>) opens the Reconfigure Node modal prefilled with current settings. Built-in dirty-state tracking blocks accidental submissions when no parameters have changed.
+                </p>
+
+                <div className="rounded-2xl border border-border/80 overflow-hidden shadow-2xl bg-black/40 group relative">
+                  <img
+                    src="/manual-screenshots/04-tenants-edit-modal.png"
+                    alt="Reconfigure Tenant Node Modal"
+                    className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.01]"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground italic text-center">
+                  Figure 4.9: Node Reconfiguration dialog showing prefilled fields, password retention safety, and dirty-state validation.
+                </p>
+              </div>
+
+              {/* ========================================================== */}
+              {/* SECTION 5: DEEP METRIC INSPECTION & ACTIVITY AUDITING       */}
+              {/* ========================================================== */}
+              <div className="space-y-4 pt-6 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
+                    <Eye className="w-5 h-5 text-indigo-400" />
+                    5. Deep Metric Inspection & Workspace Telemetry
+                  </h3>
+                  <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
+                    FIGURE 4.10 & 4.11
+                  </Badge>
+                </div>
+
+                <p className="text-sm text-foreground/90 leading-relaxed">
+                  Clicking the <strong className="text-foreground">Activity</strong> button on any row opens the deep telemetry view, partitioned into two distinct monitoring panes:
+                </p>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
+                      Figure 4.10: Activity & Users Tab
+                    </span>
+                    <div className="rounded-xl border border-border/70 overflow-hidden bg-black/40 shadow-xl">
+                      <img
+                        src="/manual-screenshots/04-tenants-view-activity-tab.png"
+                        alt="Tenant Activity and Users Inspection"
+                        className="w-full h-auto"
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground italic text-center">
+                      Live view of database reachability, admin clearance, 4 real-time KPI cards, 7-day activity histogram, and workspace users roster.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
+                      Figure 4.11: Configuration & Domains Tab
+                    </span>
+                    <div className="rounded-xl border border-border/70 overflow-hidden bg-black/40 shadow-xl">
+                      <img
+                        src="/manual-screenshots/04-tenants-view-config-tab.png"
+                        alt="Tenant Configuration and Registered Landing"
+                        className="w-full h-auto"
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground italic text-center">
+                      Architectural configuration showing active capacity plan, license expiry, enabled module subscriptions, and registered landing page preview iframe.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ========================================================== */}
+              {/* SECTION 6: CUSTOM DOMAIN MANAGEMENT & DNS SETUP            */}
+              {/* ========================================================== */}
+              <div className="space-y-4 pt-6 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
+                    <Globe className="w-5 h-5 text-indigo-400" />
+                    6. Custom Domain Management & Cryptographic DNS Setup
+                  </h3>
+                  <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
+                    FIGURE 4.12
+                  </Badge>
+                </div>
+
+                <p className="text-sm text-foreground/90 leading-relaxed">
+                  Tenants can bind custom corporate domains (e.g., <code className="text-primary font-mono">portal.acme.com</code>). The domain manager generates the required DNS routing targets and challenge tokens for SSL certificate issuance:
+                </p>
+
+                <div className="rounded-2xl border border-border/80 overflow-hidden shadow-2xl bg-black/40 group relative">
+                  <img
+                    src="/manual-screenshots/04-tenants-domain-manager.png"
+                    alt="Custom Domain Manager within Tenant Overview"
+                    className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.01]"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground italic text-center">
+                  Figure 4.12: Custom Domain Manager displaying active domains, CNAME routing targets, and TXT cryptographic verification tokens.
+                </p>
+
+                <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-2 text-xs text-muted-foreground">
+                  <p className="font-bold text-foreground">DNS Record Configuration Guide:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li><strong className="text-foreground">Subdomains:</strong> Create a <code className="text-primary font-mono">CNAME</code> record pointing to <code className="text-primary font-mono">techiveet.com</code>.</li>
+                    <li><strong className="text-foreground">Apex Domains:</strong> Create an <code className="text-primary font-mono">A</code> record pointing to your cluster public IP address.</li>
+                    <li><strong className="text-foreground">Verification:</strong> Create a <code className="text-primary font-mono">TXT</code> record at <code className="text-primary font-mono">_hive-challenge</code> with the generated verification hash.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* ========================================================== */}
+              {/* SECTION 7: EMERGENCY SUSPENSION & PURGE PROTOCOLS           */}
+              {/* ========================================================== */}
+              <div className="space-y-4 pt-6 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-destructive" />
+                    7. Emergency Suspension & Fatal Purge Protocols
+                  </h3>
+                  <Badge variant="outline" className="font-mono text-[10px] text-destructive border-destructive/30">
+                    FIGURE 4.13
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                      <Power className="w-4 h-4" />
+                      Instant Network Suspension (Power Button)
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Clicking the Power icon toggles the node between <code className="text-primary font-mono">Online</code> and <code className="text-destructive font-mono">Suspended</code>. All active session tokens are revoked and inbound traffic is blocked, while preserving database tables intact.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl border border-blue-500/30 bg-blue-500/5 space-y-2">
+                    <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
+                      <UserCheck className="w-4 h-4" />
+                      Super Admin Clearance Lock (UserCheck/UserX)
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Temporarily enables or revokes Super Admin backdoor access into the tenant workspace for compliance audits and high-priority technical support sessions.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  <div className="rounded-2xl border border-destructive/40 overflow-hidden shadow-2xl bg-black/40 group relative">
+                    <img
+                      src="/manual-screenshots/04-tenants-purge-dialog.png"
+                      alt="Fatal Purge Node Confirmation Dialog"
+                      className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.01]"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground italic text-center">
+                    Figure 4.13: Destructive purge safety alert requiring explicit confirmation before permanently dropping isolated PostgreSQL schemas.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-destructive/30 bg-destructive/5 space-y-2">
+                  <p className="text-xs font-bold text-destructive flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4" />
+                    Irreversible Purge Security Consequences:
+                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Purging a node permanently drops the isolated PostgreSQL schema (<code className="text-destructive font-mono">tenant_&#123;id&#125;</code>), purges all S3 asset directories, revokes SSL certificates, and logs a permanent forensic deletion record in the Central Audit Trail.
+                  </p>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-4 border-t border-border/50 flex items-center justify-end">
+              <div className="pt-6 border-t border-border/50 flex items-center justify-end">
                 <Link href="/dashboard/tenants">
-                  <Button className="rounded-full gap-2 font-space font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white">
+                  <Button className="rounded-full gap-2 font-space font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20">
                     <Building2 className="w-3.5 h-3.5" />
                     Open Multi-Tenant Cockpit
                   </Button>

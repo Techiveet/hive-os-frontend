@@ -54,6 +54,7 @@ import {
   DASHBOARD_MODULE_IDS,
   DASHBOARD_NAV,
   DASHBOARD_SECONDARY,
+  MODULE_ID_TO_SUBSCRIPTION_SLUG,
   isSubItemActive,
   type NavItem,
 } from "./nav";
@@ -63,6 +64,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { useBusinessType } from "@/hooks/use-business-type";
 import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
+import { requiredSubscriptionModules } from "@/lib/subscription-module-scope";
 import { cn } from "@/lib/utils";
 import {
   getAuthHeaders,
@@ -211,7 +213,7 @@ function SidebarInner({
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
   const { hasAnyPermission } = usePermissions();
-  const { hasModule } = useTenantModuleAccess();
+  const { hasModule, moduleAccess } = useTenantModuleAccess();
   const { hasChatWorkspace, hasMailboxModule } = useChatAccess();
   const { hasBusinessType } = useBusinessType();
   const { t } = useTranslation();
@@ -355,16 +357,20 @@ function SidebarInner({
         !hasBusinessType(item.businessTypes)
       )
         return false;
-      if (isTenantNode && item.subscriptionSlug) {
-        const requiredModules = Array.isArray(item.subscriptionSlug)
-          ? item.subscriptionSlug
-          : [item.subscriptionSlug];
-        if (!requiredModules.some((slug) => hasModule(slug))) return false;
+      if (isTenantNode) {
+        const rawSlug = item.subscriptionSlug ?? MODULE_ID_TO_SUBSCRIPTION_SLUG[item.moduleId];
+        if (rawSlug) {
+          const requiredModules = requiredSubscriptionModules(
+            rawSlug,
+            moduleAccess?.submodule_mode === "selected",
+          );
+          if (!requiredModules.some((slug) => hasModule(slug))) return false;
+        }
       }
       if (!item.permissions || item.permissions.length === 0) return true;
       return hasAnyPermission(item.permissions);
     },
-    [hasAnyPermission, hasBusinessType, hasModule, isTenantNode],
+    [hasAnyPermission, hasBusinessType, hasModule, isTenantNode, moduleAccess?.submodule_mode],
   );
 
   const filteredNav = useMemo(() => {

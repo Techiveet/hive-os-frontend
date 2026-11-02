@@ -47,6 +47,42 @@ export function OfflineRuntime() {
       return;
     }
 
+    const isDev =
+      process.env.NODE_ENV !== "production" ||
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname.endsWith(".localhost") ||
+      window.location.port === "3000" ||
+      window.location.port === "3001";
+
+    // In development mode, service workers interfere with Turbopack/Next.js HMR chunk graph.
+    // Cleanly unregister any active service worker and clear caches to guarantee fresh module chunks.
+    if (isDev) {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) => {
+          for (const registration of registrations) {
+            const worker = registration.active ?? registration.waiting ?? registration.installing;
+            if (worker && new URL(worker.scriptURL).pathname === "/sw.js") {
+              void registration.unregister();
+            }
+          }
+        })
+        .catch(() => {});
+
+      if ("caches" in window) {
+        caches
+          .keys()
+          .then((keys) => {
+            for (const key of keys) {
+              if (key.startsWith("hive-os-shell-")) void caches.delete(key);
+            }
+          })
+          .catch(() => {});
+      }
+      return;
+    }
+
     const registerSW = async () => {
       try {
         await navigator.serviceWorker.register("/sw.js", { scope: "/" });
