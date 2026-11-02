@@ -374,9 +374,13 @@ export default function OrderCoursingPanel({
               <Label className="text-xs uppercase tracking-widest" htmlFor="transfer_table">
                 Move to another table
               </Label>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <Select value={destinationTableId} onValueChange={setDestinationTableId}>
-                  <SelectTrigger id="transfer_table" className="sm:w-56" data-testid="table-transfer-select">
+                  <SelectTrigger
+                    id="transfer_table"
+                    className="w-full sm:min-w-[12rem] sm:flex-1 sm:basis-[12rem]"
+                    data-testid="table-transfer-select"
+                  >
                     <SelectValue placeholder="Destination table" />
                   </SelectTrigger>
                   <SelectContent>
@@ -397,11 +401,13 @@ export default function OrderCoursingPanel({
                   placeholder="Reason (required)"
                   aria-label="Table transfer reason"
                   data-testid="table-transfer-reason"
+                  className="min-w-0 sm:min-w-[10rem] sm:flex-[2] sm:basis-[10rem]"
                   value={tableReason}
                   onChange={(event) => setTableReason(event.target.value)}
                 />
                 <Button
                   type="button"
+                  className="w-full shrink-0 sm:w-auto"
                   disabled={busy || !destinationTableId || !tableReason.trim()}
                   data-testid="table-transfer-submit"
                   onClick={() => tableMutation.mutate()}
@@ -420,11 +426,11 @@ export default function OrderCoursingPanel({
               <Label className="text-xs uppercase tracking-widest" htmlFor="reassign_waiter">
                 Reassign to another waiter
               </Label>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <Select value={waiterId} onValueChange={setWaiterId}>
                   <SelectTrigger
                     id="reassign_waiter"
-                    className="sm:w-56"
+                    className="w-full sm:min-w-[12rem] sm:flex-1 sm:basis-[12rem]"
                     data-testid="waiter-reassign-select"
                   >
                     <SelectValue placeholder="New waiter" />
@@ -445,11 +451,13 @@ export default function OrderCoursingPanel({
                   placeholder="Reason (required)"
                   aria-label="Waiter reassignment reason"
                   data-testid="waiter-reassign-reason"
+                  className="min-w-0 sm:min-w-[10rem] sm:flex-[2] sm:basis-[10rem]"
                   value={waiterReason}
                   onChange={(event) => setWaiterReason(event.target.value)}
                 />
                 <Button
                   type="button"
+                  className="w-full shrink-0 sm:w-auto"
                   disabled={busy || !waiterId || !waiterReason.trim()}
                   data-testid="waiter-reassign-submit"
                   onClick={() => waiterMutation.mutate()}

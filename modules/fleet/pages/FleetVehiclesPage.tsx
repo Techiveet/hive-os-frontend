@@ -27,10 +27,11 @@ const TABS = ["vehicles", "drivers", "assignments"] as const;
 type Tab = (typeof TABS)[number];
 
 const VEHICLE_TYPES = ["truck", "van", "pickup", "car", "forklift", "bike", "trailer"] as const;
-const VEHICLE_STATUSES = ["active", "in_service", "grounded", "disposed"] as const;
+const VEHICLE_STATUSES = ["active", "assigned", "in_service", "grounded", "disposed"] as const;
 
 const STATUS_TONE: Record<string, string> = {
   active: "default",
+  assigned: "secondary",
   in_service: "secondary",
   grounded: "destructive",
   disposed: "outline",
@@ -199,6 +200,9 @@ export default function FleetVehiclesPage() {
 
   const vehicles = (vehicleOptions.data?.data ?? []) as FleetVehicle[];
   const drivers = (driverOptions.data?.data ?? []) as FleetDriver[];
+
+  // Filter out vehicles that are already assigned (have a driver)
+  const availableVehicles = vehicles.filter((vehicle) => !vehicle.assigned_driver_id);
 
   const vehicleColumns = React.useMemo<ColumnDef<FleetVehicle>[]>(
     () => [
@@ -758,7 +762,7 @@ export default function FleetVehiclesPage() {
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
                 <option value="">{t("fleet.common.select", "Select...")}</option>
-                {vehicles.map((vehicle) => (
+                {availableVehicles.map((vehicle) => (
                   <option key={vehicle.id} value={vehicle.id}>
                     {vehicle.registration} — {vehicle.code}
                   </option>

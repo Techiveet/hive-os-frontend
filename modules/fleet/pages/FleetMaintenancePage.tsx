@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/store/use-translation";
 
@@ -43,6 +43,7 @@ export default function FleetMaintenancePage() {
 
   const [scheduleOpen, setScheduleOpen] = React.useState(false);
   const [serviceOpen, setServiceOpen] = React.useState(false);
+  const [deleteScheduleFor, setDeleteScheduleFor] = React.useState<FleetServiceSchedule | null>(null);
 
   const [scheduleForm, setScheduleForm] = React.useState({
     vehicle_id: "",
@@ -118,6 +119,7 @@ export default function FleetMaintenancePage() {
     onSuccess: () => {
       toast.success(t("fleet.maintenance.schedule_deleted", "Schedule removed."));
       invalidate();
+      setDeleteScheduleFor(null);
     },
     onError: (error: any) => toast.error(errorText(error, "Could not remove it.")),
   });
@@ -262,7 +264,7 @@ export default function FleetMaintenancePage() {
                     variant="ghost"
                     size="sm"
                     className="shrink-0 text-destructive"
-                    onClick={() => deleteSchedule.mutate(schedule.id)}
+                    onClick={() => setDeleteScheduleFor(schedule)}
                     aria-label={t("fleet.common.delete", "Delete")}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -541,6 +543,38 @@ export default function FleetMaintenancePage() {
               disabled={saveService.isPending || !serviceForm.vehicle_id}
             >
               {t("fleet.common.save", "Save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete schedule confirmation */}
+      <Dialog open={deleteScheduleFor !== null} onOpenChange={(open) => !open && setDeleteScheduleFor(null)}>
+        <DialogContent className="sm:max-w-md rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl">
+          <div className="border-b border-border/40 px-6 py-5">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black tracking-tight">
+                {t("fleet.maintenance.delete_schedule_title", "Delete schedule")}
+              </DialogTitle>
+              <DialogDescription>
+                {t(
+                  "fleet.maintenance.delete_schedule_desc",
+                  "This schedule will be removed permanently. Are you sure?",
+                )}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <DialogFooter className="border-t border-border/40 px-6 py-4">
+            <Button variant="ghost" onClick={() => setDeleteScheduleFor(null)}>
+              {t("fleet.common.cancel", "Cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteSchedule.isPending}
+              onClick={() => deleteScheduleFor && deleteSchedule.mutate(deleteScheduleFor.id)}
+            >
+              {deleteSchedule.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t("fleet.maintenance.delete_schedule", "Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

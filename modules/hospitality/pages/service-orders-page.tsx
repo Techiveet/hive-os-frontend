@@ -51,6 +51,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import api from "@/modules/shared/api/http";
 import { Checkbox } from "@/components/ui/checkbox";
 import { notifyBulkDeleteOutcomes, notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
+import { dialogSelectDismissProps } from "@/modules/production/dialog-select-dismiss";
 import { usePermissions } from "@/hooks/use-permissions";
 
 type PendingOrderItem = {
@@ -62,6 +63,14 @@ type PendingOrderItem = {
   is_comp: boolean;
   comp_reason: string | null;
 };
+
+function firstApiError(error: unknown): string | null {
+  const data = (error as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })
+    ?.response?.data;
+  if (!data) return null;
+  const fieldErrors = data.errors ? Object.values(data.errors).flat() : [];
+  return fieldErrors[0] || data.message || null;
+}
 
 export default function ServiceOrdersPage() {
   const queryClient = useQueryClient();
@@ -204,7 +213,7 @@ export default function ServiceOrdersPage() {
       resetCreateForm();
     },
     onError: (error: any) => {
-      toast.error(error?.response?.data?.message || "Failed to place service order");
+      toast.error(firstApiError(error) || "Failed to place service order");
     },
   });
 
@@ -221,7 +230,7 @@ export default function ServiceOrdersPage() {
       setIsDetailDialogOpen(false);
     },
     onError: (error: any) => {
-      toast.error(error?.response?.data?.message || "Failed to update order");
+      toast.error(firstApiError(error) || "Failed to update order");
     },
   });
 
@@ -295,20 +304,25 @@ export default function ServiceOrdersPage() {
       return;
     }
 
+    // Do not send unit_price unless the user is intentionally overriding —
+    // echoing the catalog price is treated as a manual override when the actor
+    // has override_hospitality_order_prices, and the API then requires a reason.
     const payload = {
       location_id: Number(createForm.location_id),
-      reservation_id: createForm.reservation_id ? Number(createForm.reservation_id) : null,
+      reservation_id:
+        createForm.reservation_id && createForm.reservation_id !== "none"
+          ? Number(createForm.reservation_id)
+          : null,
       notes: createForm.notes || null,
       status: createForm.status,
-      items: pendingItems.map(item => ({
+      items: pendingItems.map((item) => ({
         menu_item_id: Number(item.menu_item_id),
         inventory_item_id: item.inventory_item_id,
         item_name: item.item_name,
         quantity: item.quantity,
-        unit_price: item.unit_price,
         is_comp: item.is_comp,
         comp_reason: item.comp_reason,
-      }))
+      })),
     };
 
     createMutation.mutate(payload);
@@ -804,16 +818,19 @@ export default function ServiceOrdersPage() {
 
       {/* Detail & Status Edit Dialog */}
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-        <DialogContent className="sm:max-w-[550px]">
-          <DialogHeader>
+        <DialogContent
+          className="sm:max-w-[550px] max-h-[90vh] flex flex-col gap-0 overflow-hidden p-0"
+          {...dialogSelectDismissProps}
+        >
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-4 pr-12">
             <DialogTitle>Manage Order: {selectedOrder?.order_number}</DialogTitle>
             <DialogDescription>
               Update the ticket preparation status and view order details.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditSubmit} className="space-y-4">
+          <form onSubmit={handleEditSubmit} className="flex min-h-0 flex-1 flex-col">
             {selectedOrder && (
-              <div className="space-y-4">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 pb-2">
                 <div className="flex items-center justify-between border-b pb-3 text-sm">
                   <div>
                     <span className="font-bold text-muted-foreground">Location: </span>
@@ -912,7 +929,7 @@ export default function ServiceOrdersPage() {
                 )}
               </div>
             )}
-            <DialogFooter className="pt-4 border-t flex justify-between sm:justify-between items-center w-full">
+            <DialogFooter className="shrink-0 border-t bg-background px-6 py-4 flex justify-between sm:justify-between items-center w-full">
               {selectedOrder && canViewBilling && (
                 <Button
                   type="button"

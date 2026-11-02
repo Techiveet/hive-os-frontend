@@ -112,6 +112,21 @@ interface DynamicEventItem {
   image: string;
 }
 
+type PublishedGuestFeedback = {
+  id: number;
+  customer_name: string;
+  rating: number;
+  comment?: string | null;
+  created_at: string;
+};
+
+type DisplayReview = {
+  quote: string;
+  author: string;
+  role: string;
+  rating: number;
+};
+
 export function RestaurantLandingTemplate({
   brandSettings,
   template,
@@ -133,6 +148,21 @@ export function RestaurantLandingTemplate({
   const [dynamicEvents, setDynamicEvents] = React.useState<DynamicEventItem[]>(defaultEvents);
 
   // Load dynamic menu items from API
+  const { data: publishedGuestFeedback = [] } = useQuery({
+    queryKey: ["tenantPublicFeedback"],
+    queryFn: async () => {
+      const res = await fetch(`${getBackendApiRoot()}/public/hospitality/feedback`, {
+        headers: {
+          Accept: "application/json",
+          ...getTenantHeaders(),
+        },
+      });
+      if (!res.ok) throw new Error("Failed to fetch public feedback");
+      return res.json() as Promise<PublishedGuestFeedback[]>;
+    },
+    staleTime: 30000,
+  });
+
   const { data: apiMenuItemsData } = useQuery({
     queryKey: ["tenantPublicMenuItems"],
     queryFn: async () => {
@@ -256,6 +286,16 @@ export function RestaurantLandingTemplate({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   const [successReservation, setSuccessReservation] = React.useState<{ reservation_code: string; customer_name: string; reservation_time: string } | null>(null);
+
+  const [feedbackForm, setFeedbackForm] = React.useState({
+    customer_name: "",
+    customer_phone: "",
+    rating: 5,
+    comment: "",
+  });
+  const [isFeedbackSubmitting, setIsFeedbackSubmitting] = React.useState(false);
+  const [feedbackSubmitError, setFeedbackSubmitError] = React.useState<string | null>(null);
+  const [feedbackSubmitSuccess, setFeedbackSubmitSuccess] = React.useState<string | null>(null);
 
   // New interactive sections state
   const [showScrollTop, setShowScrollTop] = React.useState(false);
@@ -585,26 +625,97 @@ export function RestaurantLandingTemplate({
   }, [heroSlides, templateGalleryImages]);
 
   // Testimonials — dashboard-configurable via template.testimonials
-  const loungeTestimonials =
-    Array.isArray(template?.testimonials) && template.testimonials.length > 0
-      ? template.testimonials.slice(0, 3)
-      : [
-          {
-            quote: t("landing.reviews.q1", "The atmosphere is unmatched — neon glow, deep house, and the best espresso martini in the city."),
-            author: "Hanna T.",
-            role: t("landing.reviews.r1", "Regular Guest"),
-          },
-          {
-            quote: t("landing.reviews.q2", "Booked the VIP lounge for a birthday. Bottle service, dedicated host, zero hassle. We're coming back."),
-            author: "Dawit M.",
-            role: t("landing.reviews.r2", "VIP Member"),
-          },
-          {
-            quote: t("landing.reviews.q3", "Dinner flows into the club night seamlessly. One venue, a whole evening — that's rare."),
-            author: "Sara K.",
-            role: t("landing.reviews.r3", "Food Critic"),
-          },
-        ];
+  const staticTestimonials = React.useMemo(
+    () =>
+      Array.isArray(template?.testimonials) && template.testimonials.length > 0
+        ? template.testimonials.slice(0, 3)
+        : [
+            {
+              quote: t("landing.reviews.q1", "The atmosphere is unmatched — neon glow, deep house, and the best espresso martini in the city."),
+              author: "Hanna T.",
+              role: t("landing.reviews.r1", "Regular Guest"),
+            },
+            {
+              quote: t("landing.reviews.q2", "Booked the VIP lounge for a birthday. Bottle service, dedicated host, zero hassle. We're coming back."),
+              author: "Dawit M.",
+              role: t("landing.reviews.r2", "VIP Member"),
+            },
+            {
+              quote: t("landing.reviews.q3", "Dinner flows into the club night seamlessly. One venue, a whole evening — that's rare."),
+              author: "Sara K.",
+              role: t("landing.reviews.r3", "Food Critic"),
+            },
+          ],
+    [template?.testimonials, t],
+  );
+
+  const displayedReviews: DisplayReview[] = React.useMemo(() => {
+    const fromGuests: DisplayReview[] = publishedGuestFeedback
+      .filter((item) => (item.comment ?? "").trim().length > 0)
+      .slice(0, 6)
+      .map((item) => ({
+        quote: (item.comment ?? "").trim(),
+        author: item.customer_name,
+        role: new Date(item.created_at).toLocaleDateString(),
+        rating: item.rating,
+      }));
+
+    if (fromGuests.length > 0) {
+      const merged = [...fromGuests];
+      for (const item of staticTestimonials) {
+        if (merged.length >= 3) break;
+        merged.push({ ...item, rating: 5 });
+      }
+      return merged.slice(0, 3);
+    }
+
+    return staticTestimonials.map((item) => ({ ...item, rating: 5 }));
+  }, [publishedGuestFeedback, staticTestimonials]);
+
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsFeedbackSubmitting(true);
+    setFeedbackSubmitError(null);
+    setFeedbackSubmitSuccess(null);
+
+    try {
+      const response = await fetch(`${getBackendApiRoot()}/public/hospitality/feedback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...getTenantHeaders(),
+        },
+        body: JSON.stringify({
+          customer_name: feedbackForm.customer_name.trim(),
+          customer_phone: feedbackForm.customer_phone.trim() || undefined,
+          rating: feedbackForm.rating,
+          comment: feedbackForm.comment.trim() || undefined,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to submit feedback.");
+      }
+
+      setFeedbackSubmitSuccess(
+        result.message ||
+          "Thank you! Your feedback has been received and will appear after review.",
+      );
+      setFeedbackForm({
+        customer_name: "",
+        customer_phone: "",
+        rating: 5,
+        comment: "",
+      });
+    } catch (err) {
+      setFeedbackSubmitError(err instanceof Error ? err.message : "Failed to submit feedback.");
+    } finally {
+      setIsFeedbackSubmitting(false);
+    }
+  };
 
   // Services — dashboard-configurable via template.services, lounge defaults otherwise
   const loungeServices =
@@ -1592,7 +1703,7 @@ export function RestaurantLandingTemplate({
             subtitle={t("landing.reviews.subtitle", "Reviews")}
           />
           <div className="grid md:grid-cols-3 gap-8">
-            {loungeTestimonials.map((item, i) => (
+            {displayedReviews.map((item, i) => (
               <Reveal key={`${item.author}-${i}`} delay={i * 0.12}>
                 <TiltCard className="group relative h-full rounded-[2.5rem] border border-white/[0.08] bg-card p-8 flex flex-col justify-between hover:border-[#7B16D9]/60 hover:shadow-[0_0_35px_rgba(123,22,217,0.22)] transition-all duration-500">
                   <div>
@@ -1600,7 +1711,10 @@ export function RestaurantLandingTemplate({
                       <Quote className="h-9 w-9 text-[#FF1A43] drop-shadow-[0_0_10px_rgba(255,26,67,0.4)]" />
                       <div className="flex gap-1">
                         {Array.from({ length: 5 }).map((_, s) => (
-                          <Star key={s} className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                          <Star
+                            key={s}
+                            className={`h-4 w-4 ${s < item.rating ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground opacity-30"}`}
+                          />
                         ))}
                       </div>
                     </div>
@@ -1621,6 +1735,99 @@ export function RestaurantLandingTemplate({
               </Reveal>
             ))}
           </div>
+
+          <Reveal delay={0.2}>
+            <div className="mt-16 max-w-2xl mx-auto rounded-[2.5rem] border border-white/[0.08] bg-card p-8 sm:p-10 shadow-xl">
+              <h3 className="text-2xl font-black mb-2 text-center">
+                {t("landing.reviews.share_title", "Share your experience")}
+              </h3>
+              <p className="text-muted-foreground text-center mb-8 font-medium">
+                {t(
+                  "landing.reviews.share_desc",
+                  "Tell us how your visit went. Approved reviews may appear on this page.",
+                )}
+              </p>
+              {feedbackSubmitSuccess ? (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center">
+                  <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
+                  <p className="font-bold text-foreground">{feedbackSubmitSuccess}</p>
+                </div>
+              ) : (
+                <form onSubmit={handleFeedbackSubmit} className="space-y-5">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="guest_feedback_name" className="text-sm font-bold mb-2 block">
+                        {t("landing.reviews.name_label", "Your name")}
+                      </label>
+                      <input
+                        id="guest_feedback_name"
+                        required
+                        className="w-full rounded-xl border border-white/10 bg-background/80 px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#FF1A43]"
+                        value={feedbackForm.customer_name}
+                        onChange={(e) => setFeedbackForm({ ...feedbackForm, customer_name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="guest_feedback_phone" className="text-sm font-bold mb-2 block">
+                        {t("landing.reviews.phone_label", "Phone (optional)")}
+                      </label>
+                      <input
+                        id="guest_feedback_phone"
+                        className="w-full rounded-xl border border-white/10 bg-background/80 px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#FF1A43]"
+                        value={feedbackForm.customer_phone}
+                        onChange={(e) => setFeedbackForm({ ...feedbackForm, customer_phone: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-sm font-bold mb-2 block">
+                      {t("landing.reviews.rating_label", "Overall rating")}
+                    </span>
+                    <div className="flex gap-1">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setFeedbackForm({ ...feedbackForm, rating: i + 1 })}
+                          className="p-1"
+                          aria-label={`Rate ${i + 1} stars`}
+                        >
+                          <Star
+                            className={`h-7 w-7 ${i < feedbackForm.rating ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground opacity-40"}`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="guest_feedback_comment" className="text-sm font-bold mb-2 block">
+                      {t("landing.reviews.comment_label", "Your review")}
+                    </label>
+                    <textarea
+                      id="guest_feedback_comment"
+                      rows={4}
+                      className="w-full rounded-xl border border-white/10 bg-background/80 px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#FF1A43] resize-none"
+                      placeholder={t("landing.reviews.comment_placeholder", "What stood out about your visit?")}
+                      value={feedbackForm.comment}
+                      onChange={(e) => setFeedbackForm({ ...feedbackForm, comment: e.target.value })}
+                    />
+                  </div>
+                  {feedbackSubmitError && (
+                    <p className="text-sm font-bold text-red-500 text-center">{feedbackSubmitError}</p>
+                  )}
+                  <Button
+                    type="submit"
+                    disabled={isFeedbackSubmitting || !feedbackForm.customer_name.trim()}
+                    className="w-full rounded-xl h-12 font-black bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] hover:opacity-90"
+                  >
+                    {isFeedbackSubmitting
+                      ? t("landing.reviews.submitting", "Sending...")
+                      : t("landing.reviews.submit", "Submit feedback")}
+                  </Button>
+                </form>
+              )}
+            </div>
+          </Reveal>
         </div>
       </section>
 

@@ -17,6 +17,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -39,24 +50,24 @@ import type { HospitalityEvent } from "@/modules/hospitality/types";
 
 export default function EventsPage() {
   const queryClient = useQueryClient();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [editingEvent, setEditingEvent] = useState<HospitalityEvent | null>(null);
 
   // DataTable State
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [search, setSearch] = useState("");
-  const [sortCol, setSortCol] = useState("start_at");
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [search, setSearch] = useState<string>("");
+  const [sortCol, setSortCol] = useState<string>("start_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [eventTypeFilter, setEventTypeFilter] = useState("all");
-  const [tableKey, setTableKey] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [eventTypeFilter, setEventTypeFilter] = useState<string>("all");
+  const [tableKey, setTableKey] = useState<number>(0);
 
   const handleQueryChange = React.useCallback((q: any) => {
     if (q.page !== undefined) setPage(q.page);
     if (q.pageSize !== undefined) setPageSize(q.pageSize);
     if (q.search !== undefined) {
-      setSearch((prev) => {
+      setSearch((prev: string) => {
         if (prev !== q.search) {
           setPage(1);
         }
@@ -100,7 +111,19 @@ export default function EventsPage() {
     },
   });
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    description: string;
+    event_type: string;
+    start_at: string;
+    end_at: string;
+    is_private: boolean;
+    min_guests: string;
+    max_guests: string;
+    ticket_price: string;
+    status: string;
+    cover_image_url: string;
+  }>({
     name: "",
     description: "",
     event_type: "party",
@@ -217,7 +240,7 @@ export default function EventsPage() {
       id: "name",
       accessorKey: "name", 
       header: "Event Name", 
-      cell: ({ row }) => (
+      cell: ({ row }: any) => (
         <div>
           <div className="font-medium">{row.original.name}</div>
           {row.original.is_private && (
@@ -229,15 +252,15 @@ export default function EventsPage() {
     { 
       id: "start_at",
       accessorKey: "start_at", 
-      header: "Date & Time", 
-      cell: ({ row }) => {
+      header: "Date & Time",
+      cell: ({ row }: any) => {
         const startDate = new Date(row.original.start_at);
         const endDate = new Date(row.original.end_at);
         return (
           <div>
             <div className="text-sm">{startDate.toLocaleDateString()}</div>
             <div className="text-xs text-muted-foreground">
-              {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
+              {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -
               {endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
           </div>
@@ -248,7 +271,7 @@ export default function EventsPage() {
       id: "event_type",
       accessorKey: "event_type", 
       header: "Type & Status", 
-      cell: ({ row }) => (
+      cell: ({ row }: any) => (
         <div className="flex flex-col items-start gap-1">
           <Badge variant="outline" className="capitalize">{row.original.event_type.replace('_', ' ')}</Badge>
           <Badge className={`capitalize ${statusColors[row.original.status] || "bg-muted"}`} variant="secondary">
@@ -260,7 +283,7 @@ export default function EventsPage() {
     { 
       id: "stats",
       header: "Stats", 
-      cell: ({ row }) => (
+      cell: ({ row }: any) => (
         <div className="text-xs text-muted-foreground space-y-1">
           <div className="flex items-center gap-1">
             <MapPin className="h-3 w-3" />
@@ -276,7 +299,7 @@ export default function EventsPage() {
     {
       id: "actions",
       header: "Actions",
-      cell: ({ row }) => (
+      cell: ({ row }: any) => (
         <div className="flex items-center justify-end gap-2">
           <Button
             variant="ghost"
@@ -286,24 +309,40 @@ export default function EventsPage() {
           >
             <Pencil className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              if (confirm("Are you sure you want to delete this event?")) {
-                deleteMutation.mutate(row.original.id);
-              }
-            }}
-            className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Event</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete "{row.original.name}"? This will also affect all associated reservations.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => deleteMutation.mutate(row.original.id)}
+                  className="rounded-full"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       ),
     },
   ];
 
-  const exportUrl = React.useMemo(() => {
+  const exportUrl = React.useMemo<string>(() => {
     const params = new URLSearchParams();
     if (search.trim()) params.set("search", search.trim());
     if (statusFilter !== "all") params.set("status", statusFilter);
@@ -494,7 +533,7 @@ export default function EventsPage() {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" onClick={() => setTableKey(prev => prev + 1)}>
+        <Button variant="outline" onClick={() => setTableKey((prev: number) => prev + 1)}>
           Refresh Data
         </Button>
       </div>

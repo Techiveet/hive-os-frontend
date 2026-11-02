@@ -155,11 +155,13 @@ function ProjectOverview({
   tasks,
   onAddTask,
   onTaskClick,
+  onViewWorkload,
 }: {
   project: Project;
   tasks: Task[];
   onAddTask: () => void;
   onTaskClick: (task: Task) => void;
+  onViewWorkload: () => void;
 }) {
   const { t } = useTranslation();
   const { startTour } = useTour();
@@ -629,7 +631,13 @@ function ProjectOverview({
                   <div className="py-8 text-center text-xs text-muted-foreground italic">{t("project_management.no_team_members_assigned", "No team members assigned.")}</div>
                 )}
               </div>
-              <Button variant="ghost" size="sm" className="w-full h-8 text-[11px] font-bold uppercase tracking-widest text-primary hover:bg-primary/5 border border-dashed border-primary/20">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full h-8 text-[11px] font-bold uppercase tracking-widest text-primary hover:bg-primary/5 border border-dashed border-primary/20"
+                onClick={onViewWorkload}
+              >
                 {t("project_management.view_full_workload_chart", "View Full Workload Chart")}
               </Button>
             </div>
@@ -1011,7 +1019,13 @@ export default function ProjectDetailPage({ id }: ProjectDetailPageProps) {
       </div>
 
       {view === "overview" && (
-        <ProjectOverview project={definedProject} tasks={allTasks} onAddTask={() => handleAddTask()} onTaskClick={handleTaskClick} />
+        <ProjectOverview
+          project={definedProject}
+          tasks={allTasks}
+          onAddTask={() => handleAddTask()}
+          onTaskClick={handleTaskClick}
+          onViewWorkload={() => setView("resources")}
+        />
       )}
 
       {view === "board" && (

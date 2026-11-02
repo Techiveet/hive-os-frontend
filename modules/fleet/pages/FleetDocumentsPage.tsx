@@ -3,7 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/store/use-translation";
 
@@ -40,6 +40,7 @@ export default function FleetDocumentsPage() {
 
   const [tableQuery, setTableQuery] = React.useState({ page: 1, pageSize: 10, search: "" });
   const [open, setOpen] = React.useState(false);
+  const [deleteDocumentFor, setDeleteDocumentFor] = React.useState<FleetDocument | null>(null);
   const [form, setForm] = React.useState({
     subject: "vehicle",
     subject_id: "",
@@ -104,6 +105,7 @@ export default function FleetDocumentsPage() {
     onSuccess: () => {
       toast.success(t("fleet.documents.deleted", "Document removed."));
       invalidate();
+      setDeleteDocumentFor(null);
     },
     onError: (error: any) => toast.error(errorText(error, "Could not remove it.")),
   });
@@ -208,7 +210,7 @@ export default function FleetDocumentsPage() {
               variant="ghost"
               size="sm"
               className="text-destructive"
-              onClick={() => remove.mutate(row.original.id)}
+              onClick={() => setDeleteDocumentFor(row.original)}
               aria-label={t("fleet.common.delete", "Delete")}
             >
               <Trash2 className="h-4 w-4" />
@@ -383,6 +385,38 @@ export default function FleetDocumentsPage() {
               disabled={create.isPending || !form.subject_id || !form.expires_on}
             >
               {t("fleet.common.save", "Save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete document confirmation */}
+      <Dialog open={deleteDocumentFor !== null} onOpenChange={(open) => !open && setDeleteDocumentFor(null)}>
+        <DialogContent className="sm:max-w-md rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl">
+          <div className="border-b border-border/40 px-6 py-5">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black tracking-tight">
+                {t("fleet.documents.delete_title", "Delete document")}
+              </DialogTitle>
+              <DialogDescription>
+                {t(
+                  "fleet.documents.delete_desc",
+                  "This document will be removed permanently. Are you sure?",
+                )}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <DialogFooter className="border-t border-border/40 px-6 py-4">
+            <Button variant="ghost" onClick={() => setDeleteDocumentFor(null)}>
+              {t("fleet.common.cancel", "Cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={remove.isPending}
+              onClick={() => deleteDocumentFor && remove.mutate(deleteDocumentFor.id)}
+            >
+              {remove.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t("fleet.documents.delete", "Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

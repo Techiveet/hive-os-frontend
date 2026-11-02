@@ -3,7 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { AlertTriangle, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/store/use-translation";
 
@@ -44,6 +44,7 @@ export default function FleetTripsPage() {
   const [form, setForm] = React.useState({ vehicle_id: "", driver_id: "", purpose: "", origin: "", destination: "" });
   const [odometerFor, setOdometerFor] = React.useState<{ trip: FleetTrip; action: "start" | "complete" } | null>(null);
   const [odometer, setOdometer] = React.useState("");
+  const [cancelTripFor, setCancelTripFor] = React.useState<FleetTrip | null>(null);
 
   const listQuery = useQuery({
     queryKey: ["fleet", "trips", tableQuery],
@@ -113,6 +114,7 @@ export default function FleetTripsPage() {
     onSuccess: () => {
       toast.success(t("fleet.trips.cancelled", "Trip cancelled."));
       invalidate();
+      setCancelTripFor(null);
     },
     onError: (error: any) => toast.error(errorText(error, "Could not cancel it.")),
   });
@@ -216,7 +218,7 @@ export default function FleetTripsPage() {
                   size="sm"
                   variant="ghost"
                   className="text-[11px]"
-                  onClick={() => cancel.mutate(row.original.id)}
+                  onClick={() => setCancelTripFor(row.original)}
                 >
                   {t("fleet.trips.cancel", "Cancel")}
                 </Button>
@@ -397,6 +399,38 @@ export default function FleetTripsPage() {
               disabled={move.isPending || (odometerFor?.action === "complete" && !odometer)}
             >
               {t("fleet.common.save", "Save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel trip confirmation */}
+      <Dialog open={cancelTripFor !== null} onOpenChange={(open) => !open && setCancelTripFor(null)}>
+        <DialogContent className="sm:max-w-md rounded-[2rem] border-border/60 bg-background/95 p-0 backdrop-blur-xl">
+          <div className="border-b border-border/40 px-6 py-5">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black tracking-tight">
+                {t("fleet.trips.cancel_title", "Cancel trip")}
+              </DialogTitle>
+              <DialogDescription>
+                {t(
+                  "fleet.trips.cancel_desc",
+                  "This trip will be cancelled and removed from the schedule. Are you sure?",
+                )}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <DialogFooter className="border-t border-border/40 px-6 py-4">
+            <Button variant="ghost" onClick={() => setCancelTripFor(null)}>
+              {t("fleet.common.cancel", "Cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={cancel.isPending}
+              onClick={() => cancelTripFor && cancel.mutate(cancelTripFor.id)}
+            >
+              {cancel.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t("fleet.trips.cancel", "Cancel Trip")}
             </Button>
           </DialogFooter>
         </DialogContent>

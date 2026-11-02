@@ -26,6 +26,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
+import { crmApi } from "@/modules/crm/api";
+import type { CrmAccount } from "@/modules/crm/types";
 import { serviceApi } from "@/modules/service/api";
 import type {
   AssetStatus,
@@ -58,7 +60,10 @@ const DEFAULT_ASSET = {
   model: "",
   serial_number: "",
   contract_id: "",
+  crm_account_id: "",
   customer_name: "",
+  /** True when the operator picks a free-text customer instead of a CRM account. */
+  customer_not_in_crm: false,
   site: "",
   installed_on: "",
   warranty_expires_on: "",
@@ -70,7 +75,10 @@ const DEFAULT_ASSET = {
 const DEFAULT_CONTRACT = {
   contract_number: "",
   name: "",
+  crm_account_id: "",
+  sales_customer_id: "",
   customer_name: "",
+  customer_not_in_crm: false,
   tier: "standard" as ContractTier,
   response_hours: "4",
   resolution_hours: "24",
@@ -85,6 +93,10 @@ const DEFAULT_CONTRACT = {
   notes: "",
 };
 
+/** Select value when the customer is free-text rather than a CRM account. */
+const CUSTOMER_NOT_IN_CRM = "custom";
+const CUSTOMER_NONE = "none";
+
 const n = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -94,6 +106,8 @@ const money = (value: unknown) =>
   `ETB ${n(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
 function assetToForm(asset: ServiceAsset) {
+  const crmAccountId = asset.crm_account_id ? String(asset.crm_account_id) : "";
+  const customerName = asset.customer_name ?? "";
   return {
     asset_tag: asset.asset_tag,
     name: asset.name,
@@ -102,7 +116,9 @@ function assetToForm(asset: ServiceAsset) {
     model: asset.model ?? "",
     serial_number: asset.serial_number ?? "",
     contract_id: asset.contract_id ? String(asset.contract_id) : "",
-    customer_name: asset.customer_name ?? "",
+    crm_account_id: crmAccountId,
+    customer_name: customerName,
+    customer_not_in_crm: !crmAccountId && Boolean(customerName.trim()),
     site: asset.site ?? "",
     installed_on: asset.installed_on ? String(asset.installed_on).slice(0, 10) : "",
     warranty_expires_on: asset.warranty_expires_on
@@ -115,10 +131,14 @@ function assetToForm(asset: ServiceAsset) {
 }
 
 function contractToForm(contract: ServiceContract) {
+  const crmAccountId = contract.crm_account_id ? String(contract.crm_account_id) : "";
   return {
     contract_number: contract.contract_number,
     name: contract.name,
+    crm_account_id: crmAccountId,
+    sales_customer_id: contract.sales_customer_id ? String(contract.sales_customer_id) : "",
     customer_name: contract.customer_name,
+    customer_not_in_crm: !crmAccountId && Boolean(contract.customer_name.trim()),
     tier: contract.tier,
     response_hours: String(contract.response_hours),
     resolution_hours: String(contract.resolution_hours),
@@ -146,7 +166,8 @@ function buildAssetPayload(values: typeof DEFAULT_ASSET) {
     model: values.model || null,
     serial_number: values.serial_number || null,
     ...(values.contract_id ? { contract_id: Number(values.contract_id) } : { contract_id: null }),
-    customer_name: values.customer_name || null,
+    crm_account_id: values.crm_account_id ? Number(values.crm_account_id) : null,
+    customer_name: values.customer_name.trim() || null,
     site: values.site || null,
     installed_on: values.installed_on || null,
     warranty_expires_on: values.warranty_expires_on || null,
@@ -160,6 +181,8 @@ function buildContractPayload(values: typeof DEFAULT_CONTRACT) {
   return {
     contract_number: values.contract_number.trim(),
     name: values.name.trim(),
+    crm_account_id: values.crm_account_id ? Number(values.crm_account_id) : null,
+    sales_customer_id: values.sales_customer_id ? Number(values.sales_customer_id) : null,
     customer_name: values.customer_name.trim(),
     tier: values.tier,
     response_hours: Number(values.response_hours || 0),
@@ -174,6 +197,12 @@ function buildContractPayload(values: typeof DEFAULT_CONTRACT) {
     status: values.status,
     notes: values.notes || null,
   };
+}
+
+function customerSelectValue(crmAccountId: string, customerNotInCrm: boolean) {
+  if (crmAccountId) return crmAccountId;
+  if (customerNotInCrm) return CUSTOMER_NOT_IN_CRM;
+  return CUSTOMER_NONE;
 }
 
 export default function ServiceAssetsPage() {
@@ -253,6 +282,13 @@ export default function ServiceAssetsPage() {
     queryFn: () => serviceApi.listContracts({ limit: 200 }).then((res) => res.data),
   });
 
+  const crmAccountsQuery = useQuery({
+    queryKey: ["crm", "account-options"],
+    queryFn: () => crmApi.listAccounts({ limit: 200 }).then((res) => res.data),
+    // Service still works when CRM is not installed for the tenant.
+    retry: false,
+  });
+
   const overviewQuery = useQuery({
     queryKey: ["service", "overview-assets"],
     queryFn: () => serviceApi.overview().then((res) => res.data),
@@ -313,12 +349,42 @@ export default function ServiceAssetsPage() {
   const assets = (assetsQuery.data?.data ?? []) as ServiceAsset[];
   const contracts = (contractsQuery.data?.data ?? []) as ServiceContract[];
   const contractOptions = (contractOptionsQuery.data?.data ?? []) as ServiceContract[];
+  const crmAccounts = (crmAccountsQuery.data?.data ?? []) as CrmAccount[];
   const assetSummary = overviewQuery.data?.data?.assets;
   const contractSummary = overviewQuery.data?.data?.contracts;
   const assetDetail = (assetDetailQuery.data?.data ?? null) as ServiceAsset | null;
   const contractDetail = (contractDetailQuery.data?.data ?? null) as
     | (ServiceContract & { assets?: ServiceAsset[] })
     | null;
+
+  const resolveCrmCustomer = React.useCallback(
+    (accountId: string, previousName: string) => {
+      if (accountId === CUSTOMER_NONE) {
+        return {
+          crm_account_id: "",
+          sales_customer_id: "",
+          customer_name: "",
+          customer_not_in_crm: false,
+        };
+      }
+      if (accountId === CUSTOMER_NOT_IN_CRM) {
+        return {
+          crm_account_id: "",
+          sales_customer_id: "",
+          customer_name: previousName,
+          customer_not_in_crm: true,
+        };
+      }
+      const account = crmAccounts.find((row) => String(row.id) === accountId);
+      return {
+        crm_account_id: accountId,
+        sales_customer_id: account?.sales_customer_id ? String(account.sales_customer_id) : "",
+        customer_name: account?.name ?? "",
+        customer_not_in_crm: false,
+      };
+    },
+    [crmAccounts],
+  );
 
   const openAssetCreate = () => {
     setAssetFormId(undefined);
@@ -615,8 +681,58 @@ export default function ServiceAssetsPage() {
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="a-customer">{t("service.assets.customer", "Customer")}</Label>
-        <Input id="a-customer" value={assetForm.customer_name} onChange={(e) => setAssetForm({ ...assetForm, customer_name: e.target.value })} />
+        <Label>{t("service.assets.customer", "Customer")}</Label>
+        <div onPointerDownCapture={(e: React.PointerEvent) => e.stopPropagation()}>
+          <Select
+            value={customerSelectValue(assetForm.crm_account_id, assetForm.customer_not_in_crm)}
+            onValueChange={(v) => {
+              const next = resolveCrmCustomer(v, assetForm.customer_name);
+              setAssetForm({
+                ...assetForm,
+                crm_account_id: next.crm_account_id,
+                customer_name: next.customer_name,
+                customer_not_in_crm: next.customer_not_in_crm,
+              });
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={t("service.assets.select_customer", "Select CRM account")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={CUSTOMER_NONE}>{t("service.assets.no_customer", "None")}</SelectItem>
+              <SelectItem value={CUSTOMER_NOT_IN_CRM}>
+                {t("service.assets.customer_not_in_crm", "Not in CRM…")}
+              </SelectItem>
+              {assetForm.crm_account_id &&
+              !crmAccounts.some((account) => String(account.id) === assetForm.crm_account_id) ? (
+                <SelectItem value={assetForm.crm_account_id}>
+                  {assetForm.customer_name || `Account #${assetForm.crm_account_id}`}
+                </SelectItem>
+              ) : null}
+              {crmAccounts.map((account) => (
+                <SelectItem key={account.id} value={String(account.id)}>
+                  {account.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {assetForm.customer_not_in_crm ? (
+          <Input
+            id="a-customer"
+            className="mt-1.5"
+            placeholder={t("service.assets.customer_name_placeholder", "Customer name")}
+            value={assetForm.customer_name}
+            onChange={(e) =>
+              setAssetForm({
+                ...assetForm,
+                crm_account_id: "",
+                customer_not_in_crm: true,
+                customer_name: e.target.value,
+              })
+            }
+          />
+        ) : null}
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="a-site">{t("service.assets.site", "Site")}</Label>
@@ -657,8 +773,60 @@ export default function ServiceAssetsPage() {
         <Input id="k-name" value={contractForm.name} onChange={(e) => setContractForm({ ...contractForm, name: e.target.value })} />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="k-customer">{t("service.assets.customer", "Customer")}</Label>
-        <Input id="k-customer" value={contractForm.customer_name} onChange={(e) => setContractForm({ ...contractForm, customer_name: e.target.value })} />
+        <Label>{t("service.assets.customer", "Customer")}</Label>
+        <div onPointerDownCapture={(e: React.PointerEvent) => e.stopPropagation()}>
+          <Select
+            value={customerSelectValue(contractForm.crm_account_id, contractForm.customer_not_in_crm)}
+            onValueChange={(v) => {
+              const next = resolveCrmCustomer(v, contractForm.customer_name);
+              setContractForm({
+                ...contractForm,
+                crm_account_id: next.crm_account_id,
+                sales_customer_id: next.sales_customer_id,
+                customer_name: next.customer_name,
+                customer_not_in_crm: next.customer_not_in_crm,
+              });
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={t("service.assets.select_customer", "Select CRM account")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={CUSTOMER_NONE}>{t("common.select", "Select…")}</SelectItem>
+              <SelectItem value={CUSTOMER_NOT_IN_CRM}>
+                {t("service.assets.customer_not_in_crm", "Not in CRM…")}
+              </SelectItem>
+              {contractForm.crm_account_id &&
+              !crmAccounts.some((account) => String(account.id) === contractForm.crm_account_id) ? (
+                <SelectItem value={contractForm.crm_account_id}>
+                  {contractForm.customer_name || `Account #${contractForm.crm_account_id}`}
+                </SelectItem>
+              ) : null}
+              {crmAccounts.map((account) => (
+                <SelectItem key={account.id} value={String(account.id)}>
+                  {account.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {contractForm.customer_not_in_crm ? (
+          <Input
+            id="k-customer"
+            className="mt-1.5"
+            placeholder={t("service.assets.customer_name_placeholder", "Customer name")}
+            value={contractForm.customer_name}
+            onChange={(e) =>
+              setContractForm({
+                ...contractForm,
+                crm_account_id: "",
+                sales_customer_id: "",
+                customer_not_in_crm: true,
+                customer_name: e.target.value,
+              })
+            }
+          />
+        ) : null}
       </div>
       <div className="space-y-1.5">
         <Label>{t("service.contracts.tier", "Tier")}</Label>

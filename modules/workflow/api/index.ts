@@ -120,7 +120,7 @@ export async function actionWorkflowApproval(
 
 export async function assignApprovers(data: {
   approvable_type: string;
-  approvable_id: number;
+  approvable_id: number | string;
   trigger_event?: string;
   module_slug?: string;
   submodule_slug?: string;
@@ -270,6 +270,37 @@ export async function fetchWorkflowTargets(): Promise<WorkflowTarget[] | null> {
   return res.json();
 }
 
+export type WorkflowTargetInstance = {
+  id: number | string;
+  label: string;
+};
+
+export async function fetchWorkflowTargetInstances(params: {
+  model_type: string;
+  search?: string;
+  limit?: number;
+}): Promise<WorkflowTargetInstance[]> {
+  const query = new URLSearchParams();
+  query.append("model_type", params.model_type);
+  if (params.search) query.append("search", params.search);
+  if (params.limit) query.append("limit", String(params.limit));
+
+  const res = await fetch(`${getBackendApiRoot()}/workflow-targets/instances?${query.toString()}`, {
+    headers: {
+      ...getAuthHeaders(),
+      ...getTenantHeaders(),
+    },
+  });
+
+  if (await handleAuthFailureResponse(res)) return [];
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || json.error || "Failed to fetch records for this model");
+  }
+
+  return (json.data || []) as WorkflowTargetInstance[];
+}
+
 export async function createWorkflowDefinition(data: {
   name: string;
   model_type: string;
@@ -316,7 +347,7 @@ export async function deleteWorkflowDefinition(id: number) {
 
 export async function createWorkflowApproval(data: {
   approvable_type: string;
-  approvable_id: number;
+  approvable_id: number | string;
   trigger_event?: string;
   module_slug?: string;
   submodule_slug?: string;

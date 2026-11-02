@@ -6,10 +6,12 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { fetchFloorPlan, updateLocationStatus, fetchHospitalityOverview } from "@/modules/hospitality/api";
 import SpatialGridMap from "../components/space-management/SpatialGridMap";
+import GridEditor from "../components/space-management/GridEditor";
 import { useState } from "react";
 import { HospitalityLocation } from "../types";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -17,8 +19,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+type SpaceView = "floor-plan" | "grid-editor";
+
 export default function SpaceManagementPage() {
   const queryClient = useQueryClient();
+  const [view, setView] = useState<SpaceView>("floor-plan");
   const [selectedLocation, setSelectedLocation] = useState<HospitalityLocation | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
@@ -33,7 +38,7 @@ export default function SpaceManagementPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) => 
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
       updateLocationStatus(id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["hospitality", "floor-plan"] });
@@ -42,7 +47,7 @@ export default function SpaceManagementPage() {
     },
   });
 
-  const allLocations = zones?.flatMap((z: any) => z.locations) || [];
+  const allLocations = zones?.flatMap((z: { locations?: HospitalityLocation[] }) => z.locations || []) || [];
   const businessType = overview?.business_type || "restaurant";
 
   return (
@@ -59,16 +64,34 @@ export default function SpaceManagementPage() {
             <h1 className="text-3xl font-black tracking-tight">Space Management</h1>
           </div>
           <p className="text-muted-foreground font-medium">
-            Real-time visual map of your venue layout and occupation.
+            {view === "floor-plan"
+              ? "Real-time visual map of your venue layout and occupation."
+              : "Drag tables onto the grid to design your venue floor layout."}
           </p>
         </div>
-        
-        <div className="flex items-center gap-3 bg-card/50 backdrop-blur-sm border border-border/40 p-1.5 rounded-full">
-          <Button variant="ghost" size="sm" className="rounded-full px-4 h-9 font-bold text-xs uppercase tracking-widest">
+
+        <div className="flex items-center gap-1 bg-card/50 backdrop-blur-sm border border-border/40 p-1.5 rounded-full self-start lg:self-auto">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "rounded-full px-4 h-9 font-bold text-xs uppercase tracking-widest",
+              view === "floor-plan" && "bg-background shadow-sm",
+            )}
+            onClick={() => setView("floor-plan")}
+          >
             <MapIcon className="mr-2 h-3.5 w-3.5" />
             Floor Plan
           </Button>
-          <Button variant="ghost" size="sm" className="rounded-full px-4 h-9 font-bold text-xs uppercase tracking-widest opacity-50">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "rounded-full px-4 h-9 font-bold text-xs uppercase tracking-widest",
+              view === "grid-editor" && "bg-background shadow-sm",
+            )}
+            onClick={() => setView("grid-editor")}
+          >
             <Maximize className="mr-2 h-3.5 w-3.5" />
             Grid Editor
           </Button>
@@ -79,13 +102,17 @@ export default function SpaceManagementPage() {
         <div className="flex h-[60vh] items-center justify-center">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="h-10 w-10 animate-spin text-primary opacity-20" />
-            <p className="text-xs font-black uppercase tracking-widest opacity-30">Synchronizing Floor Data...</p>
+            <p className="text-xs font-black uppercase tracking-widest opacity-30">
+              Synchronizing Floor Data...
+            </p>
           </div>
         </div>
+      ) : view === "grid-editor" ? (
+        <GridEditor zones={zones || []} businessType={businessType} />
       ) : (
         <div className="space-y-10">
-          <SpatialGridMap 
-            zones={zones || []} 
+          <SpatialGridMap
+            zones={zones || []}
             businessType={businessType}
             onLocationClick={(loc) => {
               setSelectedLocation(loc);
@@ -105,9 +132,14 @@ export default function SpaceManagementPage() {
                 { label: "Occupied", status: "occupied", color: "bg-destructive" },
                 { label: "Dirty", status: "dirty", color: "bg-sky-500" },
               ].map((s) => (
-                <div key={s.status} className="p-4 rounded-3xl bg-background/50 border border-border/40 text-center">
+                <div
+                  key={s.status}
+                  className="p-4 rounded-3xl bg-background/50 border border-border/40 text-center"
+                >
                   <div className={`mx-auto w-2 h-2 rounded-full ${s.color} mb-2 shadow-lg`} />
-                  <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">{s.label}</p>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                    {s.label}
+                  </p>
                   <p className="text-2xl font-black mt-1">
                     {allLocations.filter((l: HospitalityLocation) => l.status === s.status).length}
                   </p>
@@ -116,12 +148,15 @@ export default function SpaceManagementPage() {
             </div>
           </div>
 
-          <Dialog open={isDetailsOpen && !!selectedLocation} onOpenChange={(open) => {
-            if (!open) {
-              setIsDetailsOpen(false);
-              setSelectedLocation(null);
-            }
-          }}>
+          <Dialog
+            open={isDetailsOpen && !!selectedLocation}
+            onOpenChange={(open) => {
+              if (!open) {
+                setIsDetailsOpen(false);
+                setSelectedLocation(null);
+              }
+            }}
+          >
             <DialogContent className="rounded-[2rem] border border-border/40 bg-card/90 backdrop-blur-2xl p-8 max-w-md shadow-2xl">
               <DialogHeader>
                 <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-2">
@@ -133,8 +168,12 @@ export default function SpaceManagementPage() {
                 <div className="space-y-6 mt-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-xl font-black tracking-tight">{selectedLocation.label}</h4>
-                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">{selectedLocation.table_type}</p>
+                      <h4 className="text-xl font-black tracking-tight">
+                        {selectedLocation.label}
+                      </h4>
+                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                        {selectedLocation.table_type}
+                      </p>
                     </div>
                     <Badge className="rounded-full px-4 py-1 font-black uppercase text-[11px]">
                       {selectedLocation.status}
@@ -162,11 +201,16 @@ export default function SpaceManagementPage() {
                         size="sm"
                         className="rounded-xl text-[11px] font-black uppercase tracking-widest"
                         onClick={() => {
-                          statusMutation.mutate({ id: selectedLocation.id, status }, {
-                            onSuccess: () => {
-                              setSelectedLocation(prev => prev ? { ...prev, status: status as any } : null);
-                            }
-                          });
+                          statusMutation.mutate(
+                            { id: selectedLocation.id, status },
+                            {
+                              onSuccess: () => {
+                                setSelectedLocation((prev) =>
+                                  prev ? { ...prev, status: status as HospitalityLocation["status"] } : null,
+                                );
+                              },
+                            },
+                          );
                         }}
                         disabled={statusMutation.isPending}
                       >

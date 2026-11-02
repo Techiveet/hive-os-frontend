@@ -17,6 +17,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -368,18 +379,34 @@ export default function StaffShiftsPage() {
             >
               <Pencil className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                if (confirm("Are you sure you want to delete this shift?")) {
-                  deleteMutation.mutate(shift.id);
-                }
-              }}
-              className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-full"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-full"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Shift</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete the shift for "{shift.staff?.name || "Unknown Staff"}" on {new Date(shift.shift_date).toLocaleDateString()}?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteMutation.mutate(shift.id)}
+                    className="rounded-full"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         );
       }

@@ -2,6 +2,13 @@
 
 import { Users } from "lucide-react";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
 type Table = {
   id: number;
   label: string;
@@ -68,48 +75,68 @@ export function TableGridSelector({
         // This grid sits in a two-thirds-width column, so viewport breakpoints
         // overstate how much room a card actually gets. Six columns only fit
         // from 2xl upwards; at xl they squeezed each card to ~83px.
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-6">
-          {tables.map((table) => {
-            const isSelected = selectedTable?.id === table.id;
+        <TooltipProvider delayDuration={200}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-6">
+            {tables.map((table) => {
+              const isSelected = selectedTable?.id === table.id;
+              const zoneLabel = table.zone?.name ?? table.table_type ?? "Dining";
 
-            return (
-              <button
-                key={table.id}
-                type="button"
-                aria-pressed={isSelected}
-                onClick={() => onSelectTable(table)}
-                className={`flex min-h-28 flex-col items-start justify-between rounded-lg border p-4 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 dark:focus-visible:ring-emerald-300 active:scale-95 ${
-                  isSelected
-                    ? "border-emerald-700 bg-emerald-500/10 shadow-lg ring-2 ring-emerald-700 dark:border-emerald-300 dark:ring-emerald-300"
-                    : "border-slate-500 bg-card hover:border-emerald-700 dark:hover:border-emerald-300"
-                }`}
-              >
-                <span className="flex w-full items-start justify-between gap-2">
-                  {/* flex-1 is what claims the leftover row width. With min-w-0
-                      alone the label collapsed to zero width beside the shrink-0
-                      status badge, hiding which table the card represents. */}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-base font-bold text-foreground">{table.label}</span>
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {table.zone?.name ?? table.table_type ?? "Dining"}
-                    </span>
-                  </span>
-                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase ${statusClasses(table.status)}`}>
-                    {table.status}
-                  </span>
-                </span>
+              return (
+                <Tooltip key={table.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => onSelectTable(table)}
+                      className={`flex min-h-28 flex-col items-start justify-between rounded-lg border p-4 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 dark:focus-visible:ring-emerald-300 active:scale-95 ${
+                        isSelected
+                          ? "border-emerald-700 bg-emerald-500/10 shadow-lg ring-2 ring-emerald-700 dark:border-emerald-300 dark:ring-emerald-300"
+                          : "border-slate-500 bg-card hover:border-emerald-700 dark:hover:border-emerald-300"
+                      }`}
+                    >
+                      <span className="flex w-full items-start justify-between gap-2">
+                        {/* flex-1 is what claims the leftover row width. With min-w-0
+                            alone the label collapsed to zero width beside the shrink-0
+                            status badge, hiding which table the card represents. */}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-base font-bold text-foreground">
+                            {table.label}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                            {zoneLabel}
+                          </span>
+                        </span>
+                        <span
+                          className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase ${statusClasses(table.status)}`}
+                        >
+                          {table.status}
+                        </span>
+                      </span>
 
-                <span className="mt-3 flex flex-col gap-1 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                    {table.capacity} guests
-                  </span>
-                  {table.staff?.name ? <span>Waiter: {table.staff.name}</span> : null}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                      <span className="mt-3 flex flex-col gap-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                          {table.capacity} guests
+                        </span>
+                        {table.staff?.name ? (
+                          <span className="truncate">Waiter: {table.staff.name}</span>
+                        ) : null}
+                      </span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs text-left">
+                    <p className="font-semibold">{table.label}</p>
+                    <p className="opacity-90">{zoneLabel}</p>
+                    <p className="mt-1 capitalize opacity-90">
+                      {table.status} · {table.capacity} guests
+                      {table.staff?.name ? ` · ${table.staff.name}` : ""}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </div>
+        </TooltipProvider>
       )}
     </section>
   );

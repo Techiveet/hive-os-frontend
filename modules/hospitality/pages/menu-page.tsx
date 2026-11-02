@@ -17,6 +17,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -46,11 +57,11 @@ import { Model3DViewer } from "@/components/ui/model-3d-viewer";
 
 export default function MenuManagementPage() {
   const queryClient = useQueryClient();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [editingItem, setEditingItem] = useState<HospitalityMenuItem | null>(null);
 
   // Media picker state
-  const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
+  const [isMediaPickerOpen, setIsMediaPickerOpen] = useState<boolean>(false);
   const [mediaPickerTarget, setMediaPickerTarget] = useState<"image" | "model_3d">("image");
 
   const openMediaPicker = (target: "image" | "model_3d") => {
@@ -64,12 +75,12 @@ export default function MenuManagementPage() {
   const canManageStorage = hasPermission("manage_storage");
 
   // DataTable State
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [search, setSearch] = useState("");
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [search, setSearch] = useState<string>("");
   const [sortCol, setSortCol] = useState<string>("sort_order");
   const [sortDir, setSortDir] = useState<string>("asc");
-  const [tableKey, setTableKey] = useState(0);
+  const [tableKey, setTableKey] = useState<number>(0);
   const [selectedRowIds, setSelectedRowIds] = useState<Record<string, boolean>>({});
   const [active3DModel, setActive3DModel] = useState<{ url: string; name: string } | null>(null);
 
@@ -93,7 +104,7 @@ export default function MenuManagementPage() {
         total,
       };
     },
-    placeholderData: (prev) => prev,
+    placeholderData: (prev: any) => prev,
   });
 
   const { data: categories = [] } = useQuery({
@@ -101,7 +112,18 @@ export default function MenuManagementPage() {
     queryFn: () => fetchHospitalityMenuCategories(),
   });
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    category_id: string;
+    description: string;
+    price: string;
+    cost_price: string;
+    is_available: boolean;
+    is_featured: boolean;
+    preparation_time_minutes: string;
+    image_url: string;
+    model_3d_url: string;
+  }>({
     name: "",
     category_id: "",
     description: "",
@@ -205,10 +227,10 @@ export default function MenuManagementPage() {
   const handleFileSelect = (file: any) => {
     const url = file.media_details?.public_url || file.media_details?.url || file.url || file.path;
     if (mediaPickerTarget === "image") {
-      setFormData((prev) => ({ ...prev, image_url: url }));
+      setFormData((prev: any) => ({ ...prev, image_url: url }));
       toast.success("Image selected from media library");
     } else {
-      setFormData((prev) => ({ ...prev, model_3d_url: url }));
+      setFormData((prev: any) => ({ ...prev, model_3d_url: url }));
       toast.success("3D model selected from media library");
     }
     setIsMediaPickerOpen(false);
@@ -218,7 +240,7 @@ export default function MenuManagementPage() {
     if (q.page !== undefined) setPage(q.page);
     if (q.pageSize !== undefined) setPageSize(q.pageSize);
     if (q.search !== undefined) {
-      setSearch(prev => {
+      setSearch((prev: string) => {
         if (prev !== q.search) {
           setPage(1);
         }
@@ -241,7 +263,7 @@ export default function MenuManagementPage() {
   const resetFilters = useCallback(() => {
     setSearch("");
     setPage(1);
-    setTableKey(prev => prev + 1);
+    setTableKey((prev: number) => prev + 1);
   }, []);
 
   const handleDeleteRows = useCallback(async (rows: HospitalityMenuItem[]) => {
@@ -258,7 +280,7 @@ export default function MenuManagementPage() {
       id: "image",
       header: "Image",
       enableSorting: false,
-      cell: ({ row }) => {
+      cell: ({ row }: any) => {
         const item = row.original;
         
         if (!item.image_url) {
@@ -294,7 +316,12 @@ export default function MenuManagementPage() {
                 onClick={() => setActive3DModel({ url: item.model_3d_url!, name: item.name })}
                 title="Click to view in 3D"
               >
-                <SecureAssetImage src={item.image_url} alt={item.name} className="h-full w-full object-cover transition-transform group-hover:scale-110" />
+                <SecureAssetImage
+                  src={item.image_url}
+                  alt={item.name}
+                  className="h-full w-full object-cover transition-transform group-hover:scale-110"
+                  onError={() => console.error("Failed to load image:", item.image_url)}
+                />
                 <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <Box className="h-4 w-4 text-white animate-pulse" />
                 </div>
@@ -303,7 +330,12 @@ export default function MenuManagementPage() {
                 </div>
               </button>
             ) : (
-              <SecureAssetImage src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+              <SecureAssetImage
+                src={item.image_url}
+                alt={item.name}
+                className="h-full w-full object-cover"
+                onError={() => console.error("Failed to load image:", item.image_url)}
+              />
             )}
           </div>
         );
@@ -313,7 +345,7 @@ export default function MenuManagementPage() {
       id: "name",
       header: "Name",
       accessorKey: "name",
-      cell: ({ row }) => {
+      cell: ({ row }: any) => {
         const item = row.original;
         return (
           <div>
@@ -329,7 +361,7 @@ export default function MenuManagementPage() {
       id: "category",
       header: "Category",
       accessorFn: (row) => row.category?.name || "Uncategorized",
-      cell: ({ row }) => {
+      cell: ({ row }: any) => {
         const item = row.original;
         return (
           <Badge variant="outline" className="bg-muted/50 rounded-md">
@@ -342,7 +374,7 @@ export default function MenuManagementPage() {
       id: "price",
       header: "Price",
       accessorKey: "price",
-      cell: ({ row }) => {
+      cell: ({ row }: any) => {
         const item = row.original;
         return (
           <span className="font-black text-foreground">
@@ -355,7 +387,7 @@ export default function MenuManagementPage() {
       id: "status",
       header: "Status",
       accessorKey: "is_available",
-      cell: ({ row }) => {
+      cell: ({ row }: any) => {
         const item = row.original;
         return (
           <Badge
@@ -372,7 +404,7 @@ export default function MenuManagementPage() {
       header: "Actions",
       enableSorting: false,
       meta: { align: "right" as const },
-      cell: ({ row }) => {
+      cell: ({ row }: any) => {
         const item = row.original;
         return (
           <div className="flex items-center justify-end gap-2">
@@ -385,19 +417,35 @@ export default function MenuManagementPage() {
               <Pencil className="mr-1 h-3.5 w-3.5" />
               Edit
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (confirm("Are you sure you want to delete this item?")) {
-                  deleteMutation.mutate(item.id);
-                }
-              }}
-              className="h-8 text-[11px] font-black uppercase tracking-widest text-red-600 border-red-200 bg-red-50 hover:bg-red-100"
-            >
-              <Trash2 className="mr-1 h-3.5 w-3.5" />
-              Delete
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-[11px] font-black uppercase tracking-widest text-red-600 border-red-200 bg-red-50 hover:bg-red-100"
+                >
+                  <Trash2 className="mr-1 h-3.5 w-3.5" />
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Menu Item</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete "{item.name}"? This will permanently remove this item from your menu.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteMutation.mutate(item.id)}
+                    className="rounded-full"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         );
       }

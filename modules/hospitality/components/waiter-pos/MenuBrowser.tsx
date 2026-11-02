@@ -217,7 +217,7 @@ export function MenuBrowser({ categories, onAddItem }: Props) {
           No menu items match your search.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
           {filteredItems.map((item) => {
             const selection = getSelection(item);
             const variants = (item.variants ?? []).filter((variant) => variant.is_available !== false);
@@ -227,27 +227,30 @@ export function MenuBrowser({ categories, onAddItem }: Props) {
             return (
               <article
                 key={item.id}
-                className="flex flex-col justify-between rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:border-emerald-700 dark:hover:border-emerald-300"
+                className="flex min-w-0 flex-col justify-between overflow-hidden rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:border-emerald-700 dark:hover:border-emerald-300"
               >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-bold text-foreground">{item.name}</h3>
-                      {item.description ? (
-                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+                <div className="min-w-0 space-y-3">
+                  <div className="min-w-0 space-y-1.5">
+                    <h3 className="text-sm font-bold leading-snug break-words text-foreground" title={item.name}>
+                      {item.name}
+                    </h3>
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                      <span className="text-sm font-extrabold text-emerald-700 dark:text-emerald-300">
+                        {formatMoney(previewPrice)}
+                      </span>
+                      {item.preparation_time_minutes ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          {item.preparation_time_minutes} min prep
+                        </span>
                       ) : null}
                     </div>
-                    <span className="shrink-0 text-sm font-extrabold text-emerald-700 dark:text-emerald-300">
-                      {formatMoney(previewPrice)}
-                    </span>
+                    {item.description ? (
+                      <p className="line-clamp-2 text-xs text-muted-foreground" title={item.description}>
+                        {item.description}
+                      </p>
+                    ) : null}
                   </div>
-
-                  {item.preparation_time_minutes ? (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                      {item.preparation_time_minutes} min prep
-                    </div>
-                  ) : null}
 
                   {variants.length > 0 ? (
                     <div className="space-y-1">
@@ -315,28 +318,25 @@ export function MenuBrowser({ categories, onAddItem }: Props) {
                   })}
                 </div>
 
-                <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                <div className="mt-4 flex min-w-0 flex-col gap-2 border-t border-border/60 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => handleAdd(item)}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground shadow transition-all hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 dark:focus-visible:ring-emerald-300 active:scale-95"
+                  >
+                    <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    Add to order
+                  </button>
                   {item.model_3d_url ? (
                     <button
                       type="button"
                       onClick={() => setPreviewItem(item)}
-                      className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-500/10 px-3 text-sm font-medium text-blue-700 hover:bg-blue-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 dark:text-blue-300 dark:focus-visible:ring-emerald-300"
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-3 text-sm font-medium text-blue-700 hover:bg-blue-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 dark:text-blue-300 dark:focus-visible:ring-emerald-300"
                     >
-                      <Box className="h-4 w-4" aria-hidden="true" />
+                      <Box className="h-4 w-4 shrink-0" aria-hidden="true" />
                       Preview
                     </button>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">Standard item</span>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => handleAdd(item)}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow transition-all hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 dark:focus-visible:ring-emerald-300 active:scale-95"
-                  >
-                    <Plus className="h-4 w-4" aria-hidden="true" />
-                    Add to order
-                  </button>
+                  ) : null}
                 </div>
               </article>
             );

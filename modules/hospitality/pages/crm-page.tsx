@@ -25,6 +25,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -55,21 +66,28 @@ const tierColors: Record<string, string> = {
 
 export default function CRMPage() {
   const queryClient = useQueryClient();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState<boolean>(false);
   const [editingCustomer, setEditingCustomer] = useState<HospitalityCustomer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<HospitalityCustomer | null>(null);
 
   // DataTable State
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [search, setSearch] = useState("");
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [search, setSearch] = useState<string>("");
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [sortCol, setSortCol] = useState<string>("last_visit_at");
   const [sortDir, setSortDir] = useState<string>("desc");
-  const [tableKey, setTableKey] = useState(0);
+  const [tableKey, setTableKey] = useState<number>(0);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    phone: string;
+    email: string;
+    date_of_birth: string;
+    tier: string;
+    notes: string;
+  }>({
     name: "",
     phone: "",
     email: "",
@@ -98,7 +116,7 @@ export default function CRMPage() {
         total: res.data?.meta?.total || res.data?.total || 0,
       };
     },
-    placeholderData: (prev) => prev,
+    placeholderData: (prev: any) => prev,
   });
 
   const { data: customerHistory, isLoading: isLoadingHistory } = useQuery({
@@ -188,7 +206,7 @@ export default function CRMPage() {
     if (q.page !== undefined) setPage(q.page);
     if (q.pageSize !== undefined) setPageSize(q.pageSize);
     if (q.search !== undefined) {
-      setSearch((prev) => {
+      setSearch((prev: string) => {
         if (prev !== q.search) {
           setPage(1);
         }
@@ -207,7 +225,7 @@ export default function CRMPage() {
     setSearch("");
     setTierFilter("all");
     setPage(1);
-    setTableKey((prev) => prev + 1);
+    setTableKey((prev: number) => prev + 1);
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -228,7 +246,7 @@ export default function CRMPage() {
       id: "name",
       header: "Customer",
       accessorKey: "name",
-      cell: ({ row }) => {
+      cell: ({ row }: any) => {
         const customer = row.original;
         return (
           <div className="flex items-center gap-3">
@@ -254,7 +272,7 @@ export default function CRMPage() {
       id: "phone",
       header: "Contact",
       accessorKey: "phone",
-      cell: ({ row }) => {
+      cell: ({ row }: any) => {
         const customer = row.original;
         return (
           <div>
@@ -268,7 +286,7 @@ export default function CRMPage() {
       id: "tier",
       header: "Tier & Points",
       accessorKey: "tier",
-      cell: ({ row }) => {
+      cell: ({ row }: any) => {
         const customer = row.original;
         return (
           <div className="flex flex-col items-start gap-1">
@@ -287,7 +305,7 @@ export default function CRMPage() {
       id: "last_visit_at",
       header: "Last Visit",
       accessorKey: "last_visit_at",
-      cell: ({ row }) => {
+      cell: ({ row }: any) => {
         const customer = row.original;
         return customer.last_visit_at ? (
           <div className="text-sm">
@@ -303,7 +321,7 @@ export default function CRMPage() {
       header: "Actions",
       enableSorting: false,
       meta: { align: "right" },
-      cell: ({ row }) => {
+      cell: ({ row }: any) => {
         const customer = row.original;
         return (
           <div className="flex items-center justify-end gap-2">
@@ -324,18 +342,34 @@ export default function CRMPage() {
             >
               <Pencil className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                if (confirm("Are you sure you want to delete this customer profile?")) {
-                  deleteMutation.mutate(customer.id);
-                }
-              }}
-              className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Customer</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete "{customer.name}"? This will permanently remove their profile and history.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteMutation.mutate(customer.id)}
+                    className="rounded-full"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         );
       }

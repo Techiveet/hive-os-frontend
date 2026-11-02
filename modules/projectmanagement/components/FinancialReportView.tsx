@@ -302,14 +302,14 @@ const cumulativeData = useMemo(() => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 relative z-10">
-          <div className="flex bg-muted/50 p-1 rounded-xl border border-border/40">
+        <div className="flex w-full lg:w-auto flex-nowrap items-center gap-3 relative z-10 overflow-x-auto custom-scrollbar pb-1 -mb-1">
+          <div className="flex shrink-0 bg-muted/50 p-1 rounded-xl border border-border/40">
             {(["Standard", "Aggressive", "Lean", "Optimal"] as Scenario[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setSelectedScenario(s)}
                 className={cn(
-                  "px-4 py-1.5 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all",
+                  "shrink-0 px-4 py-1.5 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all",
                   selectedScenario === s 
                     ? "bg-card text-primary shadow-sm border border-border/40" 
                     : "text-muted-foreground hover:text-foreground"
@@ -324,7 +324,7 @@ const cumulativeData = useMemo(() => {
             <Button 
               variant="outline" 
               size="sm" 
-              className="h-9 px-4 gap-2 text-primary border-primary/20 hover:bg-primary/5 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all" 
+              className="h-9 shrink-0 px-4 gap-2 text-primary border-primary/20 hover:bg-primary/5 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all" 
               onClick={onConfigureBudget}
             >
               <Settings className="h-3.5 w-3.5" />
@@ -333,7 +333,7 @@ const cumulativeData = useMemo(() => {
           )}
           <Badge 
             className={cn(
-              "h-9 px-5 text-xs font-black uppercase tracking-widest rounded-xl border-none",
+              "h-9 shrink-0 px-5 text-xs font-black uppercase tracking-widest rounded-xl border-none",
               isOverBudget 
                 ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20" 
                 : "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
@@ -962,4 +962,3 @@ function FinancialReportLoading() {
     </div>
   );
 }
-

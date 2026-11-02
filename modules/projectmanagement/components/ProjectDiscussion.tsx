@@ -720,7 +720,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
       )}
     >
       <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border/40 bg-muted/20 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-inner">
             <MessageSquare className="h-5 w-5 text-primary" />
           </div>
@@ -730,14 +730,14 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 max-w-full overflow-x-auto pb-1 -mb-1 whitespace-nowrap">
           {isSelectMode && selectedIds.size > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   size="sm"
                   variant="destructive"
-                  className="h-8 px-3 text-xs font-bold gap-1.5 rounded-lg shadow-lg shadow-destructive/20 animate-in fade-in slide-in-from-right-4"
+                  className="h-8 px-3 text-xs font-bold gap-1.5 rounded-lg shadow-lg shadow-destructive/20 animate-in fade-in slide-in-from-right-4 shrink-0"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   {t("project_management.delete_selected", "Delete {count} selected", { count: selectedIds.size })}
@@ -768,7 +768,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
             variant="ghost" 
             size="sm" 
             className={cn(
-              "h-9 px-4 rounded-xl transition-all font-bold text-[11px] uppercase tracking-widest gap-2",
+              "h-9 px-4 rounded-xl transition-all font-bold text-[11px] uppercase tracking-widest gap-2 shrink-0",
               isSelectMode ? "bg-primary text-primary-foreground hover:bg-primary/90" : "hover:bg-primary/10 hover:text-primary"
             )}
             onClick={() => {
@@ -784,7 +784,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
             <Button 
               variant="outline" 
               size="sm" 
-              className="h-9 px-4 rounded-xl font-bold text-[11px] uppercase tracking-widest border-primary/20 hover:bg-primary/5 transition-all gap-2"
+              className="h-9 px-4 rounded-xl font-bold text-[11px] uppercase tracking-widest border-primary/20 hover:bg-primary/5 transition-all gap-2 shrink-0"
               onClick={() => {
                 if (selectedIds.size === visibleCommentIds.length) {
                   setSelectedIds(new Set());
@@ -798,7 +798,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
             </Button>
           )}
 
-          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-primary/10 hover:text-primary transition-all" onClick={() => setIsFullScreen(!isFullScreen)}>
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-primary/10 hover:text-primary transition-all shrink-0" onClick={() => setIsFullScreen(!isFullScreen)}>
             {isFullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
         </div>

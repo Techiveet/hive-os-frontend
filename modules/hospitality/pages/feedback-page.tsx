@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, Star, Trash2, Loader2, CheckCircle2, CornerDownRight, Quote } from "lucide-react";
+import { MessageSquare, Star, Trash2, Loader2, CheckCircle2, CornerDownRight, Quote, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { usePermissions } from "@/hooks/use-permissions";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,21 +21,49 @@ import { Textarea } from "@/components/ui/textarea";
 
 import {
   fetchHospitalityFeedback,
+  createHospitalityFeedback,
   updateHospitalityFeedback,
   deleteHospitalityFeedback,
 } from "@/modules/hospitality/api";
 import type { HospitalityFeedback } from "@/modules/hospitality/types";
 import { cn } from "@/lib/utils";
 
+const emptyCreateForm = {
+  customer_name: "",
+  customer_phone: "",
+  rating: 5,
+  comment: "",
+};
+
 export default function FeedbackPage() {
   const queryClient = useQueryClient();
+  const { hasAnyPermission } = usePermissions();
+  const canCreateFeedback = hasAnyPermission([
+    "create_hospitality_feedback",
+    "manage_hospitality_feedback",
+  ]);
   const [selectedFeedback, setSelectedFeedback] = useState<HospitalityFeedback | null>(null);
   const [isReplyDialogOpen, setIsReplyDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(emptyCreateForm);
   const [replyText, setReplyText] = useState("");
 
   const { data: feedbacks = [], isLoading } = useQuery({
     queryKey: ["hospitality", "feedback"],
     queryFn: () => fetchHospitalityFeedback(),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (payload: Record<string, unknown>) => createHospitalityFeedback(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hospitality", "feedback"] });
+      toast.success("Feedback recorded");
+      setIsCreateDialogOpen(false);
+      setCreateForm(emptyCreateForm);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "Failed to save feedback");
+    },
   });
 
   const updateMutation = useMutation({
@@ -92,8 +122,16 @@ export default function FeedbackPage() {
             <MessageSquare className="h-8 w-8 text-indigo-500" />
             Feedback & Reviews
           </h1>
-          <p className="text-muted-foreground">Manage customer feedback, reply to reviews, and track satisfaction.</p>
+          <p className="text-muted-foreground">
+            Manage customer feedback, reply to reviews, and track satisfaction. Guests can also submit reviews from your public restaurant site.
+          </p>
         </div>
+        {canCreateFeedback && (
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Record feedback
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -183,6 +221,91 @@ export default function FeedbackPage() {
           ))}
         </div>
       )}
+
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record customer feedback</DialogTitle>
+            <DialogDescription>
+              Log feedback taken in person or by phone. Use Publish on the card to show it on the public site.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="feedback-customer-name">Customer name</Label>
+              <Input
+                id="feedback-customer-name"
+                value={createForm.customer_name}
+                onChange={(e) => setCreateForm({ ...createForm, customer_name: e.target.value })}
+                placeholder="Guest name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="feedback-customer-phone">Phone (optional)</Label>
+              <Input
+                id="feedback-customer-phone"
+                value={createForm.customer_phone}
+                onChange={(e) => setCreateForm({ ...createForm, customer_phone: e.target.value })}
+                placeholder="+251..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Overall rating</Label>
+              <div className="flex gap-1">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setCreateForm({ ...createForm, rating: i + 1 })}
+                    className="p-1"
+                  >
+                    <Star
+                      className={cn(
+                        "h-6 w-6",
+                        i < createForm.rating
+                          ? "text-yellow-500 fill-yellow-500"
+                          : "text-muted-foreground opacity-40",
+                      )}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Comment</Label>
+              <Textarea
+                value={createForm.comment}
+                onChange={(e) => setCreateForm({ ...createForm, comment: e.target.value })}
+                placeholder="What did the guest say?"
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() =>
+                createMutation.mutate({
+                  customer_name: createForm.customer_name.trim(),
+                  customer_phone: createForm.customer_phone.trim() || undefined,
+                  rating: createForm.rating,
+                  comment: createForm.comment.trim() || undefined,
+                })
+              }
+              disabled={
+                createMutation.isPending ||
+                !createForm.customer_name.trim() ||
+                createForm.rating < 1
+              }
+            >
+              {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isReplyDialogOpen} onOpenChange={setIsReplyDialogOpen}>
         <DialogContent>

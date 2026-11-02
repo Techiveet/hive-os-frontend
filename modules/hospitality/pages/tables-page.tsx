@@ -19,6 +19,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -34,6 +45,7 @@ import {
   fetchHospitalityOverview,
 } from "@/modules/hospitality/api";
 import type { HospitalityLocation, HospitalityZone } from "@/modules/hospitality/types";
+import { dialogSelectDismissProps } from "@/modules/production/dialog-select-dismiss";
 import { cn } from "@/lib/utils";
 
 export default function TablesManagementPage() {
@@ -199,7 +211,7 @@ export default function TablesManagementPage() {
               Add Table
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px]" {...dialogSelectDismissProps}>
             <DialogHeader>
               <DialogTitle>{editingTable ? "Edit Table Details" : "Create New Table"}</DialogTitle>
               <DialogDescription>
@@ -409,18 +421,38 @@ export default function TablesManagementPage() {
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => {
-                    if (confirm(`Are you sure you want to delete ${table.label}?`)) {
-                      deleteMutation.mutate(table.id);
-                    }
-                  }}
-                  className="h-8 w-8 rounded-full border-border/60 bg-background/50 hover:bg-rose-50 hover:text-rose-600 transition-all shadow-sm"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 rounded-full border-border/60 bg-background/50 hover:bg-rose-50 hover:text-rose-600 transition-all shadow-sm"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Table</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete &quot;{table.label}&quot;? This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => deleteMutation.mutate(table.id)}
+                        className="rounded-full"
+                        disabled={deleteMutation.isPending}
+                      >
+                        {deleteMutation.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
           ))}

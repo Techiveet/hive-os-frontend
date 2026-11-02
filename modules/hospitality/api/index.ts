@@ -307,6 +307,11 @@ export const fetchHospitalityFeedback = async (
     (await api.get("/hospitality/feedback", { params })).data,
   );
 
+export const createHospitalityFeedback = async (
+  payload: Record<string, unknown>,
+) =>
+  (await api.post<HospitalityFeedback>("/hospitality/feedback", payload)).data;
+
 export const updateHospitalityFeedback = async (
   id: number,
   payload: Record<string, unknown>,

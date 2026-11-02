@@ -48,7 +48,9 @@ import {
   deleteWorkflowDefinition,
   fetchApprovalRoles,
   fetchWorkflowTargets,
+  fetchWorkflowTargetInstances,
   type WorkflowTarget,
+  type WorkflowTargetInstance,
 } from "../api";
 import { fetchUsers } from "@/modules/identity/api";
 import { cn } from "@/lib/utils";
@@ -92,7 +94,7 @@ interface WorkflowDefinitionRow {
   name: string;
   model_type: string;
   approver_ids?: number[] | null;
-  approval_role_ids?: number[] | null;
+  approval_role_ids?: Array<number | { id: number; name?: string }> | null;
   required_approvals: number;
   trigger_event: string;
   actions?: {
@@ -206,6 +208,8 @@ export default function WorkflowRulesPage() {
     approvable_id: "",
     trigger_event: "manual",
   });
+  const [assignmentInstances, setAssignmentInstances] = useState<WorkflowTargetInstance[]>([]);
+  const [loadingAssignmentInstances, setLoadingAssignmentInstances] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const loadData = async () => {
@@ -263,8 +267,36 @@ export default function WorkflowRulesPage() {
       approvable_id: "",
       trigger_event: "manual",
     });
+    setAssignmentInstances([]);
     setIsAssignDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (!isAssignDialogOpen || !manualAssignment.model_type) {
+      setAssignmentInstances([]);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingAssignmentInstances(true);
+    fetchWorkflowTargetInstances({ model_type: manualAssignment.model_type, limit: 100 })
+      .then((rows) => {
+        if (!cancelled) setAssignmentInstances(rows);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setAssignmentInstances([]);
+          toast.error(error instanceof Error ? error.message : "Failed to load records for this model.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAssignmentInstances(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAssignDialogOpen, manualAssignment.model_type]);
 
   const handleSave = async () => {
     if (!formData.name || !formData.model_type) {
@@ -327,18 +359,19 @@ export default function WorkflowRulesPage() {
   };
 
   const handleManualAssign = async () => {
-    const recordId = Number(manualAssignment.approvable_id);
-    if (!manualAssignment.model_type || !recordId) {
-      toast.error("Select a model and enter the record ID to assign.");
+    const rawId = manualAssignment.approvable_id.trim();
+    if (!manualAssignment.model_type || !rawId) {
+      toast.error("Select a model and an existing record to assign.");
       return;
     }
 
     const selectedTarget = targets.find((target) => target.value === manualAssignment.model_type);
+    const approvableId = /^\d+$/.test(rawId) ? Number(rawId) : rawId;
 
     try {
       const response = await createWorkflowApproval({
         approvable_type: manualAssignment.model_type,
-        approvable_id: recordId,
+        approvable_id: approvableId,
         trigger_event: manualAssignment.trigger_event,
         module_slug: selectedTarget?.module_slug,
         submodule_slug: selectedTarget?.submodule_slug,
@@ -469,11 +502,15 @@ export default function WorkflowRulesPage() {
       </Badge>
     );
   })}
-  {def.approval_role_ids?.map((rid: number) => {
-    const role = roles.find(r => r.id === rid);
+  {def.approval_role_ids?.map((roleReference) => {
+    const roleId = typeof roleReference === "number" ? roleReference : roleReference.id;
+    const role = roles.find(r => r.id === roleId);
+    const roleName = typeof roleReference === "object" && roleReference.name
+      ? roleReference.name
+      : role?.name;
     return (
-      <Badge key={rid} variant="default" className="gap-1 px-2 py-1 bg-indigo-500">
-        <Shield className="h-3 w-3" /> {role?.name || `Role #${rid}`}
+      <Badge key={roleId} variant="default" className="gap-1 px-2 py-1 bg-indigo-500">
+        <Shield className="h-3 w-3" /> {roleName || `Role #${roleId}`}
       </Badge>
     );
   })}
@@ -513,6 +550,7 @@ export default function WorkflowRulesPage() {
                   setManualAssignment({
                     ...manualAssignment,
                     model_type,
+                    approvable_id: "",
                     trigger_event: nextEvents.includes(manualAssignment.trigger_event) ? manualAssignment.trigger_event : nextEvents[0] ?? "manual",
                   });
                 }}
@@ -530,13 +568,38 @@ export default function WorkflowRulesPage() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
-                <Label>Record ID</Label>
-                <Input
-                  inputMode="numeric"
-                  placeholder="Example: 42"
-                  value={manualAssignment.approvable_id}
-                  onChange={(event) => setManualAssignment({ ...manualAssignment, approvable_id: event.target.value })}
-                />
+                <Label>Record</Label>
+                <Select
+                  value={manualAssignment.approvable_id || undefined}
+                  onValueChange={(approvable_id) => setManualAssignment({ ...manualAssignment, approvable_id })}
+                  disabled={!manualAssignment.model_type || loadingAssignmentInstances}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        !manualAssignment.model_type
+                          ? "Select a model first"
+                          : loadingAssignmentInstances
+                            ? "Loading records…"
+                            : assignmentInstances.length === 0
+                              ? "No records found"
+                              : "Select an existing record"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assignmentInstances.map((row) => (
+                      <SelectItem key={String(row.id)} value={String(row.id)}>
+                        {row.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {manualAssignment.model_type && !loadingAssignmentInstances && assignmentInstances.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Create a record for this model first, then assign the workflow.
+                  </p>
+                ) : null}
               </div>
 
               <div className="grid gap-2">
