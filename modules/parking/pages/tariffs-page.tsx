@@ -59,6 +59,12 @@ export default function ParkingTariffsPage() {
   const [previewResult, setPreviewResult] = React.useState<ParkingFeeResult | null>(null);
 
   // Queries
+  const { data: lotsData } = useQuery({
+    queryKey: ["parking", "lots"],
+    queryFn: () => parkingApi.listLots().then((res) => res.data.data),
+  });
+  const defaultLot = lotsData?.[0];
+
   const { data: tariffsData, isLoading, refetch } = useQuery({
     queryKey: ["parking", "tariffs"],
     queryFn: () => parkingApi.listTariffs().then((res) => res.data.data),
@@ -215,13 +221,15 @@ export default function ParkingTariffsPage() {
                 <Button
                   onClick={() =>
                     createTariffMutation.mutate({
+                      ...(defaultLot?.id ? { parking_lot_id: defaultLot.id } : {}),
                       name,
-                      tariff_type: tariffType,
+                      code: name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_").slice(0, 40),
+                      billing_type: tariffType,
                       base_rate: baseRate,
                       grace_period_minutes: gracePeriod,
-                      daily_max_cap: dailyCap,
-                      overnight_flat_rate: overnightFee,
-                      lost_ticket_penalty: lostTicketFee,
+                      max_daily_rate: dailyCap,
+                      night_surcharge: overnightFee,
+                      lost_ticket_fee: lostTicketFee,
                       is_active: true,
                     })
                   }
@@ -400,7 +408,7 @@ export default function ParkingTariffsPage() {
                   Estimated Fee Breakdown
                 </div>
                 <div className="text-3xl font-black font-mono text-primary mb-4">
-                  {formatCurrency(previewResult?.final_fee ?? 0)}
+                  {formatCurrency(previewResult?.final_amount ?? previewResult?.final_fee ?? 0)}
                 </div>
 
                 <div className="space-y-2 text-sm">
@@ -410,16 +418,30 @@ export default function ParkingTariffsPage() {
                   </div>
                   <div className="flex justify-between py-1 border-b border-border/40">
                     <span className="text-muted-foreground">First Hour / Base Rate:</span>
-                    <span className="font-mono">{formatCurrency(previewResult?.base_fee ?? 0)}</span>
+                    <span className="font-mono">
+                      {formatCurrency(previewResult?.base_amount ?? previewResult?.base_fee ?? 0)}
+                    </span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-border/40">
                     <span className="text-muted-foreground">Additional Time:</span>
-                    <span className="font-mono">{formatCurrency(previewResult?.additional_fee ?? 0)}</span>
+                    <span className="font-mono">
+                      {formatCurrency(
+                        Math.max(
+                          0,
+                          (previewResult?.final_amount ?? previewResult?.final_fee ?? 0) -
+                            (previewResult?.base_amount ?? previewResult?.base_fee ?? 0)
+                        )
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-border/40">
                     <span className="text-muted-foreground">Daily Cap Applied:</span>
                     <span className="font-semibold text-emerald-600">
-                      {previewResult && previewResult.final_fee >= (previewResult.daily_cap || Infinity) ? "YES" : "NO"}
+                      {previewResult &&
+                      (previewResult.final_amount ?? previewResult.final_fee ?? 0) >=
+                        (previewResult.daily_cap || Infinity)
+                        ? "YES"
+                        : "NO"}
                     </span>
                   </div>
                 </div>

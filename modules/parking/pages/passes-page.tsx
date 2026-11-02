@@ -62,11 +62,17 @@ export default function ParkingPassesPage() {
   const [userName, setUserName] = React.useState("");
   const [userPhone, setUserPhone] = React.useState("");
   const [plate, setPlate] = React.useState("");
-  const [passType, setPassType] = React.useState("monthly_standard");
+  const [passType, setPassType] = React.useState("monthly_commuter");
   const [price, setPrice] = React.useState(2500);
   const [months, setMonths] = React.useState(1);
 
   // Queries
+  const { data: lotsData } = useQuery({
+    queryKey: ["parking", "lots"],
+    queryFn: () => parkingApi.listLots().then((res) => res.data.data),
+  });
+  const defaultLot = lotsData?.[0];
+
   const { data: passesData, isLoading, refetch } = useQuery({
     queryKey: ["parking", "passes", statusFilter, searchQuery],
     queryFn: () => {
@@ -79,12 +85,24 @@ export default function ParkingPassesPage() {
 
   const passes: ParkingPass[] = passesData?.data ?? [];
   const totalCount = passesData?.total ?? passes.length;
+  const passCode = (pass: ParkingPass) => pass.pass_number || pass.pass_code || "-";
+  const subscriberName = (pass: ParkingPass) => pass.customer_name || pass.user_name || "-";
+  const subscriberPhone = (pass: ParkingPass) => pass.customer_phone || pass.user_phone || "-";
+  const passExpiry = (pass: ParkingPass) => pass.valid_until || pass.valid_to;
+  const passPrice = (pass: ParkingPass) => pass.price_etb ?? pass.price_paid ?? 0;
+  const passStatus = (pass: ParkingPass) => {
+    if (pass.status === "expired" || pass.status === "suspended") return pass.status;
+    if (passExpiry(pass) && new Date(passExpiry(pass) as string) < new Date(new Date().toDateString())) {
+      return "expired";
+    }
+    return pass.is_active === false ? "suspended" : "active";
+  };
 
   // Mutations
   const createPassMutation = useMutation({
     mutationFn: (data: any) => parkingApi.createPass(data).then((res) => res.data.data),
     onSuccess: (p) => {
-      toast.success(`Pass ${p.pass_code} issued for ${p.user_name}!`);
+      toast.success(`Pass ${passCode(p)} issued for ${subscriberName(p)}!`);
       setIsAddOpen(false);
       setUserName("");
       setPlate("");
@@ -97,14 +115,24 @@ export default function ParkingPassesPage() {
     mutationFn: (data: { id: number; months: number }) =>
       parkingApi.renewPass(data.id, data.months).then((res) => res.data.data),
     onSuccess: (p) => {
-      toast.success(`Pass ${p.pass_code} renewed successfully through ${formatDateTime(p.valid_to)}!`);
+      toast.success(`Pass ${passCode(p)} renewed successfully through ${formatDateTime(passExpiry(p))}!`);
       queryClient.invalidateQueries({ queryKey: ["parking", "passes"] });
     },
     onError: (err) => toast.error(errorText(err, "Failed to renew pass")),
   });
 
-  const activePasses = passes.filter((p) => p.status === "active").length;
-  const expiredPasses = passes.filter((p) => p.status === "expired").length;
+  const statusMutation = useMutation({
+    mutationFn: (data: { id: number; status: "active" | "suspended" }) =>
+      parkingApi.updatePassStatus(data.id, data.status).then((res) => res.data.data),
+    onSuccess: (pass) => {
+      toast.success(`${passCode(pass)} ${pass.is_active ? "activated" : "suspended"}.`);
+      queryClient.invalidateQueries({ queryKey: ["parking", "passes"] });
+    },
+    onError: (err) => toast.error(errorText(err, "Failed to update pass status")),
+  });
+
+  const activePasses = passes.filter((p) => passStatus(p) === "active").length;
+  const expiredPasses = passes.filter((p) => passStatus(p) === "expired").length;
 
   return (
     <div className="space-y-6">
@@ -171,15 +199,16 @@ export default function ParkingPassesPage() {
                       value={passType}
                       onChange={(e) => {
                         setPassType(e.target.value);
-                        if (e.target.value === "monthly_vip") setPrice(5000);
-                        else if (e.target.value === "annual") setPrice(24000);
+                        if (e.target.value === "resident_vip") setPrice(5000);
+                        else if (e.target.value === "corporate_fleet") setPrice(24000);
                         else setPrice(2500);
                       }}
                       className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
                     >
-                      <option value="monthly_standard">Monthly Standard (2,500 ETB)</option>
-                      <option value="monthly_vip">Monthly VIP Reserved (5,000 ETB)</option>
-                      <option value="annual">Annual Season Pass (24,000 ETB)</option>
+                      <option value="monthly_commuter">Monthly Standard (2,500 ETB)</option>
+                      <option value="resident_vip">Monthly VIP Reserved (5,000 ETB)</option>
+                      <option value="corporate_fleet">Corporate / Annual Fleet (24,000 ETB)</option>
+                      <option value="employee_staff">Employee / Staff Pass</option>
                     </select>
                   </div>
 
@@ -209,19 +238,24 @@ export default function ParkingPassesPage() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={() =>
+                  onClick={() => {
+                    if (!defaultLot?.id) {
+                      toast.error("No parking lot is available.");
+                      return;
+                    }
                     createPassMutation.mutate({
-                      user_name: userName,
-                      user_phone: userPhone,
+                      parking_lot_id: defaultLot.id,
+                      customer_name: userName,
+                      customer_phone: userPhone || "N/A",
                       license_plate: plate,
                       pass_type: passType,
-                      price_paid: price * months,
+                      price_etb: price * months,
                       status: "active",
                       valid_from: new Date().toISOString(),
-                      valid_to: new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000).toISOString(),
-                    })
-                  }
-                  disabled={createPassMutation.isPending || !userName.trim() || !plate.trim()}
+                      valid_until: new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000).toISOString(),
+                    });
+                  }}
+                  disabled={createPassMutation.isPending || !userName.trim() || !plate.trim() || !defaultLot?.id}
                 >
                   {createPassMutation.isPending ? "Issuing..." : "Confirm & Activate Pass"}
                 </Button>
@@ -242,7 +276,7 @@ export default function ParkingPassesPage() {
         />
         <StatCard
           title="Pass Revenue"
-          value={formatCurrency(passes.reduce((acc, p) => acc + Number(p.price_paid || 0), 0))}
+          value={formatCurrency(passes.reduce((acc, p) => acc + Number(passPrice(p)), 0))}
           subtitle="Recurring subscription billings"
           icon={CreditCard}
           variant="info"
@@ -326,11 +360,11 @@ export default function ParkingPassesPage() {
                 {passes.map((pass) => (
                   <TableRow key={pass.id}>
                     <TableCell className="font-mono font-medium text-xs">
-                      {pass.pass_code}
+                      {passCode(pass)}
                     </TableCell>
                     <TableCell>
-                      <div className="font-semibold text-sm">{pass.user_name}</div>
-                      <div className="text-xs text-muted-foreground">{pass.user_phone || "-"}</div>
+                      <div className="font-semibold text-sm">{subscriberName(pass)}</div>
+                      <div className="text-xs text-muted-foreground">{subscriberPhone(pass)}</div>
                     </TableCell>
                     <TableCell>
                       <span className="px-2 py-0.5 rounded bg-muted font-mono font-bold text-xs border border-border/80">
@@ -344,25 +378,41 @@ export default function ParkingPassesPage() {
                       {formatDateTime(pass.valid_from)}
                     </TableCell>
                     <TableCell className="text-xs font-semibold text-primary">
-                      {formatDateTime(pass.valid_to)}
+                      {formatDateTime(passExpiry(pass))}
                     </TableCell>
                     <TableCell className="font-mono text-xs">
-                      {formatCurrency(pass.price_paid)}
+                      {formatCurrency(passPrice(pass))}
                     </TableCell>
                     <TableCell>
-                      <PassStatusBadge status={pass.status || "active"} />
+                      <PassStatusBadge status={passStatus(pass)} />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => renewMutation.mutate({ id: pass.id, months: 1 })}
-                        disabled={renewMutation.isPending}
-                        className="h-7 text-xs gap-1"
-                      >
-                        <RefreshCw className="h-3 w-3" />
-                        +1 Month
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => renewMutation.mutate({ id: pass.id, months: 1 })}
+                          disabled={renewMutation.isPending}
+                          className="h-7 text-xs gap-1"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          +1 Month
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={passStatus(pass) === "suspended" ? "default" : "ghost"}
+                          onClick={() =>
+                            statusMutation.mutate({
+                              id: pass.id,
+                              status: passStatus(pass) === "suspended" ? "active" : "suspended",
+                            })
+                          }
+                          disabled={statusMutation.isPending || passStatus(pass) === "expired"}
+                          className="h-7 text-xs"
+                        >
+                          {passStatus(pass) === "suspended" ? "Activate" : "Suspend"}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

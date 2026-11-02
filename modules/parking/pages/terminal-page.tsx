@@ -51,6 +51,8 @@ import type { ParkingFeeResult, ParkingPass, ParkingSession } from "@/modules/pa
 
 export default function ParkingTerminalPage() {
   const queryClient = useQueryClient();
+  const getSessionAmount = (session: ParkingSession) =>
+    Number(session.paid_amount ?? session.calculated_fee ?? session.total_fee ?? 0);
 
   // Check-In Form State
   const [inPlate, setInPlate] = React.useState("");
@@ -114,7 +116,7 @@ export default function ParkingTerminalPage() {
       setActiveSession(null);
       setFeeResult(null);
       setSearchTicket("");
-      toast.success(`Checkout completed! Barrier Gate OPEN. Paid: ${formatCurrency(session.total_fee)}`);
+      toast.success(`Checkout completed! Barrier Gate OPEN. Paid: ${formatCurrency(getSessionAmount(session))}`);
       queryClient.invalidateQueries({ queryKey: ["parking"] });
     },
     onError: (err) => toast.error(errorText(err, "Failed to complete checkout")),
@@ -122,10 +124,19 @@ export default function ParkingTerminalPage() {
 
   const lostTicketMutation = useMutation({
     mutationFn: (id: number) => parkingApi.lostTicket(id).then((res) => res.data.data),
-    onSuccess: (session) => {
-      toast.warning(`Session marked as Lost Ticket. Penalty applied: ${formatCurrency(session.total_fee)}`);
+    onSuccess: async (session) => {
+      let penaltyAmount = 0;
+      try {
+        const feeRes = await parkingApi.calculateFee(session.id);
+        const liveFee = feeRes.data.data;
+        setFeeResult(liveFee);
+        penaltyAmount = Number(liveFee.final_amount ?? liveFee.final_fee ?? 0);
+      } catch {
+        penaltyAmount = getSessionAmount(session);
+      }
+
+      toast.warning(`Session marked as Lost Ticket. Penalty applied: ${formatCurrency(penaltyAmount)}`);
       setActiveSession(session);
-      fetchFee(session.id);
       queryClient.invalidateQueries({ queryKey: ["parking"] });
     },
     onError: (err) => toast.error(errorText(err, "Failed to mark lost ticket")),
@@ -133,14 +144,22 @@ export default function ParkingTerminalPage() {
 
   // Handler to fetch session for checkout
   const fetchSession = async (ticketOrPlate: string) => {
-    if (!ticketOrPlate.trim()) return;
+    const query = ticketOrPlate.trim().toUpperCase();
+    if (!query) return;
     try {
-      const res = await parkingApi.listSessions({ search: ticketOrPlate.trim(), status: "active" });
-      const sessions = res.data.data.data;
-      if (sessions.length > 0) {
-        const found = sessions[0];
-        setActiveSession(found);
-        fetchFee(found.id);
+      const res = await parkingApi.listSessions({ search: query, status: "active" });
+      // Laravel paginator is nested under { status, data: { data: [...] } }
+      const sessions = res.data?.data?.data ?? [];
+      const exact =
+        sessions.find(
+          (session) =>
+            session.license_plate?.toUpperCase() === query ||
+            session.ticket_number?.toUpperCase() === query
+        ) ?? sessions[0];
+
+      if (exact) {
+        setActiveSession(exact);
+        fetchFee(exact.id);
       } else {
         toast.error("No active parking session found for this ticket/plate");
         setActiveSession(null);
@@ -232,9 +251,11 @@ export default function ParkingTerminalPage() {
                 <div className="pt-2 border-t border-border/40 text-xs text-muted-foreground space-y-2">
                   <p className="font-medium text-foreground">Quick Test Plates:</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {["AA-3-98765", "ET-B-44321", "AA-2-45892"].map((p) => (
+                    {/* Match seeded active sessions so POS demos resolve real tickets. */}
+                    {["AA-3-98214", "ET-B01-551", "TKT-202610-0001"].map((p) => (
                       <button
                         key={p}
+                        type="button"
                         onClick={() => {
                           setSearchTicket(p);
                           fetchSession(p);
@@ -245,6 +266,9 @@ export default function ParkingTerminalPage() {
                       </button>
                     ))}
                   </div>
+                  <p className="text-[11px]">
+                    Only active parked vehicles can be checked out. Unknown plates show “not found”.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -284,7 +308,12 @@ export default function ParkingTerminalPage() {
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Allocated Bay</div>
-                        <div className="font-semibold">{activeSession.bay?.bay_code || "General Lot"}</div>
+                        <div className="font-semibold">
+                          {activeSession.parking_bay?.bay_number ||
+                            activeSession.bay?.bay_number ||
+                            activeSession.bay?.bay_code ||
+                            "General Lot"}
+                        </div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Duration Parked</div>
@@ -298,8 +327,10 @@ export default function ParkingTerminalPage() {
                     {feeResult && (
                       <div className="space-y-3 p-4 rounded-xl border border-primary/20 bg-primary/5">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Base Parking Fee ({feeResult.tariff_name}):</span>
-                          <span className="font-mono font-medium">{formatCurrency(feeResult.base_fee)}</span>
+                          <span className="text-muted-foreground">Base Parking Fee ({feeResult.tariff_name || "Current tariff"}):</span>
+                          <span className="font-mono font-medium">
+                            {formatCurrency(feeResult.base_amount ?? feeResult.base_fee ?? 0)}
+                          </span>
                         </div>
                         {Number(feeResult.additional_fee ?? 0) > 0 && (
                           <div className="flex items-center justify-between text-sm">
@@ -322,7 +353,12 @@ export default function ParkingTerminalPage() {
                         <div className="pt-3 border-t border-primary/20 flex items-center justify-between">
                           <span className="text-base font-bold text-foreground">Total Payable:</span>
                           <span className="text-2xl font-black font-mono text-primary">
-                            {formatCurrency(Math.max(0, feeResult.final_fee - discountAmount))}
+                            {formatCurrency(
+                              Math.max(
+                                0,
+                                (feeResult.final_amount ?? feeResult.final_fee ?? 0) - discountAmount
+                              )
+                            )}
                           </span>
                         </div>
                       </div>
@@ -478,7 +514,8 @@ export default function ParkingTerminalPage() {
                     <option value="">Automatic Best Available Bay</option>
                     {availableBays.map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.bay_code} ({b.zone?.name || "Zone"})
+                        {b.bay_number || b.bay_code || `Bay #${b.id}`} (
+                        {b.parking_zone?.name || b.zone?.name || "Unassigned zone"})
                       </option>
                     ))}
                   </select>
@@ -493,7 +530,15 @@ export default function ParkingTerminalPage() {
                   </div>
                   <div className="text-xs grid grid-cols-2 gap-2">
                     <div>Plate: <span className="font-mono font-bold">{createdSession.license_plate}</span></div>
-                    <div>Bay: <span className="font-bold">{createdSession.bay?.bay_code || "General"}</span></div>
+                    <div>
+                      Bay:{" "}
+                      <span className="font-bold">
+                        {createdSession.parking_bay?.bay_number ||
+                          createdSession.bay?.bay_number ||
+                          createdSession.bay?.bay_code ||
+                          "General"}
+                      </span>
+                    </div>
                     <div>Entry Time: {formatDateTime(createdSession.entry_time)}</div>
                     <div>Gate Status: <span className="font-semibold">Barrier Arm Lifted</span></div>
                   </div>
@@ -505,16 +550,21 @@ export default function ParkingTerminalPage() {
                 Reset
               </Button>
               <Button
-                onClick={() =>
+                onClick={() => {
+                  if (!defaultLot?.id) {
+                    toast.error("No parking lot is available for check-in.");
+                    return;
+                  }
                   checkInMutation.mutate({
-                    lot_id: defaultLot?.id,
+                    parking_lot_id: defaultLot.id,
                     license_plate: inPlate,
                     vehicle_type: inVehicleType,
-                    tariff_id: inTariffId,
-                    bay_id: inBayId,
-                  })
-                }
-                disabled={checkInMutation.isPending || !inPlate.trim()}
+                    ...(inTariffId ? { parking_tariff_id: inTariffId } : {}),
+                    ...(inBayId ? { parking_bay_id: inBayId } : {}),
+                    entry_gate: "POS Terminal Entry",
+                  });
+                }}
+                disabled={checkInMutation.isPending || !inPlate.trim() || !defaultLot?.id}
                 className="gap-2 bg-primary text-primary-foreground font-bold shadow-md"
               >
                 <Printer className="h-4 w-4" />
@@ -634,7 +684,7 @@ export default function ParkingTerminalPage() {
                 </div>
                 <div className="flex justify-between border-t pt-2 font-bold text-sm text-foreground">
                   <span>Amount Paid:</span>
-                  <span>{formatCurrency(completedSession.total_fee)}</span>
+                  <span>{formatCurrency(getSessionAmount(completedSession))}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Method:</span>

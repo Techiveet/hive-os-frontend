@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowRight,
+  Building2,
   Car,
   CheckCircle2,
   Clock,
@@ -74,7 +75,10 @@ export default function ParkingDashboardPage() {
 
   const { data: overviewData, isLoading, refetch } = useQuery({
     queryKey: ["parking", "overview", currentLotId],
-    queryFn: () => parkingApi.overview(currentLotId ? { lot_id: currentLotId } : {}).then((res) => res.data.data),
+    queryFn: () =>
+      parkingApi
+        .overview(currentLotId ? { parking_lot_id: currentLotId } : {})
+        .then((res) => res.data.data),
     refetchInterval: 15000,
   });
 
@@ -85,10 +89,21 @@ export default function ParkingDashboardPage() {
   });
 
   const anprMutation = useMutation({
-    mutationFn: (data: { license_plate: string; direction: "entry" | "exit"; lot_id?: number }) =>
-      parkingApi.simulateScan(data).then((res) => res.data),
+    mutationFn: (data: {
+      license_plate: string;
+      direction: "entry" | "exit";
+      parking_lot_id: number;
+    }) =>
+      parkingApi
+        .simulateScan({
+          parking_lot_id: data.parking_lot_id,
+          license_plate: data.license_plate,
+          // Backend gate directions are in/out (not entry/exit).
+          direction: data.direction === "exit" ? "out" : "in",
+        })
+        .then((res) => res.data),
     onSuccess: (res: any) => {
-      toast.success(res.message || "ANPR scan processed successfully.");
+      toast.success(res?.data?.message || res?.message || "ANPR scan processed successfully.");
       setIsSimOpen(false);
       queryClient.invalidateQueries({ queryKey: ["parking"] });
     },
@@ -96,6 +111,8 @@ export default function ParkingDashboardPage() {
       toast.error(errorText(err, "Failed to process ANPR simulation"));
     },
   });
+
+  const currentLot = lots.find((lot) => lot.id === currentLotId);
 
   const kpis = overviewData?.kpis;
   const recentSessions = overviewData?.recent_sessions ?? [];
@@ -142,6 +159,12 @@ export default function ParkingDashboardPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">Parking lot: </span>
+                  <span className="font-medium">
+                    {currentLot?.name ?? "No parking lot available"}
+                  </span>
+                </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="sim-plate">License Plate Number</Label>
                   <Input
@@ -151,7 +174,7 @@ export default function ParkingDashboardPage() {
                     placeholder="e.g. AA-3-98765 or ET-A-12345"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Try plates with subscriber passes (e.g. AA-2-45892) or advance reservations.
+                    Uses the lot selected in the page header. Try plates with subscriber passes or reservations.
                   </p>
                 </div>
                 <div className="space-y-1.5">
@@ -183,14 +206,18 @@ export default function ParkingDashboardPage() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={() =>
+                  onClick={() => {
+                    if (!currentLotId) {
+                      toast.error("Select a parking lot first.");
+                      return;
+                    }
                     anprMutation.mutate({
                       license_plate: simPlate,
                       direction: simDirection,
-                      lot_id: currentLotId,
-                    })
-                  }
-                  disabled={anprMutation.isPending || !simPlate}
+                      parking_lot_id: currentLotId,
+                    });
+                  }}
+                  disabled={anprMutation.isPending || !simPlate || !currentLotId}
                   className="gap-2"
                 >
                   {anprMutation.isPending ? "Processing Optical Scan..." : "Trigger Barrier Gate"}
@@ -203,6 +230,13 @@ export default function ParkingDashboardPage() {
             <Button size="sm" variant="default" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
               <CreditCard className="h-4 w-4" />
               POS Terminal
+            </Button>
+          </Link>
+
+          <Link href="/dashboard/parking/facilities">
+            <Button size="sm" variant="outline" className="gap-1.5">
+              <Building2 className="h-4 w-4" />
+              Manage Lots
             </Button>
           </Link>
         </div>

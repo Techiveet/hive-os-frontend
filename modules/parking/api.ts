@@ -60,6 +60,8 @@ export const parkingApi = {
   getPass: (id: Id) => http.get<{ status: string; data: ParkingPass }>(`${BASE}/passes/${id}`),
   createPass: (data: Payload) => http.post<{ status: string; data: ParkingPass }>(`${BASE}/passes`, data),
   renewPass: (id: Id, months: number = 1) => http.post<{ status: string; message: string; data: ParkingPass }>(`${BASE}/passes/${id}/renew`, { months }),
+  updatePassStatus: (id: Id, status: "active" | "suspended") =>
+    http.patch<{ status: string; message: string; data: ParkingPass }>(`${BASE}/passes/${id}/status`, { status }),
   lookupPlate: (plate: string) => http.get<{ status: string; is_subscriber: boolean; data: ParkingPass | null }>(`${BASE}/passes/lookup/${encodeURIComponent(plate)}`),
 
   // Reservations

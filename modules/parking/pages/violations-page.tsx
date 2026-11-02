@@ -64,6 +64,12 @@ export default function ParkingViolationsPage() {
   const [notes, setNotes] = React.useState("");
 
   // Queries
+  const { data: lotsData } = useQuery({
+    queryKey: ["parking", "lots"],
+    queryFn: () => parkingApi.listLots().then((res) => res.data.data),
+  });
+  const defaultLot = lotsData?.[0];
+
   const { data: violationsData, isLoading, refetch } = useQuery({
     queryKey: ["parking", "violations", statusFilter, searchQuery],
     queryFn: () => {
@@ -99,10 +105,10 @@ export default function ParkingViolationsPage() {
     onError: (err) => toast.error(errorText(err, "Failed to update citation status")),
   });
 
-  const pendingCount = violations.filter((v) => v.status === "pending").length;
+  const pendingCount = violations.filter((v) => v.status === "issued").length;
   const paidCount = violations.filter((v) => v.status === "paid").length;
   const totalPendingFines = violations
-    .filter((v) => v.status === "pending")
+    .filter((v) => v.status === "issued")
     .reduce((acc, v) => acc + Number(v.fine_amount || 0), 0);
 
   return (
@@ -188,16 +194,21 @@ export default function ParkingViolationsPage() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={() =>
+                  onClick={() => {
+                    if (!defaultLot?.id) {
+                      toast.error("No parking lot is available.");
+                      return;
+                    }
                     createViolationMutation.mutate({
+                      parking_lot_id: defaultLot.id,
                       license_plate: plate,
                       violation_type: violationType,
                       fine_amount: fineAmount,
                       notes,
-                      status: "pending",
-                    })
-                  }
-                  disabled={createViolationMutation.isPending || !plate.trim()}
+                      status: "issued",
+                    });
+                  }}
+                  disabled={createViolationMutation.isPending || !plate.trim() || !defaultLot?.id}
                   className="bg-rose-600 hover:bg-rose-700 text-white"
                 >
                   {createViolationMutation.isPending ? "Issuing..." : "Confirm & Issue Fine"}
@@ -211,7 +222,7 @@ export default function ParkingViolationsPage() {
       {/* KPI Cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Pending Citations"
+          title="Issued Citations"
           value={pendingCount}
           subtitle="Awaiting fine payment"
           icon={AlertTriangle}
@@ -257,7 +268,7 @@ export default function ParkingViolationsPage() {
             <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full md:w-auto">
               <TabsList className="grid grid-cols-4 w-full md:w-auto">
                 <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="pending">Pending</TabsTrigger>
+                <TabsTrigger value="issued">Issued</TabsTrigger>
                 <TabsTrigger value="paid">Settled</TabsTrigger>
                 <TabsTrigger value="waived">Waived</TabsTrigger>
               </TabsList>
@@ -325,7 +336,7 @@ export default function ParkingViolationsPage() {
                       <ViolationStatusBadge status={violation.status} />
                     </TableCell>
                     <TableCell className="text-right">
-                      {violation.status === "pending" && (
+                      {violation.status === "issued" && (
                         <div className="flex items-center justify-end gap-1.5">
                           <Button
                             size="sm"

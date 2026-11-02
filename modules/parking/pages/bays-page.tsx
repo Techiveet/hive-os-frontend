@@ -103,7 +103,12 @@ export default function ParkingBaysPage() {
   }, [zones]);
 
   const filteredBays = allBays.filter((b) => {
-    if (selectedZoneId !== "all" && String(b.zone_id) !== selectedZoneId) return false;
+    if (
+      selectedZoneId !== "all" &&
+      String(b.parking_zone_id ?? b.zone_id ?? b.zone?.id) !== selectedZoneId
+    ) {
+      return false;
+    }
     if (selectedStatus !== "all" && b.status !== selectedStatus) return false;
     if (selectedType !== "all" && b.bay_type !== selectedType) return false;
     if (searchQuery.trim()) {
@@ -181,8 +186,8 @@ export default function ParkingBaysPage() {
                   >
                     <option value="standard">Standard Slot</option>
                     <option value="vip">VIP Executive Slot</option>
-                    <option value="ev">Electric Vehicle (EV Charger)</option>
-                    <option value="handicap">Accessible / Handicap</option>
+                    <option value="ev_charging">Electric Vehicle (EV Charger)</option>
+                    <option value="disabled">Accessible / Handicap</option>
                     <option value="motorcycle">Motorcycle Bay</option>
                   </select>
                 </div>
@@ -192,16 +197,25 @@ export default function ParkingBaysPage() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={() =>
+                  onClick={() => {
+                    const zoneId = newZoneId || zones[0]?.id;
+                    if (!currentLot?.id) {
+                      toast.error("No parking lot is available.");
+                      return;
+                    }
+                    if (!zoneId) {
+                      toast.error("Create a zone first, then add bays.");
+                      return;
+                    }
                     createBayMutation.mutate({
-                      lot_id: currentLot?.id,
-                      zone_id: newZoneId || zones[0]?.id,
-                      bay_code: newBayCode,
+                      parking_lot_id: currentLot.id,
+                      parking_zone_id: zoneId,
+                      bay_number: newBayCode.trim(),
                       bay_type: newBayType,
                       status: "available",
-                    })
-                  }
-                  disabled={createBayMutation.isPending || !newBayCode.trim()}
+                    });
+                  }}
+                  disabled={createBayMutation.isPending || !newBayCode.trim() || !currentLot?.id}
                 >
                   {createBayMutation.isPending ? "Creating..." : "Save Bay"}
                 </Button>

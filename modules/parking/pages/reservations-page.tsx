@@ -77,6 +77,16 @@ export default function ParkingReservationsPage() {
   });
   const reservations: ParkingReservation[] = reservationsData?.data ?? [];
   const totalCount = reservationsData?.total ?? reservations.length;
+  const reservationBay = (reservation: ParkingReservation) =>
+    reservation.parking_bay?.bay_number ||
+    reservation.bay?.bay_number ||
+    reservation.parking_bay?.bay_code ||
+    reservation.bay?.bay_code ||
+    "Auto-Assign";
+  const arrivalTime = (reservation: ParkingReservation) =>
+    reservation.reserved_from || reservation.start_time;
+  const prepaidAmount = (reservation: ParkingReservation) =>
+    reservation.deposit_paid ?? reservation.prepaid_amount ?? 0;
 
   const { data: lotsData } = useQuery({
     queryKey: ["parking", "lots"],
@@ -214,21 +224,25 @@ export default function ParkingReservationsPage() {
                 </Button>
                 <Button
                   onClick={() => {
+                    if (!defaultLot?.id) {
+                      toast.error("No parking lot is available.");
+                      return;
+                    }
                     const start = new Date(Date.now() + 60 * 60 * 1000);
                     const end = new Date(start.getTime() + hoursAhead * 60 * 60 * 1000);
                     createReservationMutation.mutate({
-                      lot_id: defaultLot?.id,
+                      parking_lot_id: defaultLot.id,
                       customer_name: customerName,
-                      customer_phone: customerPhone,
+                      customer_phone: customerPhone || "N/A",
                       license_plate: plate,
-                      bay_id: bayId,
-                      start_time: start.toISOString(),
-                      end_time: end.toISOString(),
-                      prepaid_amount: deposit,
+                      ...(bayId ? { parking_bay_id: bayId } : {}),
+                      reserved_from: start.toISOString(),
+                      reserved_until: end.toISOString(),
+                      deposit_paid: deposit,
                       status: "confirmed",
                     });
                   }}
-                  disabled={createReservationMutation.isPending || !customerName.trim() || !plate.trim()}
+                  disabled={createReservationMutation.isPending || !customerName.trim() || !plate.trim() || !defaultLot?.id}
                 >
                   {createReservationMutation.isPending ? "Confirming..." : "Confirm Booking"}
                 </Button>
@@ -256,7 +270,7 @@ export default function ParkingReservationsPage() {
         />
         <StatCard
           title="Prepaid Deposits"
-          value={formatCurrency(reservations.reduce((acc, r) => acc + Number(r.prepaid_amount || 0), 0))}
+          value={formatCurrency(reservations.reduce((acc, r) => acc + Number(prepaidAmount(r)), 0))}
           subtitle="Secured upfront payments"
           icon={Clock}
           variant="default"
@@ -344,13 +358,13 @@ export default function ParkingReservationsPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-xs">
-                      {res.bay?.bay_code || "Auto-Assign"}
+                      {reservationBay(res)}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {formatDateTime(res.start_time)}
+                      {formatDateTime(arrivalTime(res))}
                     </TableCell>
                     <TableCell className="font-mono text-xs font-semibold">
-                      {formatCurrency(res.prepaid_amount)}
+                      {formatCurrency(prepaidAmount(res))}
                     </TableCell>
                     <TableCell>
                       <ReservationStatusBadge status={res.status} />

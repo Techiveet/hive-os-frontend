@@ -239,7 +239,7 @@ export interface ParkingFeeResult {
   discount_amount?: number;
   lost_ticket_fee?: number;
   final_amount?: number;
-  final_fee: number;
+  final_fee?: number;
   daily_cap?: number;
   tariff_name?: string;
   is_grace_period?: boolean;

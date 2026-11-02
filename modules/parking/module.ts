@@ -1,5 +1,5 @@
 import { CAR_PARKING_ROUTE_PERMISSIONS } from "@/lib/route-permissions";
-import { AlertTriangle, BarChart3, Calculator, Car, CreditCard, Gauge, Grid3X3, QrCode, Receipt } from "lucide-react";
+import { AlertTriangle, BarChart3, Building2, Calculator, Car, CreditCard, Gauge, Grid3X3, QrCode, Receipt } from "lucide-react";
 import type { FrontendModuleDefinition } from "@/modules/types";
 
 export const parkingModule: FrontendModuleDefinition = {
@@ -9,6 +9,7 @@ export const parkingModule: FrontendModuleDefinition = {
   backendModule: "Modules\\CarParking",
   routePrefixes: [
     "/dashboard/parking",
+    "/dashboard/parking/facilities",
     "/dashboard/parking/terminal",
     "/dashboard/parking/bays",
     "/dashboard/parking/sessions",
@@ -29,6 +30,16 @@ export const parkingModule: FrontendModuleDefinition = {
       subscriptionSlug: "car_parking_management",
       placement: "primary",
       tourId: "tour-nav-parking-overview",
+    },
+    {
+      moduleId: "parking",
+      translationKey: "nav.parking_facilities",
+      fallbackLabel: "Facilities & Lots",
+      href: "/dashboard/parking/facilities",
+      icon: Building2,
+      permissions: ["view_car_parking", "manage_car_parking"],
+      subscriptionSlug: "car_parking_management",
+      placement: "primary",
     },
     {
       moduleId: "parking",
