@@ -69,9 +69,18 @@ export default function FeedbackPage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
       updateHospitalityFeedback(id, payload),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["hospitality", "feedback"] });
-      toast.success("Feedback updated");
+      queryClient.invalidateQueries({ queryKey: ["tenantPublicFeedback"] });
+      if (typeof variables.payload.is_published === "boolean") {
+        toast.success(
+          variables.payload.is_published
+            ? "Now visible on your public site"
+            : "Removed from your public site",
+        );
+      } else {
+        toast.success("Feedback updated");
+      }
       setIsReplyDialogOpen(false);
     },
     onError: (error: any) => {
@@ -123,7 +132,7 @@ export default function FeedbackPage() {
             Feedback & Reviews
           </h1>
           <p className="text-muted-foreground">
-            Manage customer feedback, reply to reviews, and track satisfaction. Guests can also submit reviews from your public restaurant site.
+            Review guest feedback, publish reviews to your public site, and add an optional public response under each review.
           </p>
         </div>
         {canCreateFeedback && (
@@ -169,7 +178,7 @@ export default function FeedbackPage() {
                     <CornerDownRight className="absolute -left-5 top-1 h-4 w-4 text-muted-foreground" />
                     <div className="bg-indigo-50 dark:bg-indigo-950/30 rounded-xl p-3 border border-indigo-100 dark:border-indigo-900/50">
                       <p className="text-xs font-bold text-indigo-700 dark:text-indigo-400 mb-1">
-                        Response from Management:
+                        Public response
                       </p>
                       <p className="text-sm text-slate-700 dark:text-slate-300">{feedback.response}</p>
                     </div>
@@ -188,7 +197,7 @@ export default function FeedbackPage() {
                   )}
                 >
                   <CheckCircle2 className="mr-1 h-4 w-4" />
-                  {feedback.is_published ? "Published" : "Publish"}
+                  {feedback.is_published ? "On public site" : "Show on site"}
                 </Button>
 
                 <div className="flex gap-2">
@@ -201,7 +210,7 @@ export default function FeedbackPage() {
                       setIsReplyDialogOpen(true);
                     }}
                   >
-                    Reply
+                    {feedback.response ? "Edit response" : "Add response"}
                   </Button>
                   <Button
                     variant="ghost"
@@ -310,18 +319,18 @@ export default function FeedbackPage() {
       <Dialog open={isReplyDialogOpen} onOpenChange={setIsReplyDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reply to Feedback</DialogTitle>
+            <DialogTitle>Public response</DialogTitle>
             <DialogDescription>
-              Your response will be visible to the customer.
+              Optional note shown under this review on your public site once the review is published. Guests are not messaged directly.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Management Response</Label>
+              <Label>Response from {selectedFeedback ? "the venue" : "management"}</Label>
               <Textarea 
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
-                placeholder="Thank you for your feedback..."
+                placeholder="Thank you for dining with us — we hope to welcome you again soon."
                 rows={4}
               />
             </div>
@@ -330,7 +339,7 @@ export default function FeedbackPage() {
             <Button variant="outline" onClick={() => setIsReplyDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleReplySubmit} disabled={updateMutation.isPending || !replyText.trim()}>
               {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Send Reply
+              Save response
             </Button>
           </DialogFooter>
         </DialogContent>

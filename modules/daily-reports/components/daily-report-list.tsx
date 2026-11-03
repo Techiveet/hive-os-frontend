@@ -441,9 +441,15 @@ export function DailyReportList() {
                         Details
                       </Button>
 
-                      {report.status === "draft" && (
+                      {(report.status === "draft" || report.status === "revision_requested") && (
                         <>
-                          <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground"
+                            title={report.status === "revision_requested" ? "Edit and resubmit report" : "Edit report"}
+                          >
                             <Link href={`/dashboard/daily-reports/${report.id}`}>
                               <Edit3 className="h-3.5 w-3.5" />
                             </Link>
@@ -456,7 +462,7 @@ export function DailyReportList() {
                             className="gap-1 text-xs h-8 text-primary border-primary/30"
                           >
                             <Send className="h-3.5 w-3.5" />
-                            Submit
+                            {report.status === "revision_requested" ? "Resubmit" : "Submit"}
                           </Button>
                         </>
                       )}

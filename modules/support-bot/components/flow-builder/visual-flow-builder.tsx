@@ -7,7 +7,6 @@ import {
   Save,
   Play,
   Trash2,
-  GitFork,
   MessageSquare,
   HelpCircle,
   Headphones,
@@ -18,11 +17,30 @@ import {
   Database,
   Sliders,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
 import { supportBotApi } from "../../api/support-bot-api";
 import { SupportBot, SupportBotFlow, FlowNode, FlowEdge } from "../../types";
 
@@ -30,6 +48,32 @@ interface Props {
   bot: SupportBot;
   flowId?: number;
   onOpenSimulator?: () => void;
+}
+
+function defaultStartNodes(): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const startId = `node_${Date.now()}`;
+  const messageId = `node_${Date.now() + 1}`;
+  return {
+    nodes: [
+      {
+        id: startId,
+        type: "start",
+        position: { x: 150, y: 80 },
+        data: { label: "Conversation Trigger" },
+      },
+      {
+        id: messageId,
+        type: "message",
+        position: { x: 150, y: 210 },
+        data: {
+          label: "Welcome Message",
+          message: "Hello! How may I assist your business today?",
+          buttons: ["View Catalog", "Contact Agent"],
+        },
+      },
+    ],
+    edges: [{ id: `e_${startId}_${messageId}`, source: startId, target: messageId }],
+  };
 }
 
 export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
@@ -40,24 +84,43 @@ export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [savedSuccess, setSavedSuccess] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [newFlowName, setNewFlowName] = React.useState("");
+  const [creating, setCreating] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+  const [deleteNodeOpen, setDeleteNodeOpen] = React.useState(false);
+  const [deletingNodeId, setDeletingNodeId] = React.useState<string | null>(null);
 
   // Load flows
   React.useEffect(() => {
     loadFlows();
   }, [bot.id, flowId]);
 
-  const loadFlows = async () => {
+  const loadFlows = async (preferFlowId?: number) => {
     try {
+      setLoading(true);
       const data = await supportBotApi.getFlows(bot.id);
       setFlows(data);
       if (data.length > 0) {
-        const target = flowId ? data.find((f) => f.id === flowId) || data[0] : data[0];
+        const preferredId = preferFlowId ?? flowId;
+        const target = preferredId
+          ? data.find((f) => f.id === preferredId) || data[0]
+          : data[0];
         setActiveFlow(target);
         setNodes(target.nodes || []);
         setEdges(target.edges || []);
+      } else {
+        setActiveFlow(null);
+        setNodes([]);
+        setEdges([]);
       }
     } catch (e) {
       console.error("Failed to load flows", e);
+      toast.error("Failed to load flows.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -66,6 +129,46 @@ export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
     setNodes(flow.nodes || []);
     setEdges(flow.edges || []);
     setSelectedNodeId(null);
+  };
+
+  const handleCreateFlow = async () => {
+    const name = newFlowName.trim() || "Main Conversation Flow";
+    try {
+      setCreating(true);
+      const starter = defaultStartNodes();
+      const created = await supportBotApi.createFlow(bot.id, {
+        name,
+        trigger_type: "conversation_start",
+        is_default: flows.length === 0,
+        nodes: starter.nodes,
+        edges: starter.edges,
+      });
+      toast.success(`Flow “${created.name}” created.`);
+      setCreateOpen(false);
+      setNewFlowName("");
+      await loadFlows(created.id);
+    } catch (e) {
+      console.error("Failed to create flow", e);
+      toast.error("Failed to create flow.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleteFlow = async () => {
+    if (!activeFlow) return;
+    try {
+      setDeleting(true);
+      await supportBotApi.deleteFlow(bot.id, activeFlow.id);
+      toast.success(`Flow “${activeFlow.name}” deleted.`);
+      setDeleteOpen(false);
+      await loadFlows();
+    } catch (e) {
+      console.error("Failed to delete flow", e);
+      toast.error("Failed to delete flow.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleAddNode = (type: FlowNode["type"]) => {
@@ -116,13 +219,24 @@ export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
   };
 
   const handleDeleteNode = (id: string) => {
-    setNodes((prev) => prev.filter((n) => n.id !== id));
-    setEdges((prev) => prev.filter((e) => e.source !== id && e.target !== id));
-    if (selectedNodeId === id) setSelectedNodeId(null);
+    setDeletingNodeId(id);
+    setDeleteNodeOpen(true);
+  };
+
+  const confirmDeleteNode = () => {
+    if (deletingNodeId === null) return;
+    setNodes((prev) => prev.filter((n) => n.id !== deletingNodeId));
+    setEdges((prev) => prev.filter((e) => e.source !== deletingNodeId && e.target !== deletingNodeId));
+    if (selectedNodeId === deletingNodeId) setSelectedNodeId(null);
+    setDeleteNodeOpen(false);
+    setDeletingNodeId(null);
   };
 
   const handleSaveFlow = async () => {
-    if (!activeFlow) return;
+    if (!activeFlow) {
+      setCreateOpen(true);
+      return;
+    }
     try {
       setSaving(true);
       setSavedSuccess(false);
@@ -131,9 +245,11 @@ export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
         edges,
       });
       setSavedSuccess(true);
+      toast.success("Flow saved.");
       setTimeout(() => setSavedSuccess(false), 3000);
     } catch (e) {
       console.error("Failed to save flow", e);
+      toast.error("Failed to save flow.");
     } finally {
       setSaving(false);
     }
@@ -145,8 +261,8 @@ export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
     <div className="flex h-[calc(100vh-14rem)] flex-col rounded-xl border border-border/80 bg-card overflow-hidden shadow-sm">
       {/* Studio Header Toolbar */}
       <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-4 py-2.5">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
             <Workflow className="h-5 w-5 text-primary" />
             <span className="font-bold text-sm">Flow Studio:</span>
           </div>
@@ -157,7 +273,7 @@ export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
                 key={f.id}
                 type="button"
                 onClick={() => handleSelectFlow(f)}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
                   activeFlow?.id === f.id
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -166,10 +282,22 @@ export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
                 {f.name} {f.is_default && "★"}
               </button>
             ))}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setNewFlowName(flows.length === 0 ? "Main Conversation Flow" : "");
+                setCreateOpen(true);
+              }}
+              className="h-7 gap-1 px-2 text-xs shrink-0"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Flow
+            </Button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {savedSuccess && (
             <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
               <CheckCircle2 className="h-3.5 w-3.5" /> Saved!
@@ -181,6 +309,7 @@ export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
               size="sm"
               variant="outline"
               onClick={onOpenSimulator}
+              disabled={!activeFlow}
               className="h-8 gap-1.5 text-xs text-primary border-primary/40 bg-primary/5 hover:bg-primary/10"
             >
               <Play className="h-3.5 w-3.5 fill-primary" />
@@ -188,10 +317,22 @@ export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
             </Button>
           )}
 
+          {activeFlow && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDeleteOpen(true)}
+              className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </Button>
+          )}
+
           <Button
             size="sm"
             onClick={handleSaveFlow}
-            disabled={saving}
+            disabled={saving || (!activeFlow && flows.length > 0)}
             className="h-8 gap-1.5 text-xs shadow"
           >
             <Save className="h-3.5 w-3.5" />
@@ -202,6 +343,28 @@ export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
 
       {/* Main Studio Canvas & Inspector Workspace */}
       <div className="flex flex-1 overflow-hidden relative">
+        {!activeFlow && !loading ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+            <Workflow className="h-12 w-12 text-muted-foreground/40" />
+            <div>
+              <p className="font-semibold">No conversation flows yet</p>
+              <p className="mt-1 text-sm text-muted-foreground max-w-md">
+                Create a flow to design welcome messages, knowledge lookups, ERP actions, and human handoff.
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                setNewFlowName("Main Conversation Flow");
+                setCreateOpen(true);
+              }}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create First Flow
+            </Button>
+          </div>
+        ) : (
+          <>
         {/* Left Floating Node Insertion Pallet */}
         <div className="absolute top-4 left-4 z-10 flex flex-col gap-1.5 rounded-xl border border-border/80 bg-background/90 p-2 shadow-lg backdrop-blur-md">
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-2 py-0.5">
@@ -431,7 +594,87 @@ export function VisualFlowBuilder({ bot, flowId, onOpenSimulator }: Props) {
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New conversation flow</DialogTitle>
+            <DialogDescription>
+              Flows define how the bot greets visitors and routes them through knowledge, ERP actions, or human handoff.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="flow-name">Flow name</Label>
+            <Input
+              id="flow-name"
+              value={newFlowName}
+              onChange={(e) => setNewFlowName(e.target.value)}
+              placeholder="e.g. Main Conversation Flow"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleCreateFlow();
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleCreateFlow()} disabled={creating}>
+              {creating ? "Creating..." : "Create Flow"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this flow?</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{activeFlow?.name}” will be permanently removed. Conversations already using it may fall back to another flow.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteFlow();
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Deleting..." : "Delete Flow"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteNodeOpen} onOpenChange={setDeleteNodeOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this node?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This node will be permanently removed from the flow. Any connections to it will also be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeleteNode();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Node
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

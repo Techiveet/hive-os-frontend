@@ -3,11 +3,24 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, Trash2, Sliders, Sparkles } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Sliders, Sparkles, MessageSquare, Power } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supportBotApi } from "@/modules/support-bot/api/support-bot-api";
 import { SupportBot } from "@/modules/support-bot/types";
 
@@ -28,6 +41,8 @@ export default function BotSettingsPage() {
   const [isActive, setIsActive] = React.useState(true);
   const [enableEscalation, setEnableEscalation] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
 
   React.useEffect(() => {
     if (botId) {
@@ -62,21 +77,32 @@ export default function BotSettingsPage() {
         is_active: isActive,
         enable_human_escalation: enableEscalation,
       });
+      toast.success("Bot settings saved.");
       router.push(`/dashboard/support-bot/${botId}`);
     } catch (e) {
       console.error("Save settings error", e);
+      toast.error("Failed to save settings.");
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to permanently delete this bot?")) return;
+    setDeleteOpen(true);
+  };
+
+  const confirmDelete = async () => {
     try {
+      setDeleting(true);
       await supportBotApi.deleteBot(botId);
+      toast.success("Bot deleted.");
+      setDeleteOpen(false);
       router.push("/dashboard/support-bot");
     } catch (e) {
       console.error("Delete bot error", e);
+      toast.error("Failed to delete bot.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -178,12 +204,91 @@ export default function BotSettingsPage() {
         </CardContent>
       </Card>
 
+      <Card className="border-border/80 shadow-sm">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-primary" />
+            Greeting & Availability
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5 text-xs">
+          <div>
+            <label className="font-semibold text-muted-foreground">Greeting Message</label>
+            <Textarea
+              value={greeting}
+              onChange={(e) => setGreeting(e.target.value)}
+              rows={3}
+              placeholder={`Hello! Welcome to ${bot.name}. How can we help?`}
+              className="mt-1 text-xs leading-relaxed"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Shown when a visitor opens the widget (also editable in Widget Studio).
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 px-3 py-3">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <Power className="h-3.5 w-3.5 text-muted-foreground" />
+                <Label htmlFor="bot-active" className="text-xs font-semibold">
+                  Bot is active
+                </Label>
+              </div>
+              <p className="text-[11px] text-muted-foreground pl-5">
+                Inactive bots reject new conversations and hide the public widget.
+              </p>
+            </div>
+            <Switch id="bot-active" checked={isActive} onCheckedChange={setIsActive} />
+          </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 px-3 py-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="bot-escalation" className="text-xs font-semibold">
+                Enable human escalation
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                Allows the bot to hand conversations to live agents in the inbox.
+              </p>
+            </div>
+            <Switch
+              id="bot-escalation"
+              checked={enableEscalation}
+              onCheckedChange={setEnableEscalation}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex justify-end pt-4">
         <Button variant="destructive" size="sm" onClick={handleDelete} className="gap-2 text-xs">
           <Trash2 className="h-3.5 w-3.5" />
           Delete Bot
         </Button>
       </div>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this bot?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{bot.name}" will be permanently removed. All its flows, knowledge base entries, and conversation history will be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmDelete();
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Deleting..." : "Delete Bot"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

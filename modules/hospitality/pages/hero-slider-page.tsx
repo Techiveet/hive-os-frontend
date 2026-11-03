@@ -43,6 +43,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { SecureAssetImage } from "@/components/ui/secure-asset-image";
 import { FileManagerClient } from "@/components/dashboard/file-manager-client";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -421,18 +431,17 @@ export default function HeroSliderPage() {
   ];
 
   const loadPresets = () => {
-    if (
-      confirm(
-        "This will load the default Savory Lounge slide templates. Existing slides will be overwritten. Proceed?"
-      )
-    ) {
-      setSlides(PRESET_SLIDES);
-      setIsDirty(true);
-      setPreviewIndex(0);
-      toast.success(
-        "Loaded Savory Lounge presets! Don't forget to upload/attach images and click Save Changes."
-      );
-    }
+    setLoadPresetsOpen(true);
+  };
+
+  const confirmLoadPresets = () => {
+    setSlides(PRESET_SLIDES);
+    setIsDirty(true);
+    setPreviewIndex(0);
+    setLoadPresetsOpen(false);
+    toast.success(
+      "Loaded Savory Lounge presets! Don't forget to upload/attach images and click Save Changes."
+    );
   };
 
   // ── raw catalog state (needed for backward compatibility or placeholder) ──
@@ -448,23 +457,53 @@ export default function HeroSliderPage() {
   // For per-menu-item targets we use the pattern "menu_item_image_<id>" or "menu_item_model_<id>"
   const [mediaPickerTarget, setMediaPickerTarget] = useState<"slide" | "specialties" | "menus_image" | "menus_model" | string | null>(null);
 
+  // ── delete confirmation ──
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
+
+  // ── bulk delete confirmation ──
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
+  // ── load presets confirmation ──
+  const [loadPresetsOpen, setLoadPresetsOpen] = useState(false);
+
+  // ── single menu item delete confirmation ──
+  const [singleDeleteOpen, setSingleDeleteOpen] = useState(false);
+  const [deletingMenuItemId, setDeletingMenuItemId] = useState<number | null>(null);
+  const [deletingMenuItemName, setDeletingMenuItemName] = useState<string>("");
+
+  // ── FAQ delete confirmation ──
+  const [faqDeleteOpen, setFaqDeleteOpen] = useState(false);
+  const [deletingFaqIndex, setDeletingFaqIndex] = useState<number | null>(null);
+
+  // ── Gallery image delete confirmation ──
+  const [galleryImageDeleteOpen, setGalleryImageDeleteOpen] = useState(false);
+  const [deletingGalleryImageIndex, setDeletingGalleryImageIndex] = useState<number | null>(null);
+
+  // ── Marquee phrase delete confirmation ──
+  const [marqueeDeleteOpen, setMarqueeDeleteOpen] = useState(false);
+  const [deletingMarqueeIndex, setDeletingMarqueeIndex] = useState<number | null>(null);
+
   // ── menu items (for the Menus Section tab) ──
   const { data: menuItemsData, isLoading: isLoadingMenuItems } = useQuery({
     queryKey: ["hospitality", "menu-items", "all", workspaceScope],
     queryFn: () => fetchHospitalityMenuItems({ per_page: 50, sortCol: "sort_order", sortDir: "asc" }),
   });
   const allMenuItems: HospitalityMenuItem[] = Array.isArray(menuItemsData) ? menuItemsData : (menuItemsData as any)?.rows ?? [];
+  const [menuItemNameDrafts, setMenuItemNameDrafts] = useState<Record<number, string>>({});
+  const [menuItemMediaDrafts, setMenuItemMediaDrafts] = useState<
+    Record<number, { image_url?: string | null; model_3d_url?: string | null }>
+  >({});
 
-  const updateMenuItemMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
-      updateHospitalityMenuItem(id, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["hospitality", "menu-items"] });
-      queryClient.invalidateQueries({ queryKey: ["tenantPublicMenuItems"] });
-      toast.success("Menu item updated");
-    },
-    onError: () => toast.error("Failed to update menu item"),
-  });
+  useEffect(() => {
+    setMenuItemNameDrafts((current) => {
+      const next = { ...current };
+      allMenuItems.forEach((item) => {
+        if (next[item.id] === undefined) next[item.id] = item.name;
+      });
+      return next;
+    });
+  }, [menuItemsData]);
 
   const deleteMenuItemMutation = useMutation({
     mutationFn: deleteHospitalityMenuItem,
@@ -522,16 +561,72 @@ export default function HeroSliderPage() {
 
   const handleBulkDelete = async () => {
     if (selectedMenuItemIds.length === 0) return;
-    if (!confirm(`Are you sure you want to delete the ${selectedMenuItemIds.length} selected item(s)?`)) return;
+    setBulkDeleteOpen(true);
+  };
 
+  const confirmBulkDelete = async () => {
     try {
       await Promise.all(selectedMenuItemIds.map(id => deleteMenuItemMutation.mutateAsync(id)));
       setSelectedMenuItemIds([]);
+      setBulkDeleteOpen(false);
       toast.success("Selected menu items deleted successfully");
     } catch (err) {
       console.error(err);
       toast.error("Failed to delete some menu items");
     }
+  };
+
+  const handleSingleDelete = (id: number, name: string) => {
+    setDeletingMenuItemId(id);
+    setDeletingMenuItemName(name);
+    setSingleDeleteOpen(true);
+  };
+
+  const confirmSingleDelete = () => {
+    if (deletingMenuItemId === null) return;
+    deleteMenuItemMutation.mutate(deletingMenuItemId);
+    setSingleDeleteOpen(false);
+    setDeletingMenuItemId(null);
+    setDeletingMenuItemName("");
+  };
+
+  const handleFaqDelete = (idx: number) => {
+    setDeletingFaqIndex(idx);
+    setFaqDeleteOpen(true);
+  };
+
+  const confirmFaqDelete = () => {
+    if (deletingFaqIndex === null) return;
+    setFaqs((prev) => prev.filter((_, i) => i !== deletingFaqIndex));
+    setIsDirty(true);
+    setFaqDeleteOpen(false);
+    setDeletingFaqIndex(null);
+  };
+
+  const handleGalleryImageDelete = (idx: number) => {
+    setDeletingGalleryImageIndex(idx);
+    setGalleryImageDeleteOpen(true);
+  };
+
+  const confirmGalleryImageDelete = () => {
+    if (deletingGalleryImageIndex === null) return;
+    setGallery((prev) => ({ ...prev, images: (prev.images ?? []).filter((_, i) => i !== deletingGalleryImageIndex) }));
+    setIsDirty(true);
+    setGalleryImageDeleteOpen(false);
+    setDeletingGalleryImageIndex(null);
+  };
+
+  const handleMarqueeDelete = (idx: number) => {
+    setDeletingMarqueeIndex(idx);
+    setMarqueeDeleteOpen(true);
+  };
+
+  const confirmMarqueeDelete = () => {
+    if (deletingMarqueeIndex === null) return;
+    setMarquee((prev) => prev.filter((_, i) => i !== deletingMarqueeIndex));
+    setIsDirty(true);
+    setMarqueeDeleteOpen(false);
+    setDeletingMarqueeIndex(null);
   };
 
   // ── fetch current template ──
@@ -682,19 +777,48 @@ export default function HeroSliderPage() {
         },
       };
 
-      return apiFetch("/settings/landing", {
+      const menuItemUpdates = allMenuItems
+        .map((item) => ({
+          item,
+          name: (menuItemNameDrafts[item.id] ?? item.name).trim(),
+          media: menuItemMediaDrafts[item.id] ?? {},
+        }))
+        .filter(
+          ({ item, name, media }) =>
+            name !== item.name ||
+            media.image_url !== undefined ||
+            media.model_3d_url !== undefined,
+        );
+
+      if (menuItemUpdates.some(({ name }) => !name)) {
+        throw new Error("Food names cannot be empty.");
+      }
+
+      const landingSettings = await apiFetch("/settings/landing", {
         method: "POST",
         body: JSON.stringify({
           business_type: queryData?.data?.business_type,
           landing_page_template: nextTemplate,
         }),
       });
+
+      await Promise.all(
+        menuItemUpdates.map(({ item, name, media }) =>
+          updateHospitalityMenuItem(item.id, {
+            ...(name !== item.name ? { name } : {}),
+            ...media,
+          }),
+        ),
+      );
+
+      return landingSettings;
     },
     onSuccess: (response: any) => {
       const updatedTemplate = resolveLandingTemplate(
         response?.data?.landing_page_template ?? currentTemplate,
       );
       setCurrentTemplate(updatedTemplate);
+      setMenuItemMediaDrafts({});
       setSlides(updatedTemplate.hero?.slides ?? []);
       setHighlights(updatedTemplate.highlights ?? []);
       setMenus(updatedTemplate.menus ?? {
@@ -807,9 +931,16 @@ export default function HeroSliderPage() {
   };
 
   const handleDelete = (index: number) => {
-    if (!confirm("Remove this slide from the hero slider?")) return;
-    setSlides((prev) => prev.filter((_, i) => i !== index));
+    setDeletingIndex(index);
+    setDeleteOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (deletingIndex === null) return;
+    setSlides((prev) => prev.filter((_, i) => i !== deletingIndex));
     setIsDirty(true);
+    setDeleteOpen(false);
+    setDeletingIndex(null);
   };
 
   const handleMove = (index: number, dir: "up" | "down") => {
@@ -875,12 +1006,20 @@ export default function HeroSliderPage() {
       toast.success("Image selected for service card");
     } else if (typeof mediaPickerTarget === "string" && mediaPickerTarget.startsWith("menu_item_image_")) {
       const itemId = Number(mediaPickerTarget.replace("menu_item_image_", ""));
-      updateMenuItemMutation.mutate({ id: itemId, payload: { image_url: url } });
-      toast.success("Image saved to menu item");
+      setMenuItemMediaDrafts((current) => ({
+        ...current,
+        [itemId]: { ...current[itemId], image_url: url },
+      }));
+      setIsDirty(true);
+      toast.success("Image selected; click Save Changes to publish it");
     } else if (typeof mediaPickerTarget === "string" && mediaPickerTarget.startsWith("menu_item_model_")) {
       const itemId = Number(mediaPickerTarget.replace("menu_item_model_", ""));
-      updateMenuItemMutation.mutate({ id: itemId, payload: { model_3d_url: url } });
-      toast.success("3D model saved to menu item");
+      setMenuItemMediaDrafts((current) => ({
+        ...current,
+        [itemId]: { ...current[itemId], model_3d_url: url },
+      }));
+      setIsDirty(true);
+      toast.success("3D model selected; click Save Changes to publish it");
     }
     setMediaPickerTarget(null);
   };
@@ -1174,7 +1313,7 @@ export default function HeroSliderPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => { setMarquee((prev) => prev.filter((_, i) => i !== idx)); setIsDirty(true); }}
+                    onClick={() => handleMarqueeDelete(idx)}
                     className="h-9 w-9 shrink-0 p-0 text-rose-500 border-rose-200 bg-rose-50 hover:bg-rose-100 dark:text-rose-400 dark:border-rose-800 dark:bg-rose-950/40 rounded-lg"
                     title="Remove phrase"
                   >
@@ -1473,14 +1612,23 @@ export default function HeroSliderPage() {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {paginatedItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`group rounded-2xl border overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 relative ${
+                    (() => {
+                      const mediaDraft = menuItemMediaDrafts[item.id] ?? {};
+                      const imageUrl =
+                        mediaDraft.image_url !== undefined ? mediaDraft.image_url : item.image_url;
+                      const modelUrl =
+                        mediaDraft.model_3d_url !== undefined
+                          ? mediaDraft.model_3d_url
+                          : item.model_3d_url;
+                      return (
+                        <div
+                          key={item.id}
+                          className={`group rounded-2xl border overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 relative ${
                         selectedMenuItemIds.includes(item.id)
                           ? "border-[#7B16D9] ring-2 ring-[#7B16D9]/20 bg-[#7B16D9]/5"
                           : "bg-card border-border"
-                      }`}
-                    >
+                          }`}
+                        >
                       {/* Checkbox selector */}
                       <div className="absolute top-2 left-2 z-20 bg-black/40 backdrop-blur-md p-1.5 rounded-lg border border-white/10 flex items-center justify-center">
                         <input
@@ -1494,11 +1642,7 @@ export default function HeroSliderPage() {
                       {/* Delete button (single delete) */}
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm(`Are you sure you want to delete "${item.name}"?`)) {
-                            deleteMenuItemMutation.mutate(item.id);
-                          }
-                        }}
+                        onClick={() => handleSingleDelete(item.id, item.name)}
                         className="absolute top-2 right-2 z-20 p-1.5 bg-rose-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-rose-600 shadow-md border border-rose-600/20"
                         title="Delete menu item"
                       >
@@ -1507,9 +1651,9 @@ export default function HeroSliderPage() {
 
                       {/* Image strip */}
                       <div className="relative h-40 bg-gradient-to-br from-[#120820] to-[#1a0a30] overflow-hidden">
-                        {item.image_url ? (
+                        {imageUrl ? (
                           <SecureAssetImage
-                            src={item.image_url}
+                            src={imageUrl}
                             alt={item.name}
                             className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
                           />
@@ -1524,7 +1668,7 @@ export default function HeroSliderPage() {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 
                         {/* 3D badge */}
-                        {item.model_3d_url && (
+                        {modelUrl && (
                           <div className="absolute top-2 right-2 group-hover:right-10 transition-all duration-200 flex items-center gap-1 bg-[#7B16D9]/80 backdrop-blur-sm text-white text-[11px] font-black uppercase tracking-wider px-2 py-1 rounded-full border border-[#7B16D9] z-10">
                             <Box className="h-2.5 w-2.5" />
                             3D
@@ -1544,6 +1688,27 @@ export default function HeroSliderPage() {
 
                       {/* Body: uploaders */}
                       <div className="p-4 space-y-3">
+                        <div className="space-y-1.5">
+                          <Label
+                            htmlFor={`menu-item-name-${item.id}`}
+                            className="text-[11px] font-black uppercase tracking-widest text-muted-foreground"
+                          >
+                            Food name
+                          </Label>
+                          <Input
+                            id={`menu-item-name-${item.id}`}
+                            value={menuItemNameDrafts[item.id] ?? item.name}
+                            onChange={(event) => {
+                              setMenuItemNameDrafts((current) => ({
+                                ...current,
+                                [item.id]: event.target.value,
+                              }));
+                              setIsDirty(true);
+                            }}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+
                         {/* Image uploader row */}
                         <div className="space-y-1.5">
                           <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
@@ -1558,14 +1723,20 @@ export default function HeroSliderPage() {
                               className="flex-1 h-8 text-[11px] font-black uppercase tracking-widest text-indigo-600 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 dark:text-indigo-400 dark:border-indigo-800 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/70 rounded-lg"
                             >
                               <ImageIcon className="mr-1 h-3 w-3" />
-                              {item.image_url ? "Replace" : "Upload"}
+                              {imageUrl ? "Replace" : "Upload"}
                             </Button>
-                            {item.image_url && (
+                            {imageUrl && (
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => updateMenuItemMutation.mutate({ id: item.id, payload: { image_url: null } })}
+                                onClick={() => {
+                                  setMenuItemMediaDrafts((current) => ({
+                                    ...current,
+                                    [item.id]: { ...current[item.id], image_url: null },
+                                  }));
+                                  setIsDirty(true);
+                                }}
                                 className="h-8 w-8 p-0 text-rose-500 border-rose-200 bg-rose-50 hover:bg-rose-100 dark:text-rose-400 dark:border-rose-800 dark:bg-rose-950/40 rounded-lg"
                                 title="Remove image"
                               >
@@ -1589,14 +1760,20 @@ export default function HeroSliderPage() {
                               className="flex-1 h-8 text-[11px] font-black uppercase tracking-widest border-[#7B16D9]/30 text-[#7B16D9] bg-[#7B16D9]/5 hover:bg-[#7B16D9]/15 rounded-lg"
                             >
                               <Box className="mr-1 h-3 w-3" />
-                              {item.model_3d_url ? "Replace" : "Upload"}
+                              {modelUrl ? "Replace" : "Upload"}
                             </Button>
-                            {item.model_3d_url && (
+                            {modelUrl && (
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => updateMenuItemMutation.mutate({ id: item.id, payload: { model_3d_url: null } })}
+                                onClick={() => {
+                                  setMenuItemMediaDrafts((current) => ({
+                                    ...current,
+                                    [item.id]: { ...current[item.id], model_3d_url: null },
+                                  }));
+                                  setIsDirty(true);
+                                }}
                                 className="h-8 w-8 p-0 text-rose-500 border-rose-200 bg-rose-50 hover:bg-rose-100 dark:text-rose-400 dark:border-rose-800 dark:bg-rose-950/40 rounded-lg"
                                 title="Remove 3D model"
                               >
@@ -1606,7 +1783,9 @@ export default function HeroSliderPage() {
                           </div>
                         </div>
                       </div>
-                    </div>
+                        </div>
+                      );
+                    })()
                   ))}
                 </div>
 
@@ -1974,10 +2153,7 @@ export default function HeroSliderPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        setFaqs((prev) => prev.filter((_, i) => i !== idx));
-                        setIsDirty(true);
-                      }}
+                      onClick={() => handleFaqDelete(idx)}
                       className="h-7 w-7 p-0 text-rose-500 border-rose-200 bg-rose-50 hover:bg-rose-100 dark:text-rose-400 dark:border-rose-800 dark:bg-rose-950/40 rounded-lg"
                       title="Remove question"
                     >
@@ -2101,10 +2277,7 @@ export default function HeroSliderPage() {
                       </Button>
                       <Button
                         type="button" variant="destructive" size="sm"
-                        onClick={() => {
-                          setGallery((prev) => ({ ...prev, images: (prev.images ?? []).filter((_, i) => i !== idx) }));
-                          setIsDirty(true);
-                        }}
+                        onClick={() => handleGalleryImageDelete(idx)}
                         className="rounded-full text-[11px] h-7 px-3 shadow-lg"
                       >
                         Remove
@@ -2513,7 +2686,12 @@ export default function HeroSliderPage() {
           if (!next) setMediaPickerTarget(null);
         }}
       >
-        <DialogContent className="flex h-[80vh] max-w-[1000px] flex-col p-0 overflow-hidden rounded-[2rem]">
+        <DialogContent
+          className="flex h-[80vh] max-w-[1000px] flex-col p-0 overflow-hidden rounded-[2rem]"
+          onInteractOutside={(event) => event.preventDefault()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
           <div className="flex items-center justify-between border-b px-6 py-4 bg-background/50 backdrop-blur-md">
             <div>
               <DialogTitle>Media Library</DialogTitle>
@@ -2562,6 +2740,153 @@ export default function HeroSliderPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Slide</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove this slide from the hero slider? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              Remove Slide
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Menu Items</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedMenuItemIds.length} selected menu item(s)? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBulkDelete}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              Delete Items
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Load Presets Confirmation Dialog */}
+      <AlertDialog open={loadPresetsOpen} onOpenChange={setLoadPresetsOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Load Savory Lounge Presets</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will load the default Savory Lounge slide templates. Existing slides will be overwritten. Proceed?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLoadPresets}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              Load Presets
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Single Menu Item Delete Confirmation Dialog */}
+      <AlertDialog open={singleDeleteOpen} onOpenChange={setSingleDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Menu Item</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deletingMenuItemName}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmSingleDelete}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* FAQ Delete Confirmation Dialog */}
+      <AlertDialog open={faqDeleteOpen} onOpenChange={setFaqDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove FAQ</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove this FAQ question? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmFaqDelete}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Gallery Image Delete Confirmation Dialog */}
+      <AlertDialog open={galleryImageDeleteOpen} onOpenChange={setGalleryImageDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Gallery Image</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove this image from the gallery? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmGalleryImageDelete}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Marquee Phrase Delete Confirmation Dialog */}
+      <AlertDialog open={marqueeDeleteOpen} onOpenChange={setMarqueeDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Phrase</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove this phrase from the marquee? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmMarqueeDelete}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

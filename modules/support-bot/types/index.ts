@@ -84,6 +84,7 @@ export interface SupportBotKnowledgeBase {
   category?: string | null;
   tags?: string[] | null;
   is_enabled: boolean;
+  bot?: Pick<SupportBot, 'id' | 'name' | 'slug' | 'primary_color'> | null;
   created_at: string;
   updated_at: string;
 }
@@ -104,6 +105,7 @@ export interface SupportBotConversation {
     name: string;
     email: string;
   } | null;
+  bot?: Pick<SupportBot, 'id' | 'name' | 'slug' | 'primary_color'> | null;
   current_flow_id?: number | null;
   current_node_id?: string | null;
   variables?: Record<string, any> | null;

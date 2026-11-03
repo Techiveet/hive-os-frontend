@@ -72,13 +72,20 @@ export default function ParkingReportsPage() {
     return best;
   }, null);
 
-  const paymentBreakdown = (revData?.by_payment_method ?? revData?.revenue_by_payment_method ?? []).map(
-    (item: { method?: string; payment_method?: string; amount?: number; total?: number; count?: number }) => ({
-      method: item.method ?? item.payment_method ?? "unspecified",
-      amount: Number(item.amount ?? item.total ?? 0),
-      count: Number(item.count ?? 0),
-    })
-  );
+  type PaymentBreakdownItem = { method: string; amount: number; count: number };
+  const paymentBreakdown: PaymentBreakdownItem[] = (
+    (revData?.by_payment_method ?? revData?.revenue_by_payment_method ?? []) as Array<{
+      method?: string;
+      payment_method?: string;
+      amount?: number;
+      total?: number;
+      count?: number;
+    }>
+  ).map((item) => ({
+    method: item.method ?? item.payment_method ?? "unspecified",
+    amount: Number(item.amount ?? item.total ?? 0),
+    count: Number(item.count ?? 0),
+  }));
 
   const isLoading = revLoading || occLoading;
 

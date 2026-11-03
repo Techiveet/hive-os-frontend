@@ -329,11 +329,87 @@ export const splitHospitalityBill = async (
   (await api.post(`/hospitality/service-orders/${orderId}/split-bill`, payload))
     .data;
 
+export type HospitalityCashierSession = {
+  id: number;
+  status: string;
+  opening_float: number | string;
+  cash_sales?: number | string;
+  cash_drops?: number | string;
+  expenses?: number | string;
+  expected_cash?: number | string;
+  actual_cash?: number | string | null;
+  difference?: number | string;
+  discrepancy_reason?: string | null;
+  notes?: string | null;
+  business_date?: string | null;
+  outlet_id?: number | null;
+  opened_at?: string | null;
+  closed_at?: string | null;
+  approved_at?: string | null;
+  user?: { id: number; name: string } | null;
+  outlet?: { id: number; name: string } | null;
+  closedBy?: { id: number; name: string } | null;
+  approvedBy?: { id: number; name: string } | null;
+};
+
+export const fetchHospitalityCashierSessions = async (
+  params: Record<string, unknown> = {},
+) => {
+  const res = await api.get("/hospitality/cashier/sessions", { params });
+  const payload = res.data?.data ?? res.data;
+  return Array.isArray(payload) ? (payload as HospitalityCashierSession[]) : [];
+};
+
+export const openHospitalityCashierSession = async (payload: {
+  opening_float: number;
+  outlet_id?: number | null;
+  notes?: string;
+}) =>
+  (
+    await api.post<{ message: string; data: HospitalityCashierSession }>(
+      "/hospitality/cashier/sessions/open",
+      payload,
+    )
+  ).data;
+
+export const closeHospitalityCashierSession = async (
+  id: number,
+  payload: { actual_cash: number; notes?: string; discrepancy_reason?: string },
+) =>
+  (
+    await api.post<{ message: string; data: HospitalityCashierSession }>(
+      `/hospitality/cashier/sessions/${id}/close`,
+      payload,
+    )
+  ).data;
+
+export const approveHospitalityCashierSession = async (id: number) =>
+  (
+    await api.post<{ message: string; data: HospitalityCashierSession }>(
+      `/hospitality/cashier/sessions/${id}/approve-close`,
+    )
+  ).data;
+
 export const closeHospitalityOrder = async (orderId: number) =>
   (await api.post(`/hospitality/service-orders/${orderId}/close`)).data;
 
 export const fetchHospitalityBills = async (orderId: number) =>
   (await api.get(`/hospitality/service-orders/${orderId}/bills`)).data;
+
+export type HospitalityBillSplitSummary = {
+  order_total: number;
+  total_paid: number;
+  total_tip: number;
+  remaining: number;
+};
+
+export const fetchHospitalityBillSplits = async (orderId: number) =>
+  (
+    await api.get<HospitalityBillSplitSummary>(
+      `/hospitality/service-orders/${orderId}/bills`,
+    )
+  ).data;
+
 export const fetchFloorPlan = async (params: Record<string, unknown> = {}) =>
   (await api.get("/hospitality/space/zones", { params })).data;
 

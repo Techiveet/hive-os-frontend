@@ -8,20 +8,21 @@ import {
   Bot,
   Send,
   CheckCircle2,
-  Clock,
   Search,
-  Filter,
   RefreshCw,
-  Sparkles,
   Inbox,
-  AlertCircle,
   MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getSupportBotInboxChannelName, initEcho } from "@/lib/echo";
 import { getAccessToken } from "@/lib/runtime-context";
 import { supportBotApi } from "../../api/support-bot-api";
@@ -32,11 +33,22 @@ import {
 } from "../../types";
 
 interface Props {
-  bot: SupportBot;
+  /** Single-bot inbox (e.g. /support-bot/2/inbox). */
+  bot?: SupportBot;
+  /** Multi-bot agent console with selector (e.g. /support-bot/inbox). */
+  bots?: SupportBot[];
 }
 
-export function LiveSupportInbox({ bot }: Props) {
+export function LiveSupportInbox({ bot, bots }: Props) {
+  const scopedBot = bot ?? null;
+  const availableBots = React.useMemo(
+    () => (scopedBot ? [scopedBot] : bots ?? []),
+    [scopedBot, bots],
+  );
+  const multiBot = !scopedBot && availableBots.length > 0;
+
   const requestedConversation = Number(useSearchParams().get("conversation")) || null;
+  const [botFilter, setBotFilter] = React.useState<string>("all");
   const [conversations, setConversations] = React.useState<
     SupportBotConversation[]
   >([]);
@@ -46,7 +58,9 @@ export function LiveSupportInbox({ bot }: Props) {
   const [activeConv, setActiveConv] =
     React.useState<SupportBotConversation | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [statusFilter, setStatusFilter] = React.useState<string>(requestedConversation ? "all" : "escalated");
+  const [statusFilter, setStatusFilter] = React.useState<string>(
+    requestedConversation ? "all" : "escalated",
+  );
   React.useEffect(() => {
     if (requestedConversation) {
       setSelectedConvId(requestedConversation);
@@ -64,27 +78,57 @@ export function LiveSupportInbox({ bot }: Props) {
   const typingSentAtRef = React.useRef(0);
   const selectedConvIdRef = React.useRef<number | null>(selectedConvId);
   selectedConvIdRef.current = selectedConvId;
+  const conversationsRef = React.useRef(conversations);
+  conversationsRef.current = conversations;
+  const activeConvRef = React.useRef(activeConv);
+  activeConvRef.current = activeConv;
   const conversationReadRef = React.useRef(0);
 
-  /** Lets the visitor see that a person is composing. Throttled. */
+  const botNameById = React.useMemo(() => {
+    const map = new Map<number, SupportBot>();
+    for (const b of availableBots) map.set(b.id, b);
+    return map;
+  }, [availableBots]);
+
+  /** API calls always use the conversation's own bot — never the filter. */
+  const resolveBotId = React.useCallback(
+    (conversation?: SupportBotConversation | null, fallbackId?: number | null) => {
+      if (conversation?.bot_id) return conversation.bot_id;
+      if (fallbackId) return fallbackId;
+      if (scopedBot) return scopedBot.id;
+      return null;
+    },
+    [scopedBot],
+  );
+
   const pingTyping = (conversationId: number) => {
     const now = Date.now();
     if (now - typingSentAtRef.current < 2000) return;
     typingSentAtRef.current = now;
 
-    void supportBotApi.sendTyping(bot.id, conversationId);
+    const conv =
+      conversationsRef.current.find((c) => c.id === conversationId) ||
+      (activeConvRef.current?.id === conversationId ? activeConvRef.current : null);
+    const botId = resolveBotId(conv);
+    if (!botId) return;
+    void supportBotApi.sendTyping(botId, conversationId);
   };
   const [sending, setSending] = React.useState(false);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
   const loadConversations = React.useCallback(
     async (quiet = false) => {
-      if (!bot?.id) return;
       try {
         if (!quiet) setLoading(true);
-        const res = await supportBotApi.getConversations(bot.id, {
-          status: statusFilter === "all" ? undefined : statusFilter,
-        });
+        const status = statusFilter === "all" ? undefined : statusFilter;
+
+        const res = scopedBot
+          ? await supportBotApi.getConversations(scopedBot.id, { status })
+          : await supportBotApi.getAllConversations({
+              status,
+              bot_id: botFilter === "all" ? undefined : Number(botFilter),
+            });
+
         const list = Array.isArray(res?.data)
           ? res.data
           : Array.isArray(res)
@@ -93,7 +137,8 @@ export function LiveSupportInbox({ bot }: Props) {
         setConversations(list);
 
         setSelectedConvId((current) =>
-          current === requestedConversation || list.some((item: SupportBotConversation) => item.id === current)
+          current === requestedConversation ||
+          list.some((item: SupportBotConversation) => item.id === current)
             ? current
             : (list[0]?.id ?? null),
         );
@@ -104,7 +149,7 @@ export function LiveSupportInbox({ bot }: Props) {
         if (!quiet) setLoading(false);
       }
     },
-    [bot.id, statusFilter, requestedConversation],
+    [scopedBot, botFilter, statusFilter, requestedConversation],
   );
 
   React.useEffect(() => {
@@ -113,18 +158,26 @@ export function LiveSupportInbox({ bot }: Props) {
     return () => window.clearInterval(timer);
   }, [loadConversations]);
 
-  // Polls, realtime and mutations all share this guard. A response for an old
-  // selection (or an older read of the same ticket) must never replace the
-  // displayed transcript while the reply action targets the current selection.
-  const refreshConversation = React.useCallback(async (conversationId: number) => {
-    const request = ++conversationReadRef.current;
-    const data = await supportBotApi.getConversation(bot.id, conversationId);
-    if (selectedConvIdRef.current === conversationId && conversationReadRef.current === request) {
-      setActiveConv(data);
-    }
-  }, [bot.id]);
+  const refreshConversation = React.useCallback(
+    async (conversationId: number) => {
+      const listed = conversationsRef.current.find((c) => c.id === conversationId);
+      const open =
+        activeConvRef.current?.id === conversationId ? activeConvRef.current : null;
+      const botId = resolveBotId(listed || open, scopedBot?.id ?? null);
+      if (!botId) return;
 
-  // Load single conversation details
+      const request = ++conversationReadRef.current;
+      const data = await supportBotApi.getConversation(botId, conversationId);
+      if (
+        selectedConvIdRef.current === conversationId &&
+        conversationReadRef.current === request
+      ) {
+        setActiveConv(data);
+      }
+    },
+    [resolveBotId, scopedBot?.id],
+  );
+
   React.useEffect(() => {
     if (!selectedConvId) {
       setActiveConv(null);
@@ -140,7 +193,7 @@ export function LiveSupportInbox({ bot }: Props) {
     };
 
     loadSingle();
-    const interval = setInterval(loadSingle, 4000); // Live poll updates
+    const interval = setInterval(loadSingle, 4000);
     return () => {
       ++conversationReadRef.current;
       clearInterval(interval);
@@ -151,13 +204,6 @@ export function LiveSupportInbox({ bot }: Props) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeConv?.messages]);
 
-  // Live inbox.
-  //
-  // The 4-second poll above only ever refreshes the conversation already open,
-  // so a visitor asking for a person sat unseen until somebody reloaded the
-  // page. This subscribes to the tenant's support channel instead: an
-  // escalation or a visitor message arrives while the agent is looking at it.
-  // Opening a conversation is the moment its messages have been seen.
   React.useEffect(() => {
     if (selectedConvId === null) return;
 
@@ -181,7 +227,7 @@ export function LiveSupportInbox({ bot }: Props) {
     try {
       echo = initEcho(token);
     } catch {
-      return; // Realtime is an enhancement; polling still works without it.
+      return;
     }
 
     if (!echo) return;
@@ -200,14 +246,8 @@ export function LiveSupportInbox({ bot }: Props) {
 
     channel.listen(
       ".support-bot.escalated",
-      (event: {
-        conversation_id: number;
-        visitor_name?: string | null;
-        visitor_email?: string | null;
-      }) => {
-        loadConversations();
-
-
+      () => {
+        void loadConversations();
       },
     );
 
@@ -215,11 +255,12 @@ export function LiveSupportInbox({ bot }: Props) {
       ".support-bot.message",
       (event: { conversation_id: number; sender_type?: string }) => {
         void refreshOpenConversation(event.conversation_id);
-        loadConversations();
+        void loadConversations();
 
-        // Anything arriving in a conversation the agent is not currently reading
-        // is unread until they open it.
-        if (event.sender_type === "visitor" && selectedConvIdRef.current !== event.conversation_id) {
+        if (
+          event.sender_type === "visitor" &&
+          selectedConvIdRef.current !== event.conversation_id
+        ) {
           setUnreadByConversation((current) => ({
             ...current,
             [event.conversation_id]: (current[event.conversation_id] ?? 0) + 1,
@@ -236,7 +277,6 @@ export function LiveSupportInbox({ bot }: Props) {
 
         setVisitorTyping(true);
 
-        // Nothing announces "stopped typing", so the indicator expires itself.
         if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
         typingTimerRef.current = window.setTimeout(
           () => setVisitorTyping(false),
@@ -250,17 +290,25 @@ export function LiveSupportInbox({ bot }: Props) {
       channel.stopListening(".support-bot.message");
       channel.stopListening(".support-bot.typing");
     };
-  }, [bot.id, loadConversations, refreshConversation]);
+  }, [loadConversations, refreshConversation]);
 
   const handleSendReply = async () => {
-    if (!replyText.trim() || !selectedConvId || activeConv?.id !== selectedConvId || sending) return;
+    if (
+      !replyText.trim() ||
+      !selectedConvId ||
+      activeConv?.id !== selectedConvId ||
+      sending
+    )
+      return;
+
+    const botId = resolveBotId(activeConv);
+    if (!botId) return;
 
     try {
       setSending(true);
-      await supportBotApi.sendAgentMessage(bot.id, selectedConvId, replyText);
+      await supportBotApi.sendAgentMessage(botId, selectedConvId, replyText);
       if (selectedConvIdRef.current !== selectedConvId) return;
       setReplyText("");
-      // Reload conversation messages
       await refreshConversation(selectedConvId);
     } catch (e) {
       console.error("Failed to send agent reply", e);
@@ -273,13 +321,11 @@ export function LiveSupportInbox({ bot }: Props) {
     status: "active" | "escalated" | "resolved" | "closed",
   ) => {
     if (!selectedConvId || activeConv?.id !== selectedConvId) return;
+    const botId = resolveBotId(activeConv);
+    if (!botId) return;
     try {
-      await supportBotApi.updateConversationStatus(
-        bot.id,
-        selectedConvId,
-        status,
-      );
-      loadConversations();
+      await supportBotApi.updateConversationStatus(botId, selectedConvId, status);
+      void loadConversations();
       await refreshConversation(selectedConvId);
     } catch (e) {
       console.error("Failed to update status", e);
@@ -291,15 +337,17 @@ export function LiveSupportInbox({ bot }: Props) {
     return (
       (c.visitor_name && c.visitor_name.toLowerCase().includes(term)) ||
       (c.visitor_email && c.visitor_email.toLowerCase().includes(term)) ||
+      (c.bot?.name && c.bot.name.toLowerCase().includes(term)) ||
       c.session_id.toLowerCase().includes(term)
     );
   });
 
+  const labelForConversation = (c: SupportBotConversation) =>
+    c.bot?.name || botNameById.get(c.bot_id)?.name || `Bot #${c.bot_id}`;
+
   return (
     <div className="flex h-[calc(100vh-14rem)] rounded-xl border border-border/80 bg-card overflow-hidden shadow-sm">
-      {/* Left Conversations Sidebar */}
       <div className="w-80 border-r border-border/60 flex flex-col bg-muted/10">
-        {/* Sidebar Header & Filters */}
         <div className="p-3 border-b border-border/60 space-y-2">
           <div className="flex items-center justify-between">
             <span className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -314,6 +362,22 @@ export function LiveSupportInbox({ bot }: Props) {
               <RefreshCw className="h-3 w-3" />
             </Button>
           </div>
+
+          {multiBot && (
+            <Select value={botFilter} onValueChange={setBotFilter}>
+              <SelectTrigger className="h-8 text-xs bg-background">
+                <SelectValue placeholder="All bots" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All bots</SelectItem>
+                {availableBots.map((b) => (
+                  <SelectItem key={b.id} value={String(b.id)}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           <div className="flex gap-1">
             {["escalated", "active", "resolved", "all"].map((status) => (
@@ -343,7 +407,6 @@ export function LiveSupportInbox({ bot }: Props) {
           </div>
         </div>
 
-        {/* Conversation List */}
         <div className="flex-1 overflow-y-auto divide-y divide-border/40">
           {loading && conversations.length === 0 ? (
             <div className="p-6 text-center text-xs text-muted-foreground">
@@ -374,7 +437,6 @@ export function LiveSupportInbox({ bot }: Props) {
                       {c.visitor_name || "Visitor"}
                     </span>
                     <div className="flex items-center gap-1">
-                      {/* Unread count for a thread the agent is not reading. */}
                       {(unreadByConversation[c.id] ?? 0) > 0 && (
                         <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
                           {unreadByConversation[c.id] > 9
@@ -395,9 +457,11 @@ export function LiveSupportInbox({ bot }: Props) {
                     {c.visitor_email || c.session_id.substring(0, 14)}
                   </p>
 
-                  <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
-                    <span className="capitalize">{c.channel}</span>
-                    <span>
+                  <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground gap-2">
+                    <span className="capitalize truncate">
+                      {multiBot ? labelForConversation(c) : c.channel}
+                    </span>
+                    <span className="shrink-0">
                       {new Date(
                         c.last_activity_at || c.created_at,
                       ).toLocaleTimeString([], {
@@ -413,11 +477,9 @@ export function LiveSupportInbox({ bot }: Props) {
         </div>
       </div>
 
-      {/* Right Chat Thread & Reply Console */}
       <div className="flex-1 flex flex-col bg-background">
         {activeConv && activeConv.id === selectedConvId ? (
           <>
-            {/* Thread Header */}
             <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-4 py-2.5">
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xs">
@@ -431,6 +493,11 @@ export function LiveSupportInbox({ bot }: Props) {
                     <Badge variant="outline" className="text-[10px] capitalize">
                       {activeConv.status}
                     </Badge>
+                    {multiBot && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {labelForConversation(activeConv)}
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-[11px] text-muted-foreground">
                     {activeConv.visitor_email || "No email"} · Channel:{" "}
@@ -464,7 +531,6 @@ export function LiveSupportInbox({ bot }: Props) {
               </div>
             </div>
 
-            {/* Message Thread History */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-muted/5">
               {activeConv.messages?.map((msg: SupportBotMessage) => {
                 const isVisitor = msg.sender_type === "visitor";
@@ -525,8 +591,6 @@ export function LiveSupportInbox({ bot }: Props) {
                   </div>
                 );
               })}
-              {/* The visitor is composing — shown to the agent so they know
-                  to wait rather than send a second prompt. */}
               {visitorTyping && (
                 <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                   <div className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-1.5">
@@ -541,7 +605,6 @@ export function LiveSupportInbox({ bot }: Props) {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Agent Reply Box */}
             <div className="border-t border-border/60 p-3 bg-muted/10">
               <div className="flex items-center gap-1.5 mb-2 overflow-x-auto pb-1">
                 <span className="text-[10px] text-muted-foreground shrink-0">
@@ -566,7 +629,7 @@ export function LiveSupportInbox({ bot }: Props) {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  handleSendReply();
+                  void handleSendReply();
                 }}
                 className="flex items-center gap-2"
               >

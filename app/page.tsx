@@ -481,9 +481,16 @@ function LandingUI({
 
   // SCROLL TO TOP STATE
   const [showScrollTop, setShowScrollTop] = useState(false);
+  // Prefer the hostname subdomain for public landing routing. Stored
+  // hive_context can point at another workspace (e.g. techive) and would
+  // otherwise keep serving that tenant's enterprise template on lanouveil.*.
+  const hostnameTenantSlug =
+    mounted && typeof window !== "undefined" && window.location.hostname.endsWith(".localhost")
+      ? window.location.hostname.split(".")[0] || null
+      : null;
   const detectedTenantSlug =
     mounted && typeof window !== "undefined"
-      ? getTenantId() || initialTenantSlug
+      ? hostnameTenantSlug || getTenantId() || initialTenantSlug
       : initialTenantSlug;
   const workspaceScope = getWorkspaceScopeKey();
   const isTenantExperience =
@@ -722,13 +729,18 @@ function LandingUI({
         return <LmsPreloader brandName={brandSettings?.app_title || detectedTenantSlug} />;
       }
 
-      if (detectedTenantSlug === "savory-lounge") {
+      if (
+        detectedTenantSlug === "savory-lounge" ||
+        detectedTenantSlug === "lanouveil" ||
+        tenantLandingPayload?.business_type === "restaurant" ||
+        tenantLandingPayload?.business_type === "hotel"
+      ) {
         return (
           <div className="flex h-screen w-screen items-center justify-center bg-[#080510]">
             <div className="flex flex-col items-center gap-4">
               <div className="h-12 w-12 animate-spin rounded-full border-4 border-[#FF1A43] border-t-transparent" />
               <p className="text-white/60 font-black tracking-widest text-xs uppercase">
-                Loading {brandSettings?.app_title || "Savory Lounge"}...
+                Loading {brandSettings?.app_title || detectedTenantSlug || "Hospitality"}...
               </p>
             </div>
           </div>
@@ -742,7 +754,17 @@ function LandingUI({
     const selectedTemplateKey = resolvedTemplate.meta?.template_key ?? "";
     const selectedTemplateBusinessType = resolvedTemplate.meta?.business_type ?? businessType;
     const hasCustomCode = (resolvedTemplate.rendering.mode === "custom_code" || resolvedTemplate.rendering.mode === "raw_package") && Boolean(resolvedTemplate.rendering.html?.trim());
-    const isSavoryLounge = selectedTemplateKey === "savory-lounge-nightclub" || selectedTemplateKey === "savory-lounge" || detectedTenantSlug === "savory-lounge" || (["nightclub", "restaurant", "lounge"].includes(businessType) && selectedTemplateKey === "signature");
+    const hospitalityBusinessTypes = ["restaurant", "hotel", "nightclub", "lounge", "hospitality", "bistro"];
+    const isHospitalityTemplate =
+      selectedTemplateKey === "savory-lounge-nightclub" ||
+      selectedTemplateKey === "savory-lounge" ||
+      selectedTemplateKey === "restaurant-modern" ||
+      selectedTemplateKey === "hotel-hospitality" ||
+      selectedTemplateKey === "restaurant" ||
+      detectedTenantSlug === "savory-lounge" ||
+      detectedTenantSlug === "lanouveil" ||
+      hospitalityBusinessTypes.includes(String(businessType ?? "")) ||
+      hospitalityBusinessTypes.includes(String(selectedTemplateBusinessType ?? ""));
     const isLmsTemplate = selectedTemplateKey === "lms-academy" || selectedTemplateKey === "lms" || detectedTenantSlug === "lms-demo" || (
       selectedTemplateBusinessType === "lms" && (!selectedTemplateKey || selectedTemplateKey === "signature")
     );
@@ -752,13 +774,13 @@ function LandingUI({
 
     const hasAssignedTemplate = Boolean(
       (tenantLandingPayload?.has_template && tenantLandingPayload?.landing_page_template) ||
-      isSavoryLounge ||
+      isHospitalityTemplate ||
       isLmsTemplate ||
       isB2BTemplate ||
       hasCustomCode ||
       [
         "lms-academy", "savory-lounge-nightclub", "b2b-marketplace",
-        "restaurant-modern", "water-beverage", "technology-company",
+        "restaurant-modern", "hotel-hospitality", "water-beverage", "technology-company",
         "lms", "savory-lounge", "b2b", "restaurant", "water-bottling", "software-development"
       ].includes(selectedTemplateKey) ||
       ["lanouveil", "global-b2b", "savory-lounge", "aquauno", "aquavivo", "techive", "lms-demo"].includes(detectedTenantSlug)
@@ -780,21 +802,31 @@ function LandingUI({
     }
 
     /*
-     * The LMS academy template is checked before stored custom code.
+     * LMS and hospitality React landings are checked before stored custom code.
      *
-     * Every tenant carries a custom_code landing, so that branch always won and
-     * an LMS tenant's landing rendered as raw HTML inside a full-screen iframe.
-     * That iframe cannot share the React chrome, so the site header, its nav
-     * tabs, the active-tab state, the language switcher and the theme toggle
-     * were all missing from the landing while every other page in the template
-     * had them — the navigation was not the same throughout.
-     *
-     * Scoped to the LMS on purpose: the other business templates keep their
-     * existing custom_code precedence.
+     * Every tenant can carry a custom_code/raw_package blob, so that branch
+     * otherwise always wins and an LMS/restaurant tenant renders as raw HTML
+     * inside a full-screen iframe — losing menus, reservations, feedback, and
+     * the shared site chrome those React templates provide.
      */
     if (isLmsTemplate) {
       return (
         <LmsLandingTemplate
+          brandSettings={brandSettings}
+          template={resolvedTemplate}
+          tenantName={
+            tenantLandingPayload?.tenant?.name ||
+            brandSettings?.app_title ||
+            detectedTenantSlug ||
+            t('landing.common.tenant_workspace', "Tenant Workspace")
+          }
+        />
+      );
+    }
+
+    if (isHospitalityTemplate) {
+      return (
+        <RestaurantLandingTemplate
           brandSettings={brandSettings}
           template={resolvedTemplate}
           tenantName={
@@ -825,36 +857,6 @@ function LandingUI({
           }
           tenantData={tenantLandingPayload?.tenant_data || tenantLandingPayload?.tenant}
           collections={tenantLandingPayload?.collections}
-        />
-      );
-    }
-
-    if (isSavoryLounge) {
-      return (
-        <RestaurantLandingTemplate
-          brandSettings={brandSettings}
-          template={resolvedTemplate}
-          tenantName={
-            tenantLandingPayload?.tenant?.name ||
-            brandSettings?.app_title ||
-            detectedTenantSlug ||
-            t('landing.common.tenant_workspace', "Tenant Workspace")
-          }
-        />
-      );
-    }
-
-    if (isLmsTemplate) {
-      return (
-        <LmsLandingTemplate
-          brandSettings={brandSettings}
-          template={resolvedTemplate}
-          tenantName={
-            tenantLandingPayload?.tenant?.name ||
-            brandSettings?.app_title ||
-            detectedTenantSlug ||
-            t('landing.common.tenant_workspace', "Tenant Workspace")
-          }
         />
       );
     }

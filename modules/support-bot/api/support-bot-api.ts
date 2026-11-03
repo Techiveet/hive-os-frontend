@@ -85,6 +85,14 @@ export const supportBotApi = {
     return res.data?.data || [];
   },
 
+  /** Tenant-wide knowledge library (optional bot_id filter). */
+  getAllKnowledgeBases: async (params?: {
+    bot_id?: number;
+  }): Promise<SupportBotKnowledgeBase[]> => {
+    const res = await api.get(`/support-bot/knowledge`, { params });
+    return res.data?.data || [];
+  },
+
   createKnowledgeEntry: async (
     botId: number,
     payload: Partial<SupportBotKnowledgeBase>
@@ -117,6 +125,17 @@ export const supportBotApi = {
     params?: { status?: string; channel?: string; page?: number }
   ): Promise<{ data: SupportBotConversation[]; total: number; current_page: number }> => {
     const res = await api.get(`/support-bot/bots/${botId}/conversations`, { params });
+    return res.data;
+  },
+
+  /** Tenant-wide inbox across every bot (optional bot_id filter). */
+  getAllConversations: async (params?: {
+    status?: string;
+    channel?: string;
+    bot_id?: number;
+    page?: number;
+  }): Promise<{ data: SupportBotConversation[]; total: number; current_page: number }> => {
+    const res = await api.get(`/support-bot/conversations`, { params });
     return res.data;
   },
 

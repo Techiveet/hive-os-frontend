@@ -23,6 +23,17 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { supportBotApi } from "../api/support-bot-api";
 import { SupportBot } from "../types";
@@ -42,6 +53,12 @@ export function SupportBotList() {
 
   // Testing Simulator Drawer
   const [simulatingBot, setSimulatingBot] = React.useState<SupportBot | null>(null);
+
+  // Delete Confirmation
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [deletingId, setDeletingId] = React.useState<number | null>(null);
+  const [deleting, setDeleting] = React.useState(false);
+  const [duplicatingId, setDuplicatingId] = React.useState<number | null>(null);
 
   const loadBots = async () => {
     try {
@@ -82,20 +99,35 @@ export function SupportBotList() {
 
   const handleDuplicate = async (id: number) => {
     try {
-      await supportBotApi.duplicateBot(id);
-      loadBots();
+      setDuplicatingId(id);
+      const copy = await supportBotApi.duplicateBot(id);
+      toast.success(`Duplicated as “${copy?.name || "Copy"}”.`);
+      await loadBots();
     } catch (e) {
       console.error("Failed to duplicate bot", e);
+      toast.error("Failed to duplicate bot.");
+    } finally {
+      setDuplicatingId(null);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this support bot?")) return;
+    setDeletingId(id);
+    setDeleteOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (deletingId === null) return;
     try {
-      await supportBotApi.deleteBot(id);
+      setDeleting(true);
+      await supportBotApi.deleteBot(deletingId);
+      setDeleteOpen(false);
+      setDeletingId(null);
       loadBots();
     } catch (e) {
       console.error("Failed to delete bot", e);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -263,11 +295,12 @@ export function SupportBotList() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => handleDuplicate(bot.id)}
+                    onClick={() => void handleDuplicate(bot.id)}
+                    disabled={duplicatingId === bot.id}
                     className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                     title="Duplicate Bot"
                   >
-                    <Copy className="h-3.5 w-3.5" />
+                    <Copy className={`h-3.5 w-3.5 ${duplicatingId === bot.id ? "animate-pulse" : ""}`} />
                   </Button>
 
                   <Link href={`/dashboard/support-bot/${bot.id}/settings`}>
@@ -359,6 +392,31 @@ export function SupportBotList() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this bot?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This support bot will be permanently removed. All its flows, knowledge base entries, and conversation history will be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmDelete();
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Deleting..." : "Delete Bot"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

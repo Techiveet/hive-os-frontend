@@ -9,15 +9,13 @@ import { supportBotApi } from "@/modules/support-bot/api/support-bot-api";
 import { SupportBot } from "@/modules/support-bot/types/index";
 
 export default function SupportBotKnowledgePage() {
-  const [selectedBot, setSelectedBot] = React.useState<SupportBot | null>(null);
+  const [bots, setBots] = React.useState<SupportBot[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     supportBotApi
       .getBots()
-      .then((data: SupportBot[]) => {
-        if (data.length > 0) setSelectedBot(data[0]);
-      })
+      .then((data: SupportBot[]) => setBots(data))
       .catch((e: unknown) => console.error("Failed to load bots", e))
       .finally(() => setLoading(false));
   }, []);
@@ -31,7 +29,7 @@ export default function SupportBotKnowledgePage() {
     );
   }
 
-  if (!selectedBot) {
+  if (bots.length === 0) {
     return (
       <div className="p-6">
         <NoBotConfigured area="The knowledge base" />
@@ -40,8 +38,14 @@ export default function SupportBotKnowledgePage() {
   }
 
   return (
-    <div className="p-6">
-      <KnowledgeBaseHub bot={selectedBot} />
+    <div className="p-6 space-y-4">
+      <div>
+        <h1 className="text-xl font-bold">Knowledge Base & RAG Training</h1>
+        <p className="text-xs text-muted-foreground">
+          Browse FAQs across all bots, or filter to train one assistant.
+        </p>
+      </div>
+      <KnowledgeBaseHub bots={bots} />
     </div>
   );
 }

@@ -53,6 +53,11 @@ function harness(requested: number | null = 22) {
       if (!hooks[index] || !same(hooks[index].deps, deps)) hooks[index] = { callback, deps };
       return hooks[index].callback;
     },
+    useMemo(factory: () => any, deps: any[]) {
+      const index = cursor++;
+      if (!hooks[index] || !same(hooks[index].deps, deps)) hooks[index] = { value: factory(), deps };
+      return hooks[index].value;
+    },
     useEffect(setup: () => any, deps: any[]) {
       const index = cursor++;
       if (!hooks[index] || !same(hooks[index].deps, deps)) {

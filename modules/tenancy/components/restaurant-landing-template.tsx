@@ -33,7 +33,6 @@ import {
   Reveal,
   CountUp,
 } from "./lounge-fx";
-import { CustomLandingFrame, useCustomLandingHtml } from "./custom-landing-frame";
 
 type BrandSettings = {
   app_title?: string | null;
@@ -117,6 +116,7 @@ type PublishedGuestFeedback = {
   customer_name: string;
   rating: number;
   comment?: string | null;
+  response?: string | null;
   created_at: string;
 };
 
@@ -125,6 +125,7 @@ type DisplayReview = {
   author: string;
   role: string;
   rating: number;
+  response?: string | null;
 };
 
 export function RestaurantLandingTemplate({
@@ -140,6 +141,14 @@ export function RestaurantLandingTemplate({
   const heroSlides: TenantLandingHeroSlide[] =
     Array.isArray(template?.hero?.slides) ? template.hero.slides : [];
   const { t } = useTranslation();
+  // Dashboard-edited copy must win over lang/*.json keys. `t(key, fallback)`
+  // prefers the dictionary whenever the key exists, which silently ignored
+  // every tenant edit (stats, hero slides, services, FAQs, etc.).
+  const tenantCopy = (key: string, value: string | undefined | null, fallback = "") => {
+    const trimmed = (value ?? "").trim();
+    if (trimmed) return trimmed;
+    return t(key, fallback);
+  };
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
   const [currentSlide, setCurrentSlide] = React.useState(0);
@@ -156,11 +165,13 @@ export function RestaurantLandingTemplate({
           Accept: "application/json",
           ...getTenantHeaders(),
         },
+        cache: "no-store",
       });
       if (!res.ok) throw new Error("Failed to fetch public feedback");
       return res.json() as Promise<PublishedGuestFeedback[]>;
     },
-    staleTime: 30000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const { data: apiMenuItemsData } = useQuery({
@@ -249,24 +260,24 @@ export function RestaurantLandingTemplate({
   }, [activeDish?.id]);
 
   // Dynamic specialties (highlights) configuration from settings
-  const specialtiesEyebrow = t("landing.highlights.highlight_0.kicker", template?.highlights?.[0]?.kicker || "Our Specialties");
-  const specialtiesTitle = t("landing.highlights.highlight_0.title", template?.highlights?.[0]?.title || "Crafted with passion, served with perfection.");
-  const specialtiesDescription = t("landing.highlights.highlight_0.description", template?.highlights?.[0]?.description || "Every dish tells a story of local sourcing, seasonal inspiration, and meticulous preparation. Discover flavors that linger long after the last bite.");
+  const specialtiesEyebrow = tenantCopy("landing.highlights.highlight_0.kicker", template?.highlights?.[0]?.kicker, "Our Specialties");
+  const specialtiesTitle = tenantCopy("landing.highlights.highlight_0.title", template?.highlights?.[0]?.title, "Crafted with passion, served with perfection.");
+  const specialtiesDescription = tenantCopy("landing.highlights.highlight_0.description", template?.highlights?.[0]?.description, "Every dish tells a story of local sourcing, seasonal inspiration, and meticulous preparation. Discover flavors that linger long after the last bite.");
   const rawSpecialtiesImage = template?.highlights?.[0]?.image;
   const specialtiesImage = rawSpecialtiesImage ? (getPublicServeUrl(rawSpecialtiesImage) ?? rawSpecialtiesImage) : "/landing/dish.png";
 
   const specialtiesItems = [
     {
-      title: t("landing.highlights.highlight_1.title", template?.highlights?.[1]?.title || "Artisan Steaks"),
-      desc: t("landing.highlights.highlight_1.description", template?.highlights?.[1]?.description || "Dry-aged to perfection for minimum 28 days.")
+      title: tenantCopy("landing.highlights.highlight_1.title", template?.highlights?.[1]?.title, "Artisan Steaks"),
+      desc: tenantCopy("landing.highlights.highlight_1.description", template?.highlights?.[1]?.description, "Dry-aged to perfection for minimum 28 days.")
     },
     {
-      title: t("landing.highlights.highlight_2.title", template?.highlights?.[2]?.title || "Fresh Catch"),
-      desc: t("landing.highlights.highlight_2.description", template?.highlights?.[2]?.description || "Sourced daily from local sustainable fisheries.")
+      title: tenantCopy("landing.highlights.highlight_2.title", template?.highlights?.[2]?.title, "Fresh Catch"),
+      desc: tenantCopy("landing.highlights.highlight_2.description", template?.highlights?.[2]?.description, "Sourced daily from local sustainable fisheries.")
     },
     {
-      title: t("landing.highlights.highlight_3.title", template?.highlights?.[3]?.title || "Handcrafted Pasta"),
-      desc: t("landing.highlights.highlight_3.description", template?.highlights?.[3]?.description || "Made fresh every morning using traditional methods.")
+      title: tenantCopy("landing.highlights.highlight_3.title", template?.highlights?.[3]?.title, "Handcrafted Pasta"),
+      desc: tenantCopy("landing.highlights.highlight_3.description", template?.highlights?.[3]?.description, "Made fresh every morning using traditional methods.")
     }
   ];
 
@@ -315,7 +326,7 @@ export function RestaurantLandingTemplate({
 
   // Scroll-spy: highlight the nav link of the section currently in view
   React.useEffect(() => {
-    const ids = ["specialties", "menu", "services", "events", "gallery", "cellar", "experience", "location"];
+    const ids = ["specialties", "menu", "services", "events", "gallery", "reviews", "feedback", "cellar", "experience", "location"];
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -421,6 +432,18 @@ export function RestaurantLandingTemplate({
     setSubmitError(null);
 
     try {
+      const payload: Record<string, unknown> = {
+        customer_name: formData.customer_name,
+        customer_phone: formData.customer_phone,
+        reservation_time: formData.reservation_time,
+        guest_count: Number(formData.guest_count),
+        special_requests: `[Booking Type: ${formData.booking_type}] ${formData.special_requests}`.trim(),
+      };
+
+      if (formData.location_id) {
+        payload.location_id = Number(formData.location_id);
+      }
+
       const response = await fetch(`${getBackendApiRoot()}/public/hospitality/reserve`, {
         method: "POST",
         headers: {
@@ -428,26 +451,30 @@ export function RestaurantLandingTemplate({
           Accept: "application/json",
           ...getTenantHeaders(),
         },
-        body: JSON.stringify({
-          location_id: Number(formData.location_id),
-          customer_name: formData.customer_name,
-          customer_phone: formData.customer_phone,
-          reservation_time: formData.reservation_time,
-          guest_count: Number(formData.guest_count),
-          special_requests: `[Booking Type: ${formData.booking_type}] ${formData.special_requests}`.trim(),
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(result.message || "Failed to submit reservation.");
+        throw new Error(
+          result.message ||
+            (typeof result.errors === "object"
+              ? Object.values(result.errors).flat().join(" ")
+              : null) ||
+            "Failed to submit reservation.",
+        );
       }
 
+      const reservation = result.reservation;
       setSuccessReservation({
-        reservation_code: result.reservation.reservation_code,
-        customer_name: result.reservation.customer_name,
-        reservation_time: result.reservation.reservation_time,
+        reservation_code:
+          reservation?.reservation_code ||
+          result.submission?.id?.toString() ||
+          "PENDING",
+        customer_name: reservation?.customer_name || formData.customer_name,
+        reservation_time:
+          reservation?.reservation_time || formData.reservation_time,
       });
 
       setFormData({
@@ -484,14 +511,6 @@ export function RestaurantLandingTemplate({
 
   const isDark = mounted ? resolvedTheme === "dark" : true;
   const brandName = brandSettings?.app_title || tenantName || "Savory Lounge";
-  const customLandingHtml = useCustomLandingHtml(
-    template,
-    brandName,
-    "Restaurant",
-    isDark,
-    brandSettings,
-  );
-  
   // Resolve Logo
   const rawLogoUrl = isDark
     ? (brandSettings?.logo_dark || brandSettings?.logo_light)
@@ -509,17 +528,17 @@ export function RestaurantLandingTemplate({
   // Cellar — dashboard-configurable via template.cellar
   const cellarItemsFromTemplate = (template?.cellar?.items ?? []).filter((i) => i?.title?.trim());
   const cellarContent = {
-    eyebrow: t("landing.cellar.eyebrow", template?.cellar?.eyebrow?.trim() || "The Liquor Boutique"),
-    title: t("landing.cellar.title", template?.cellar?.title?.trim() || "Savory Spirits & Wine Cellar"),
-    description: t("landing.cellar.description", template?.cellar?.description?.trim() || "Step into a sanctuary of taste. From rare single-malt scotches and vintage champagnes to bespoke local spirits, our cellar offers an curated selection for the refined palate."),
+    eyebrow: tenantCopy("landing.cellar.eyebrow", template?.cellar?.eyebrow, "The Liquor Boutique"),
+    title: tenantCopy("landing.cellar.title", template?.cellar?.title, "Savory Spirits & Wine Cellar"),
+    description: tenantCopy("landing.cellar.description", template?.cellar?.description, "Step into a sanctuary of taste. From rare single-malt scotches and vintage champagnes to bespoke local spirits, our cellar offers an curated selection for the refined palate."),
     image: template?.cellar?.image
       ? (getPublicServeUrl(template.cellar.image) ?? template.cellar.image)
       : "/landing/liquor.png",
     items:
       cellarItemsFromTemplate.length >= 2
         ? cellarItemsFromTemplate.slice(0, 4).map((i, idx) => ({
-            title: t(`landing.cellar.item_${idx}.title`, i.title),
-            desc: t(`landing.cellar.item_${idx}.description`, i.description)
+            title: tenantCopy(`landing.cellar.item_${idx}.title`, i.title),
+            desc: tenantCopy(`landing.cellar.item_${idx}.description`, i.description)
           }))
         : [
             { title: t("landing.cellar.item_0.title", "Rare Vintages"), desc: t("landing.cellar.item_0.description", "Exquisite wines from the world's most prestigious vineyards.") },
@@ -531,15 +550,15 @@ export function RestaurantLandingTemplate({
 
   // Experience / Ambiance — dashboard-configurable via template.experience
   const experienceContent = {
-    eyebrow: t("landing.experience.eyebrow", template?.experience?.eyebrow?.trim() || "The Ambiance"),
-    title: t("landing.experience.title", template?.experience?.title?.trim() || "An atmosphere that elevates every moment."),
-    description: t("landing.experience.description", template?.experience?.description?.trim() || "Whether it's a romantic dinner, a family celebration, or a business lunch, our dining spaces are designed to provide the perfect backdrop."),
+    eyebrow: tenantCopy("landing.experience.eyebrow", template?.experience?.eyebrow, "The Ambiance"),
+    title: tenantCopy("landing.experience.title", template?.experience?.title, "An atmosphere that elevates every moment."),
+    description: tenantCopy("landing.experience.description", template?.experience?.description, "Whether it's a romantic dinner, a family celebration, or a business lunch, our dining spaces are designed to provide the perfect backdrop."),
     image: template?.experience?.image
       ? (getPublicServeUrl(template.experience.image) ?? template.experience.image)
       : "/landing/dining.png",
-    featuredBadge: t("landing.experience.featured_badge", template?.experience?.featured_badge?.trim() || "Featured Space"),
-    featuredTitle: t("landing.experience.featured_title", template?.experience?.featured_title?.trim() || "The Garden Terrace"),
-    featuredDescription: t("landing.experience.featured_description", template?.experience?.featured_description?.trim() || "Experience alfresco dining surrounded by lush greenery and ambient lighting. Perfect for evening sunsets and starry nights."),
+    featuredBadge: tenantCopy("landing.experience.featured_badge", template?.experience?.featured_badge, "Featured Space"),
+    featuredTitle: tenantCopy("landing.experience.featured_title", template?.experience?.featured_title, "The Garden Terrace"),
+    featuredDescription: tenantCopy("landing.experience.featured_description", template?.experience?.featured_description, "Experience alfresco dining surrounded by lush greenery and ambient lighting. Perfect for evening sunsets and starry nights."),
   };
 
   // Location / hours / final CTA — dashboard-configurable.
@@ -557,8 +576,16 @@ export function RestaurantLandingTemplate({
     template?.location_info?.map_url?.trim() ||
     `https://www.google.com/maps?q=${encodeURIComponent(address.join(", "))}&output=embed`;
   const locationContent = {
-    ctaTitle: t("landing.final_cta.title", rawCtaTitle && !ctaLooksGeneric(rawCtaTitle) ? rawCtaTitle : "Ready to join us?"),
-    ctaDescription: t("landing.final_cta.description", rawCtaDesc && !ctaLooksGeneric(rawCtaDesc) ? rawCtaDesc : "Reserve your table today and let us treat you to an unforgettable dining experience."),
+    ctaTitle: tenantCopy(
+      "landing.final_cta.title",
+      rawCtaTitle && !ctaLooksGeneric(rawCtaTitle) ? rawCtaTitle : "",
+      "Ready to join us?",
+    ),
+    ctaDescription: tenantCopy(
+      "landing.final_cta.description",
+      rawCtaDesc && !ctaLooksGeneric(rawCtaDesc) ? rawCtaDesc : "",
+      "Reserve your table today and let us treat you to an unforgettable dining experience.",
+    ),
     hours:
       (template?.location_info?.hours ?? []).length > 0
         ? (template!.location_info!.hours as string[])
@@ -570,10 +597,10 @@ export function RestaurantLandingTemplate({
 
   // Guest list strip — dashboard-configurable via template.guestlist
   const guestlistContent = {
-    eyebrow: t("landing.guestlist.eyebrow", template?.guestlist?.eyebrow?.trim() || "Skip the line"),
-    title: t("landing.guestlist.title", template?.guestlist?.title?.trim() || "Get on the Guest List"),
-    description: t("landing.guestlist.description", template?.guestlist?.description?.trim() || "Priority entry, a welcome drink, and first pick of the lounge — confirmed in minutes."),
-    cta: t("landing.guestlist.cta", template?.guestlist?.cta?.trim() || "Join Tonight"),
+    eyebrow: tenantCopy("landing.guestlist.eyebrow", template?.guestlist?.eyebrow, "Skip the line"),
+    title: tenantCopy("landing.guestlist.title", template?.guestlist?.title, "Get on the Guest List"),
+    description: tenantCopy("landing.guestlist.description", template?.guestlist?.description, "Priority entry, a welcome drink, and first pick of the lounge — confirmed in minutes."),
+    cta: tenantCopy("landing.guestlist.cta", template?.guestlist?.cta, "Join Tonight"),
   };
 
   // Single source of truth for nav links (desktop pill + mobile dropdown)
@@ -583,6 +610,8 @@ export function RestaurantLandingTemplate({
     { id: "services", label: t("landing.nav.services_short", "Offers") },
     { id: "events", label: t("landing.nav.events_short", "Events") },
     { id: "gallery", label: t("landing.nav.gallery", "Gallery") },
+    { id: "reviews", label: t("landing.nav.reviews", "Reviews") },
+    { id: "feedback", label: t("landing.nav.feedback", "Feedback") },
     { id: "cellar", label: t("landing.nav.cellar_short", "Cellar") },
     { id: "location", label: t("landing.nav.location", "Location") },
   ];
@@ -650,27 +679,37 @@ export function RestaurantLandingTemplate({
   );
 
   const displayedReviews: DisplayReview[] = React.useMemo(() => {
-    const fromGuests: DisplayReview[] = publishedGuestFeedback
-      .filter((item) => (item.comment ?? "").trim().length > 0)
+    // Published guest reviews replace the template testimonials entirely.
+    // Rating-only submissions (no comment) still count — they were being
+    // filtered out before, which left the public site stuck on placeholders.
+    const fromGuests: DisplayReview[] = (Array.isArray(publishedGuestFeedback)
+      ? publishedGuestFeedback
+      : []
+    )
       .slice(0, 6)
-      .map((item) => ({
-        quote: (item.comment ?? "").trim(),
-        author: item.customer_name,
-        role: new Date(item.created_at).toLocaleDateString(),
-        rating: item.rating,
-      }));
+      .map((item) => {
+        const comment = (item.comment ?? "").trim();
+        return {
+          quote:
+            comment ||
+            t(
+              "landing.reviews.rating_only",
+              "Rated us :rating out of 5.",
+              { rating: String(item.rating) },
+            ),
+          author: item.customer_name,
+          role: new Date(item.created_at).toLocaleDateString(),
+          rating: item.rating,
+          response: (item.response ?? "").trim() || null,
+        };
+      });
 
     if (fromGuests.length > 0) {
-      const merged = [...fromGuests];
-      for (const item of staticTestimonials) {
-        if (merged.length >= 3) break;
-        merged.push({ ...item, rating: 5 });
-      }
-      return merged.slice(0, 3);
+      return fromGuests;
     }
 
     return staticTestimonials.map((item) => ({ ...item, rating: 5 }));
-  }, [publishedGuestFeedback, staticTestimonials]);
+  }, [publishedGuestFeedback, staticTestimonials, t]);
 
   const handleFeedbackSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -732,18 +771,18 @@ export function RestaurantLandingTemplate({
           }))
       : [
           {
-            title: "Private Events & Buyouts",
-            desc: "Celebrate anniversaries, VIP corporate receptions, or private parties. We offer full and partial venue buyout options.",
+            title: t("landing.services.service_0.title", "Private Events & Buyouts"),
+            desc: t("landing.services.service_0.description", "Celebrate anniversaries, VIP corporate receptions, or private parties. We offer full and partial venue buyout options."),
             image: "/landing/dining.png",
           },
           {
-            title: "VIP Lounge Experience",
-            desc: "Indulge in premium bottle service, bespoke seating in our high-end lounge, and dedicated butler treatment.",
+            title: t("landing.services.service_1.title", "VIP Lounge Experience"),
+            desc: t("landing.services.service_1.description", "Indulge in premium bottle service, bespoke seating in our high-end lounge, and dedicated butler treatment."),
             image: "/landing/hero_3.png",
           },
           {
-            title: "Catering & Masterclasses",
-            desc: "Elevate your private gatherings with custom menus, chef-led dining, and mixology sessions hosted by our top artisans.",
+            title: t("landing.services.service_2.title", "Catering & Masterclasses"),
+            desc: t("landing.services.service_2.description", "Elevate your private gatherings with custom menus, chef-led dining, and mixology sessions hosted by our top artisans."),
             image: "/landing/dish.png",
           },
         ];
@@ -753,9 +792,9 @@ export function RestaurantLandingTemplate({
     (f) => f?.question?.trim() && f?.answer?.trim(),
   );
   const faqs = customFaqs.length > 0
-    ? customFaqs.map((f, i) => ({
-        q: t(`landing.faqs.faq_${i}.question`, f.question),
-        a: t(`landing.faqs.faq_${i}.answer`, f.answer),
+    ? customFaqs.map((f) => ({
+        q: f.question,
+        a: f.answer,
       }))
     : [
     {
@@ -780,19 +819,8 @@ export function RestaurantLandingTemplate({
     },
   ];
 
-  // Templates that carry their own page code render it instead of this design.
-  if (customLandingHtml) {
-    return (
-      <CustomLandingFrame
-        html={customLandingHtml}
-        title={`${brandName} landing page`}
-        mode={template.rendering.mode}
-      />
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 overflow-hidden" style={{ fontFamily: "'Poppins', sans-serif" }}>
+    <div className="relative min-h-screen bg-background text-foreground selection:bg-primary/30 overflow-x-hidden" style={{ fontFamily: "'Poppins', sans-serif" }}>
       {/* Premium ambient FX layer */}
       <ScrollProgress />
       <GrainOverlay />
@@ -803,7 +831,7 @@ export function RestaurantLandingTemplate({
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="fixed top-0 left-0 right-0 z-50 px-3 sm:px-6 pt-3 sm:pt-4"
+        className="fixed top-0 left-0 right-0 z-[90] px-3 sm:px-6 pt-3 sm:pt-4"
       >
         <div
           className={`mx-auto max-w-7xl rounded-full p-[1.5px] transition-all duration-500 ${
@@ -876,6 +904,7 @@ export function RestaurantLandingTemplate({
               <LanguageSwitcher />
               <ThemeToggle />
               <Button
+                type="button"
                 onClick={() => setIsBookingOpen(true)}
                 className="hidden sm:flex rounded-full px-6 lg:px-8 h-11 font-bold shadow-lg shadow-[#FF1A43]/25 hover:scale-105 transition-transform bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] hover:from-[#e61539] hover:to-[#6a12bd] text-white border-none"
               >
@@ -997,7 +1026,7 @@ export function RestaurantLandingTemplate({
               </div>
               <div>
                 <Badge variant="outline" className="mb-4 px-5 py-2 text-sm font-bold uppercase tracking-widest backdrop-blur-md bg-[#FF1A43]/10 border-[#FF1A43]/45 text-[#FF1A43] shadow-[0_0_15px_rgba(255,26,67,0.2)]">
-                  {t(`landing.hero.badge_${safeCurrentSlide}`, activeSlide.badge)}
+                  {tenantCopy(`landing.hero.badge_${safeCurrentSlide}`, activeSlide.badge)}
                 </Badge>
               </div>
               
@@ -1005,7 +1034,7 @@ export function RestaurantLandingTemplate({
                 <h1 className="mx-auto max-w-5xl text-5xl sm:text-7xl lg:text-[6rem] font-black tracking-tighter leading-[0.95] mb-5 uppercase">
                   <RevealText
                     trigger="mount"
-                    text={t(`landing.hero.title_${safeCurrentSlide}`, activeSlide.title)}
+                    text={tenantCopy(`landing.hero.title_${safeCurrentSlide}`, activeSlide.title)}
                     className="bg-gradient-to-r from-[#FF1A43] via-[#D31A9B] to-[#7B16D9] bg-clip-text text-transparent drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
                   />
                 </h1>
@@ -1013,13 +1042,13 @@ export function RestaurantLandingTemplate({
 
               {Boolean(activeSlide.subtitle?.trim()) && (
                 <p className="mx-auto max-w-2xl text-lg sm:text-2xl text-muted-foreground mb-10 font-medium leading-relaxed">
-                  {t(`landing.hero.subtitle_${safeCurrentSlide}`, activeSlide.subtitle)}
+                  {tenantCopy(`landing.hero.subtitle_${safeCurrentSlide}`, activeSlide.subtitle)}
                 </p>
               )}
               
               <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
                 <MagneticButton className="w-full sm:w-auto">
-                  <Button onClick={() => setIsBookingOpen(true)} size="lg" className="rounded-full px-10 h-16 text-lg font-bold shadow-[0_0_25px_rgba(255,26,67,0.45)] hover:shadow-[0_0_40px_rgba(255,26,67,0.65)] transition-all duration-300 w-full sm:w-auto bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] text-white border-none">
+                  <Button type="button" onClick={() => setIsBookingOpen(true)} size="lg" className="rounded-full px-10 h-16 text-lg font-bold shadow-[0_0_25px_rgba(255,26,67,0.45)] hover:shadow-[0_0_40px_rgba(255,26,67,0.65)] transition-all duration-300 w-full sm:w-auto bg-gradient-to-r from-[#FF1A43] to-[#7B16D9] text-white border-none">
                     {t("landing.cta.reservation", "Make a Reservation")}
                     <ArrowRight className="ml-3 h-6 w-6" />
                   </Button>
@@ -1108,10 +1137,10 @@ export function RestaurantLandingTemplate({
             <Reveal key={`${stat.value}-${i}`} delay={i * 0.1}>
               <div className="text-center group cursor-default">
                 <div className="text-4xl sm:text-6xl font-black tracking-tighter bg-gradient-to-r from-[#FF1A43] via-[#D31A9B] to-[#7B16D9] bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(255,26,67,0.15)]">
-                  <CountUp value={t(`landing.stats.stat_${i}.value`, stat.value)} />
+                  <CountUp value={stat.value} />
                 </div>
                 <p className="mt-3 text-xs sm:text-sm font-black uppercase tracking-[0.22em] text-muted-foreground group-hover:text-foreground transition-colors duration-300">
-                  {t(`landing.stats.stat_${i}.label`, stat.label)}
+                  {stat.label}
                 </p>
               </div>
             </Reveal>
@@ -1217,8 +1246,8 @@ export function RestaurantLandingTemplate({
 
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
           <SectionTitle
-            title={t("landing.menus.title", template?.menus?.title || "Explore Our Menus in 3D")}
-            subtitle={t("landing.menus.eyebrow", template?.menus?.eyebrow || "Menus")}
+            title={tenantCopy("landing.menus.title", template?.menus?.title, "Explore Our Menus in 3D")}
+            subtitle={tenantCopy("landing.menus.eyebrow", template?.menus?.eyebrow, "Menus")}
           />
 
           <div className="grid lg:grid-cols-12 gap-12 items-center">
@@ -1309,16 +1338,16 @@ export function RestaurantLandingTemplate({
               <div>
                 <p className="text-sm font-black uppercase tracking-[0.3em] text-[#FF1A43] mb-3 flex items-center gap-4">
                   <span className="w-12 h-px bg-[#FF1A43]" />
-                  {t("landing.menus.description_eyebrow", template?.menus?.description_eyebrow || "Interactive Experience")}
+                  {tenantCopy("landing.menus.description_eyebrow", template?.menus?.description_eyebrow, "Interactive Experience")}
                 </p>
                 {template?.menus?.description?.includes("<") ? (
                   <div
                     className="text-lg text-muted-foreground font-medium leading-relaxed html-content"
-                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(t("landing.menus.description", template.menus.description)) }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(tenantCopy("landing.menus.description", template.menus.description)) }}
                   />
                 ) : (
                   <p className="text-lg text-muted-foreground font-medium leading-relaxed">
-                    {t("landing.menus.description", template?.menus?.description || "Interact directly with our signature dishes in high-fidelity 3D, or select from our exquisite main courses.")}
+                    {tenantCopy("landing.menus.description", template?.menus?.description, "Interact directly with our signature dishes in high-fidelity 3D, or select from our exquisite main courses.")}
                   </p>
                 )}
               </div>
@@ -1398,8 +1427,8 @@ export function RestaurantLandingTemplate({
 
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
           <SectionTitle
-            title={t("landing.services_section.title", template?.services_section?.title?.trim() || "Exclusive Services")}
-            subtitle={t("landing.services_section.eyebrow", template?.services_section?.eyebrow?.trim() || "Services")}
+            title={tenantCopy("landing.services_section.title", template?.services_section?.title, "Exclusive Services")}
+            subtitle={tenantCopy("landing.services_section.eyebrow", template?.services_section?.eyebrow, "Services")}
           />
           
           <div className="grid md:grid-cols-3 gap-8">
@@ -1420,10 +1449,10 @@ export function RestaurantLandingTemplate({
                 {/* Card details */}
                 <div className="absolute inset-0 z-10 p-8 flex flex-col justify-end text-left space-y-4">
                   <h3 className="text-2xl font-black text-white group-hover:text-[#FF1A43] transition-colors">
-                    {t(`landing.services.service_${i}.title`, srv.title)}
+                    {srv.title}
                   </h3>
                   <p className="text-white/80 text-sm leading-relaxed font-medium opacity-90">
-                    {t(`landing.services.service_${i}.description`, srv.desc)}
+                    {srv.desc}
                   </p>
                   <Button 
                     onClick={() => {
@@ -1545,8 +1574,8 @@ export function RestaurantLandingTemplate({
         <div className="absolute bottom-0 left-1/3 w-[420px] h-[420px] bg-[#D31A9B]/8 rounded-full blur-[110px] pointer-events-none z-0" />
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
           <SectionTitle
-            title={t("landing.gallery.title", template?.gallery?.title?.trim() || "The Vibe")}
-            subtitle={t("landing.gallery.eyebrow", template?.gallery?.eyebrow?.trim() || "Gallery")}
+            title={tenantCopy("landing.gallery.title", template?.gallery?.title, "The Vibe")}
+            subtitle={tenantCopy("landing.gallery.eyebrow", template?.gallery?.eyebrow, "Gallery")}
           />
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 [grid-auto-rows:220px] md:[grid-auto-rows:260px]">
             {galleryImages.map((img, i) => (
@@ -1719,16 +1748,24 @@ export function RestaurantLandingTemplate({
                       </div>
                     </div>
                     <p className="text-lg leading-relaxed font-medium text-foreground/90">
-                      &ldquo;{t(`landing.testimonials.testimonial_${i}.quote`, item.quote)}&rdquo;
+                      &ldquo;{item.quote}&rdquo;
                     </p>
+                    {item.response ? (
+                      <div className="mt-5 rounded-2xl border border-[#7B16D9]/25 bg-[#7B16D9]/10 p-4">
+                        <p className="text-[11px] font-black uppercase tracking-widest text-[#7B16D9] mb-1.5">
+                          {t("landing.reviews.venue_response", "Response from :venue", { venue: brandName })}
+                        </p>
+                        <p className="text-sm text-foreground/85 leading-relaxed">{item.response}</p>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="mt-8 pt-6 border-t border-white/[0.06] flex items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#FF1A43] to-[#7B16D9] text-white font-black text-lg shadow-[0_0_15px_rgba(255,26,67,0.35)]">
-                      {t(`landing.testimonials.testimonial_${i}.author`, item.author).charAt(0)}
+                      {item.author.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-black text-foreground">{t(`landing.testimonials.testimonial_${i}.author`, item.author)}</p>
-                      <p className="text-sm text-muted-foreground font-medium">{t(`landing.testimonials.testimonial_${i}.role`, item.role)}</p>
+                      <p className="font-black text-foreground">{item.author}</p>
+                      <p className="text-sm text-muted-foreground font-medium">{item.role}</p>
                     </div>
                   </div>
                 </TiltCard>
@@ -1736,8 +1773,12 @@ export function RestaurantLandingTemplate({
             ))}
           </div>
 
-          <Reveal delay={0.2}>
-            <div className="mt-16 max-w-2xl mx-auto rounded-[2.5rem] border border-white/[0.08] bg-card p-8 sm:p-10 shadow-xl">
+          {/* Keep the feedback form always painted — whileInView Reveal can stay at
+              opacity 0 when the page shell uses overflow clipping / transforms. */}
+          <div
+            id="feedback"
+            className="mt-16 max-w-2xl mx-auto rounded-[2.5rem] border border-white/[0.08] bg-card p-8 sm:p-10 shadow-xl"
+          >
               <h3 className="text-2xl font-black mb-2 text-center">
                 {t("landing.reviews.share_title", "Share your experience")}
               </h3>
@@ -1826,8 +1867,7 @@ export function RestaurantLandingTemplate({
                   </Button>
                 </form>
               )}
-            </div>
-          </Reveal>
+          </div>
         </div>
       </section>
 
@@ -2088,10 +2128,10 @@ export function RestaurantLandingTemplate({
         )}
       </AnimatePresence>
 
-      {/* Booking Modal */}
+      {/* Booking Modal — z above grain/spotlight (55/60) and nav (90) */}
       <AnimatePresence>
         {isBookingOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -2110,6 +2150,7 @@ export function RestaurantLandingTemplate({
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: "spring", duration: 0.5 }}
               className="relative w-full max-w-lg overflow-hidden rounded-[2rem] border border-border bg-card shadow-2xl z-10 flex flex-col max-h-[90vh]"
+              onClick={(e) => e.stopPropagation()}
             >
               {/* Gold Gradient Accent bar */}
               <div className="h-2 w-full bg-gradient-to-r from-[#FF1A43] via-[#D31A9B] to-[#7B16D9]" />
@@ -2118,7 +2159,13 @@ export function RestaurantLandingTemplate({
               <div className="flex items-center justify-between p-6 border-b border-white/10 bg-[#0E0B1B]/40">
                 <div>
                   <h3 className="text-2xl font-black tracking-tight text-white">{t("landing.booking.title", "Book a Table")}</h3>
-                  <p className="text-xs text-[#FF1A43] mt-1 font-bold">{t("landing.booking.subtitle", "Submit a VIP reservation request instantly")}</p>
+                  <p className="text-xs text-[#FF1A43] mt-1 font-bold">
+                    {t(
+                      "landing.booking.subtitle",
+                      "Sent straight to :venue — we’ll confirm on the phone you provide.",
+                      { venue: brandName },
+                    )}
+                  </p>
                 </div>
                 <button
                   onClick={() => setIsBookingOpen(false)}
@@ -2138,7 +2185,11 @@ export function RestaurantLandingTemplate({
                   <div className="space-y-2">
                     <h4 className="text-2xl font-black text-white">{t("landing.booking.success", "Reservation Requested!")}</h4>
                     <p className="text-white/80 max-w-sm text-sm">
-                      {t("landing.booking.success_desc", "Thank you, :name. Your reservation request has been received. We will contact you to confirm.", { name: successReservation.customer_name })}
+                      {t(
+                        "landing.booking.success_desc",
+                        "Thank you, :name. Your request is with the :venue reservations team. We’ll call you shortly to confirm.",
+                        { name: successReservation.customer_name, venue: brandName },
+                      )}
                     </p>
                   </div>
                   
