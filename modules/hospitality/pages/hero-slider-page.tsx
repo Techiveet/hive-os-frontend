@@ -1114,19 +1114,24 @@ export default function HeroSliderPage() {
       {/* ── Tabs Container ── */}
       <Tabs defaultValue="slider" value={activeTab} onValueChange={handleTabChange} className="w-full">
         {/* Tabs are ordered top-to-bottom to match the order sections appear on the landing page */}
-        <TabsList className="flex w-full flex-wrap h-auto gap-1 mb-6 justify-start">
-          <TabsTrigger value="slider" className="gap-1.5"><GalleryHorizontalEnd className="h-3.5 w-3.5" /> 1. Hero Slides</TabsTrigger>
-          <TabsTrigger value="stats" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> 2. Stats</TabsTrigger>
-          <TabsTrigger value="specialties" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" /> 3. Specialties</TabsTrigger>
-          <TabsTrigger value="menus" className="gap-1.5"><Box className="h-3.5 w-3.5" /> 4. Menus</TabsTrigger>
-          <TabsTrigger value="services" className="gap-1.5"><ConciergeBell className="h-3.5 w-3.5" /> 5. Services</TabsTrigger>
-          <TabsTrigger value="gallery" className="gap-1.5"><Images className="h-3.5 w-3.5" /> 6. Gallery</TabsTrigger>
-          <TabsTrigger value="cellar" className="gap-1.5"><Wine className="h-3.5 w-3.5" /> 7. Cellar</TabsTrigger>
-          <TabsTrigger value="experience" className="gap-1.5"><Sofa className="h-3.5 w-3.5" /> 8. Experience</TabsTrigger>
-          <TabsTrigger value="testimonials" className="gap-1.5"><Quote className="h-3.5 w-3.5" /> 9. Testimonials</TabsTrigger>
-          <TabsTrigger value="faqs" className="gap-1.5"><HelpCircle className="h-3.5 w-3.5" /> 10. FAQs</TabsTrigger>
-          <TabsTrigger value="location" className="gap-1.5"><MapPin className="h-3.5 w-3.5" /> 11. Location &amp; CTA</TabsTrigger>
-        </TabsList>
+        <div
+          className="custom-scrollbar mb-6 w-full overflow-x-auto overflow-y-hidden pb-2"
+          style={{ scrollbarColor: "hsl(var(--primary) / 0.2) transparent" }}
+        >
+          <TabsList className="flex h-9 w-max min-w-full flex-nowrap gap-1">
+            <TabsTrigger value="slider" className="flex-none gap-1.5 whitespace-nowrap"><GalleryHorizontalEnd className="h-3.5 w-3.5" /> 1. Hero Slides</TabsTrigger>
+            <TabsTrigger value="stats" className="flex-none gap-1.5 whitespace-nowrap"><BarChart3 className="h-3.5 w-3.5" /> 2. Stats</TabsTrigger>
+            <TabsTrigger value="specialties" className="flex-none gap-1.5 whitespace-nowrap"><Sparkles className="h-3.5 w-3.5" /> 3. Specialties</TabsTrigger>
+            <TabsTrigger value="menus" className="flex-none gap-1.5 whitespace-nowrap"><Box className="h-3.5 w-3.5" /> 4. Menus</TabsTrigger>
+            <TabsTrigger value="services" className="flex-none gap-1.5 whitespace-nowrap"><ConciergeBell className="h-3.5 w-3.5" /> 5. Services</TabsTrigger>
+            <TabsTrigger value="gallery" className="flex-none gap-1.5 whitespace-nowrap"><Images className="h-3.5 w-3.5" /> 6. Gallery</TabsTrigger>
+            <TabsTrigger value="cellar" className="flex-none gap-1.5 whitespace-nowrap"><Wine className="h-3.5 w-3.5" /> 7. Cellar</TabsTrigger>
+            <TabsTrigger value="experience" className="flex-none gap-1.5 whitespace-nowrap"><Sofa className="h-3.5 w-3.5" /> 8. Experience</TabsTrigger>
+            <TabsTrigger value="testimonials" className="flex-none gap-1.5 whitespace-nowrap"><Quote className="h-3.5 w-3.5" /> 9. Testimonials</TabsTrigger>
+            <TabsTrigger value="faqs" className="flex-none gap-1.5 whitespace-nowrap"><HelpCircle className="h-3.5 w-3.5" /> 10. FAQs</TabsTrigger>
+            <TabsTrigger value="location" className="flex-none gap-1.5 whitespace-nowrap"><MapPin className="h-3.5 w-3.5" /> 11. Location &amp; CTA</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="slider" className="outline-none">
           {/* ── Layout: preview + grid ── */}
