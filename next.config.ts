@@ -108,6 +108,10 @@ const nextConfig: NextConfig = {
         source: "/sanctum/:path*",
         destination: `${apiOrigin}/sanctum/:path*`,
       },
+      {
+        source: "/s/:token",
+        destination: `${apiOrigin}/s/:token`,
+      },
     ];
   },
 

@@ -154,6 +154,7 @@ type FileManagerMediaDetails = {
   signed_url?: string;
   thumbnail?: string;
   hls_path?: string;
+  embedded_subtitles_scanned?: boolean;
   artist?: string;
   subtitles?: FileManagerSubtitle[];
   video_versions?: FileManagerVideoVersion[];
@@ -342,10 +343,14 @@ const SimpleMenu = ({
           <div
             ref={menuRef}
             onClick={(e) => {
+              // Stop the click from reaching the card/folder handlers underneath,
+              // then close the menu. MenuItem must NOT stop propagation itself,
+              // otherwise this handler never runs and the menu stays open.
               e.stopPropagation();
               setOpen(false);
             }}
-            className="fixed w-52 bg-background border border-border/50 rounded-xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)] z-[999999] flex flex-col py-1.5 animate-in fade-in zoom-in-95 duration-100"
+            // Kept below the dialogs (z-[9998]/z-[9999]) so it can never cover a modal.
+            className="fixed w-52 bg-background border border-border/50 rounded-xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)] z-[9990] flex flex-col py-1.5 animate-in fade-in zoom-in-95 duration-100"
             style={{ top: coords.top, left: coords.left }}
           >
             {children}
@@ -360,8 +365,8 @@ const MenuItem = ({ icon, label, onClick, danger }: MenuItemProps) => (
   <button
     type="button"
     onClick={(e) => {
-      e.stopPropagation();
-      onClick && onClick(e);
+      // Let the click bubble to the portal wrapper in SimpleMenu, which closes the menu.
+      onClick?.(e);
     }}
     className={cn(
       "flex items-center justify-start gap-3 w-full px-4 py-2.5 text-sm text-left hover:bg-muted/60 transition-colors font-medium",
@@ -622,6 +627,13 @@ export function FileManagerClient({
     id: number;
     type: "file" | "folder";
   } | null>(null);
+
+  // --- Delete Confirmation States ---
+  const [deletePlaylistOpen, setDeletePlaylistOpen] = React.useState(false);
+  const [deletingPlaylistId, setDeletingPlaylistId] = React.useState<number | null>(null);
+
+  const [moveToTrashOpen, setMoveToTrashOpen] = React.useState(false);
+  const [forceDeleteOpen, setForceDeleteOpen] = React.useState(false);
 
   // ── Authenticated download helper ─────────────────────────────────────────
   // Uses fetch with auth headers so tenants also get the correct file.
@@ -889,6 +901,8 @@ export function FileManagerClient({
       currentMedia.url !== nextMedia.url ||
       currentMedia.thumbnail !== nextMedia.thumbnail ||
       currentMedia.title !== nextMedia.title ||
+      currentMedia.embedded_subtitles_scanned !==
+        nextMedia.embedded_subtitles_scanned ||
       (currentMedia.subtitles?.length ?? 0) !==
         (nextMedia.subtitles?.length ?? 0);
 
@@ -900,7 +914,8 @@ export function FileManagerClient({
   React.useEffect(() => {
     const waitingForAdaptiveQuality = Boolean(
       selectedFile?.media_details?.mime_type?.startsWith("video/") &&
-      !selectedFile?.media_details?.hls_path,
+      (!selectedFile?.media_details?.hls_path ||
+        !selectedFile?.media_details?.embedded_subtitles_scanned),
     );
 
     if (!waitingForAdaptiveQuality) {
@@ -1003,6 +1018,8 @@ export function FileManagerClient({
       toast.success("Recycle bin emptied");
       setSelectedItems([]);
     },
+    onError: (err: unknown) =>
+      toast.error(getErrorMessage(err, "Failed to empty trash")),
   });
 
   const restoreItemsMut = useMutation({
@@ -1019,6 +1036,8 @@ export function FileManagerClient({
       toast.success("Items restored successfully");
       setSelectedItems([]);
     },
+    onError: (err: unknown) =>
+      toast.error(getErrorMessage(err, "Failed to restore items")),
   });
 
   const forceDeleteItemsMut = useMutation({
@@ -1037,14 +1056,23 @@ export function FileManagerClient({
       queryClient.invalidateQueries({ queryKey: ["files"] });
       toast.success("Items permanently deleted");
       setSelectedItems([]);
+      setForceDeleteOpen(false);
     },
+    onError: (err: unknown) =>
+      toast.error(getErrorMessage(err, "Failed to delete items permanently")),
   });
 
   const shareLinkMut = useMutation({
     mutationFn: async ({ type, id }: ShareItemPayload) => {
       const res = await fetch(
         `${getBackendApiRoot()}/files/${type}/${id}/share`,
-        { method: "POST", headers: getAuthHeaders() },
+        {
+          method: "POST",
+          headers: getAuthHeaders({
+            "X-Frontend-Origin":
+              typeof window !== "undefined" ? window.location.origin : "",
+          }),
+        },
       );
       if (!res.ok) {
         const error = await res.json().catch(() => null);
@@ -1053,11 +1081,27 @@ export function FileManagerClient({
       return res.json();
     },
     onSuccess: (data) => {
-      navigator.clipboard.writeText(
-        data.link || "https://hive.os/share/mock-link-8x92a",
-      );
+      const token =
+        typeof data?.token === "string" && data.token.length > 0
+          ? data.token
+          : typeof data?.link === "string"
+            ? data.link.split("/s/").pop()?.split(/[?#]/)[0]
+            : null;
+      const shareUrl =
+        token && typeof window !== "undefined"
+          ? `${window.location.origin}/s/${token}`
+          : data?.link;
+
+      if (!shareUrl) {
+        toast.error("Share link was created but could not be copied.");
+        return;
+      }
+
+      navigator.clipboard.writeText(shareUrl);
       toast.success("Secure sharing link copied to clipboard!");
     },
+    onError: (err: unknown) =>
+      toast.error(getErrorMessage(err, "Failed to generate link")),
   });
 
   // ==============================================================================
@@ -1137,6 +1181,8 @@ export function FileManagerClient({
       setSelectedFile(null);
       setSelectedItems([]);
     },
+    onError: (err: unknown) =>
+      toast.error(getErrorMessage(err, "Failed to move to recycle bin")),
   });
 
   const toggleFavoriteMut = useMutation({
@@ -1157,6 +1203,87 @@ export function FileManagerClient({
       if (!res.ok) throw new Error("Failed to toggle favorite");
       return res.json();
     },
+    onMutate: async (variables) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ["files"] }),
+        queryClient.cancelQueries({ queryKey: ["folders"] }),
+      ]);
+
+      const previousFiles = queryClient.getQueriesData({
+        queryKey: ["files"],
+      });
+      const previousFolders = queryClient.getQueriesData({
+        queryKey: ["folders"],
+      });
+      const updateFavorite = (value: unknown, collectionKey: "files" | "folders") => {
+        if (!value || typeof value !== "object") return value;
+        const record = value as Record<string, unknown>;
+        const responseData = record.data;
+        if (!responseData || typeof responseData !== "object") return value;
+        const collection = (responseData as Record<string, unknown>)[collectionKey];
+        const items = Array.isArray(collection)
+          ? collection
+          : collection &&
+              typeof collection === "object" &&
+              Array.isArray((collection as { data?: unknown }).data)
+            ? (collection as { data: unknown[] }).data
+            : null;
+        if (!items) return value;
+
+        return {
+          ...record,
+          data: {
+            ...responseData,
+            [collectionKey]: Array.isArray(collection)
+              ? items.map((item) =>
+                  item &&
+                  typeof item === "object" &&
+                  (item as { id?: number }).id === variables.id
+                    ? {
+                        ...item,
+                        is_favorite: !(item as FileManagerFile).is_favorite,
+                      }
+                    : item,
+                )
+              : {
+                  ...(collection as Record<string, unknown>),
+                  data: items.map((item) =>
+                    item &&
+                    typeof item === "object" &&
+                    (item as { id?: number }).id === variables.id
+                      ? {
+                          ...item,
+                          is_favorite: !(item as FileManagerFile).is_favorite,
+                        }
+                      : item,
+                  ),
+                },
+          },
+        };
+      };
+
+      queryClient.setQueriesData(
+        { queryKey: ["files"] },
+        (value) => updateFavorite(value, "files"),
+      );
+      queryClient.setQueriesData(
+        { queryKey: ["folders"] },
+        (value) => updateFavorite(value, "folders"),
+      );
+
+      if (
+        selectedFile &&
+        selectedFile.id === variables.id &&
+        variables.type === "file"
+      ) {
+        setSelectedFile({
+          ...selectedFile,
+          is_favorite: !selectedFile.is_favorite,
+        });
+      }
+
+      return { previousFiles, previousFolders };
+    },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["files"] });
       queryClient.invalidateQueries({ queryKey: ["folders"] });
@@ -1176,14 +1303,36 @@ export function FileManagerClient({
         selectedFile.id === variables.id &&
         variables.type === "file"
       ) {
-        const newStatus = !selectedFile.is_favorite;
-        setSelectedFile({ ...selectedFile, is_favorite: newStatus });
+        const newStatus = Boolean(data.is_favorite);
+        setSelectedFile((current) =>
+          current && current.id === variables.id
+            ? { ...current, is_favorite: newStatus }
+            : current,
+        );
         toast.success(
           newStatus ? "Added to favorites! ❤️" : "Removed from favorites 🤍",
         );
       } else {
         toast.success("Favorite status updated");
       }
+    },
+    onError: (err: unknown, _variables, context) => {
+      context?.previousFiles.forEach(([queryKey, data]) =>
+        queryClient.setQueryData(queryKey, data),
+      );
+      context?.previousFolders.forEach(([queryKey, data]) =>
+        queryClient.setQueryData(queryKey, data),
+      );
+      queryClient.invalidateQueries({ queryKey: ["files"] });
+      queryClient.invalidateQueries({ queryKey: ["folders"] });
+      if (selectedFile && _variables.type === "file") {
+        setSelectedFile((current) =>
+          current?.id === _variables.id
+            ? { ...current, is_favorite: !current.is_favorite }
+            : current,
+        );
+      }
+      toast.error(getErrorMessage(err, "Failed to update favorite"));
     },
   });
 
@@ -1203,6 +1352,8 @@ export function FileManagerClient({
       setIsCreateFolderOpen(false);
       setFolderName("");
     },
+    onError: (err: unknown) =>
+      toast.error(getErrorMessage(err, "Failed to create folder")),
   });
 
   const addToPlaylistMut = useMutation({
@@ -1249,6 +1400,8 @@ export function FileManagerClient({
       queryClient.invalidateQueries({ queryKey: ["playlists"] });
       toast.success("Playlist created! 🎧");
     },
+    onError: (err: unknown) =>
+      toast.error(getErrorMessage(err, "Failed to create playlist")),
   });
 
   const deletePlaylistMut = useMutation({
@@ -1263,9 +1416,34 @@ export function FileManagerClient({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["playlists"] });
       toast.success("Playlist deleted");
+      setDeletePlaylistOpen(false);
+      setDeletingPlaylistId(null);
       if (activePlaylistId) setActivePlaylistId(null);
     },
+    onError: (err: unknown) =>
+      toast.error(getErrorMessage(err, "Failed to delete playlist")),
   });
+
+  // --- Delete Confirmation Handlers ---
+  const handleDeletePlaylist = (id: number) => {
+    setDeletingPlaylistId(id);
+    setDeletePlaylistOpen(true);
+  };
+
+  const confirmDeletePlaylist = () => {
+    if (deletingPlaylistId === null) return;
+    deletePlaylistMut.mutate(deletingPlaylistId);
+  };
+
+  const handleMoveToTrash = () => {
+    selectedItems.forEach((item: FileManagerItemRef) => deleteMut.mutate(item));
+    setMoveToTrashOpen(false);
+  };
+
+  const handleForceDelete = () => {
+    forceDeleteItemsMut.mutate(selectedItems);
+    setForceDeleteOpen(false);
+  };
 
   const uploadFileMut = useMutation({
     mutationFn: async (): Promise<{ queued: boolean }> => {
@@ -1479,6 +1657,8 @@ export function FileManagerClient({
         });
       }
     },
+    onError: (err: unknown) =>
+      toast.error(getErrorMessage(err, "Failed to delete subtitle")),
   });
 
   // --- UI Handlers ---
@@ -1970,7 +2150,7 @@ export function FileManagerClient({
       );
     }
     if (
-      /(document|msword|excel|spreadsheet|powerpoint|presentation|csv)/i.test(
+      /(document|msword|word|officedocument|openxmlformats|excel|spreadsheet|powerpoint|presentation|csv)/i.test(
         mime,
       )
     )
@@ -1980,6 +2160,9 @@ export function FileManagerClient({
             url={getStreamUrl(safeUrl)}
             fetchUrl={isProtectedTenantFileUrl(safeUrl) ? getStreamUrl(safeUrl) : undefined}
             fetchHeaders={isProtectedTenantFileUrl(safeUrl) ? getAuthHeaders() : undefined}
+            previewUrl={`${getBackendApiRoot()}/files/${file.id}/document-preview`}
+            previewHeaders={getAuthHeaders()}
+            title={mediaTitle}
             type="office"
           />
         </div>
@@ -2125,7 +2308,7 @@ export function FileManagerClient({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        deletePlaylistMut.mutate(pl.id);
+                        handleDeletePlaylist(pl.id);
                       }}
                       className="opacity-0 group-hover/pl:opacity-100 p-1 hover:bg-red-500/20 rounded-md text-red-500 transition-all ml-2"
                       title="Delete Playlist"
@@ -2217,7 +2400,7 @@ export function FileManagerClient({
                   <Button
                     size="sm"
                     className="bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold whitespace-nowrap"
-                    onClick={() => forceDeleteItemsMut.mutate(selectedItems)}
+                    onClick={() => setForceDeleteOpen(true)}
                   >
                     {forceDeleteItemsMut.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -2240,9 +2423,7 @@ export function FileManagerClient({
                   <Button
                     size="sm"
                     className="bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold whitespace-nowrap"
-                    onClick={() =>
-                      selectedItems.forEach((item) => deleteMut.mutate(item))
-                    }
+                    onClick={() => setMoveToTrashOpen(true)}
                   >
                     <Trash2 className="h-4 w-4 mr-2" /> Move to Trash
                   </Button>
@@ -2650,11 +2831,10 @@ export function FileManagerClient({
                                         danger
                                         icon={<AlertTriangle />}
                                         label="Delete Forever"
-                                        onClick={() =>
-                                          forceDeleteItemsMut.mutate([
-                                            { type: "folder", id: folder.id },
-                                          ])
-                                        }
+                                        onClick={() => {
+                                          setSelectedItems([{ type: "folder", id: folder.id }]);
+                                          setForceDeleteOpen(true);
+                                        }}
                                       />
                                     </>
                                   ) : (
@@ -2662,12 +2842,10 @@ export function FileManagerClient({
                                       danger
                                       icon={<Trash2 />}
                                       label="Move to Trash"
-                                      onClick={() =>
-                                        deleteMut.mutate({
-                                          type: "folder",
-                                          id: folder.id,
-                                        })
-                                      }
+                                      onClick={() => {
+                                        setSelectedItems([{ type: "folder", id: folder.id }]);
+                                        setMoveToTrashOpen(true);
+                                      }}
                                     />
                                   )}
                                 </SimpleMenu>
@@ -3002,11 +3180,10 @@ export function FileManagerClient({
                                         danger
                                         icon={<AlertTriangle />}
                                         label="Delete Forever"
-                                        onClick={() =>
-                                          forceDeleteItemsMut.mutate([
-                                            { type: "file", id: file.id },
-                                          ])
-                                        }
+                                        onClick={() => {
+                                          setSelectedItems([{ type: "file", id: file.id }]);
+                                          setForceDeleteOpen(true);
+                                        }}
                                       />
                                     </>
                                   ) : (
@@ -3014,12 +3191,10 @@ export function FileManagerClient({
                                       danger
                                       icon={<Trash2 />}
                                       label="Move to Trash"
-                                      onClick={() =>
-                                        deleteMut.mutate({
-                                          type: "file",
-                                          id: file.id,
-                                        })
-                                      }
+                                      onClick={() => {
+                                        setSelectedItems([{ type: "file", id: file.id }]);
+                                        setMoveToTrashOpen(true);
+                                      }}
                                     />
                                   )}
                                 </SimpleMenu>
@@ -3556,15 +3731,26 @@ export function FileManagerClient({
                             id: selectedFile.id,
                           })
                         }
+                        disabled={toggleFavoriteMut.isPending}
                       >
-                        <Star
-                          className={cn(
-                            "h-4 w-4 mr-2 shrink-0",
-                            selectedFile.is_favorite && "fill-yellow-500",
-                          )}
-                        />{" "}
+                        {toggleFavoriteMut.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 shrink-0 animate-spin" />
+                        ) : (
+                          <Star
+                            className={cn(
+                              "h-4 w-4 mr-2 shrink-0",
+                              selectedFile.is_favorite && "fill-yellow-500",
+                            )}
+                          />
+                        )}
                         <span className="truncate">
-                          {selectedFile.is_favorite ? "Unfavorite" : "Favorite"}
+                          {toggleFavoriteMut.isPending
+                            ? selectedFile.is_favorite
+                              ? "Removing favorite..."
+                              : "Adding favorite..."
+                            : selectedFile.is_favorite
+                              ? "Unfavorite"
+                              : "Favorite"}
                         </span>
                       </Button>
                     )}
@@ -3992,6 +4178,69 @@ export function FileManagerClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Playlist Confirmation Dialog */}
+      <AlertDialog open={deletePlaylistOpen} onOpenChange={setDeletePlaylistOpen}>
+        <AlertDialogContent className="rounded-[2rem] border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this playlist? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl border-border/50">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeletePlaylist}
+              className="rounded-xl bg-red-500 hover:bg-red-600 text-white shadow-md font-bold"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Move to Trash Confirmation Dialog */}
+      <AlertDialog open={moveToTrashOpen} onOpenChange={setMoveToTrashOpen}>
+        <AlertDialogContent className="rounded-[2rem] border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Move to Trash</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to move {selectedItems.length} item(s) to the recycle bin? You can restore them within 30 days.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl border-border/50">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMoveToTrash}
+              className="rounded-xl bg-red-500 hover:bg-red-600 text-white shadow-md font-bold"
+            >
+              Move to Trash
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Force Delete Confirmation Dialog */}
+      <AlertDialog open={forceDeleteOpen} onOpenChange={setForceDeleteOpen}>
+        <AlertDialogContent className="rounded-[2rem] border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Forever</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete {selectedItems.length} item(s)? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl border-border/50">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleForceDelete}
+              className="rounded-xl bg-red-500 hover:bg-red-600 text-white shadow-md font-bold"
+            >
+              Delete Forever
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

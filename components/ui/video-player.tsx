@@ -477,6 +477,22 @@ export function VideoPlayer({
     setDurationSeconds(0);
 
     const useHls = isHlsSource;
+    let nativeFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    const fallbackToNative = () => {
+      if (!authorizedNativeSrc || !video.isConnected) return;
+
+      pendingStreamSeekRef.current = video.currentTime || 0;
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+
+      video.addEventListener('canplay', handleCanPlay);
+      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      video.addEventListener('error', handleNativeError);
+      video.src = authorizedNativeSrc;
+      video.load();
+    };
     const handleCanPlay = () => setIsBuffering(false);
     const handleLoadedMetadata = () => {
       if (pendingStreamSeekRef.current !== null) {
@@ -544,6 +560,11 @@ export function VideoPlayer({
         hlsRef.current = hls;
         hls.loadSource(authorizedSrc);
         hls.attachMedia(video);
+        nativeFallbackTimer = setTimeout(() => {
+          if (video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+            fallbackToNative();
+          }
+        }, 8000);
         
         hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
            setIsBuffering(false);
@@ -632,6 +653,9 @@ export function VideoPlayer({
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
+      }
+      if (nativeFallbackTimer) {
+        clearTimeout(nativeFallbackTimer);
       }
     };
   }, [authToken, authorizedNativeSrc, authorizedSrc, isHlsSource, nativeSrc, src]);

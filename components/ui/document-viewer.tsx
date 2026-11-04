@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { FileText, Download, ExternalLink, File as FileIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { authenticatedDownload } from '@/lib/authenticated-download';
+import { PdfViewer } from '@/components/ui/pdf-viewer';
 
 interface DocumentViewerProps {
   url: string;
@@ -12,6 +13,8 @@ interface DocumentViewerProps {
   fetchUrl?: string;
   fetchHeaders?: Record<string, string>;
   downloadUrl?: string;
+  previewUrl?: string;
+  previewHeaders?: Record<string, string>;
   title?: string;
 }
 
@@ -22,6 +25,8 @@ export function DocumentViewer({
   fetchUrl,
   fetchHeaders,
   downloadUrl,
+  previewUrl,
+  previewHeaders,
   title = 'Document',
 }: DocumentViewerProps) {
   const isOffice = type === 'office';
@@ -182,11 +187,20 @@ export function DocumentViewer({
             <pre className="h-full max-h-[60vh] overflow-auto whitespace-pre-wrap break-words p-5 text-xs leading-6 text-foreground">{textContent || 'This file is empty.'}</pre>
           )}
         </div>
+      ) : isOffice && previewUrl ? (
+        <div className="mt-6 min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/40 bg-background/40">
+          <PdfViewer
+            src={previewUrl}
+            fetchUrl={previewUrl}
+            fetchHeaders={previewHeaders ?? fetchHeaders}
+            title={`${title} preview`}
+          />
+        </div>
       ) : (
         <div className="mt-6 flex flex-1 items-center justify-center rounded-2xl border border-border/40 bg-background/40 px-6 py-10">
           <p className="max-w-sm text-xs leading-6 text-muted-foreground">
             {isOffice
-              ? 'Office previews depend on public document endpoints. On secure tenant and localhost sessions, use Open or Download for a clean handoff.'
+              ? 'Inline preview is unavailable for this Office document. You can still open or download it securely.'
               : errorMessage || 'This file type does not support inline preview yet, but you can still open or download it securely.'}
           </p>
         </div>
