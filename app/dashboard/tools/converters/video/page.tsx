@@ -2,7 +2,8 @@
 
 import React, { useState, useRef, useCallback } from "react";
 import Link from "next/link";
-import { Home, Upload, Download, X, Loader2, Music, Film, Zap, Server } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Home, Upload, Download, X, Loader2, Music, Film, Server } from "lucide-react";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/errors";
-import { getAccessToken, getBackendApiRoot } from "@/lib/runtime-context";
+import { getAuthHeaders, getBackendApiRoot } from "@/lib/runtime-context";
 import { VideoPlayer } from "@/components/ui/video-player";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -28,13 +29,30 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-export default function VideoAudioConverterPage() {
-  const [mode, setMode] = useState<Mode>("video");
+function isVideoFormat(value: string): value is VideoFormat {
+  return (VIDEO_FORMATS as string[]).includes(value);
+}
+
+function isAudioFormat(value: string): value is AudioFormat {
+  return (AUDIO_FORMATS as string[]).includes(value);
+}
+
+function VideoAudioConverterPageInner() {
+  const searchParams = useSearchParams();
+  const initialMode: Mode = searchParams.get("mode") === "audio" ? "audio" : "video";
+  const initialFormatParam = (searchParams.get("format") || "").toLowerCase();
+
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [converting, setConverting] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [outputFormat, setOutputFormat] = useState<VideoFormat | AudioFormat>("mp4");
+  const [outputFormat, setOutputFormat] = useState<VideoFormat | AudioFormat>(() => {
+    if (initialMode === "audio") {
+      return isAudioFormat(initialFormatParam) ? initialFormatParam : "mp3";
+    }
+    return isVideoFormat(initialFormatParam) ? initialFormatParam : "mp4";
+  });
   const [quality, setQuality] = useState(80);
   const [compress, setCompress] = useState(false);
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
@@ -42,6 +60,7 @@ export default function VideoAudioConverterPage() {
   const [outputSize, setOutputSize] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const skipNextModeReset = useRef(true);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setIsDragging(false);
@@ -50,8 +69,26 @@ export default function VideoAudioConverterPage() {
   }, []);
 
   React.useEffect(() => {
+    const nextMode: Mode = searchParams.get("mode") === "audio" ? "audio" : "video";
+    const nextFormat = (searchParams.get("format") || "").toLowerCase();
+    skipNextModeReset.current = true;
+    setMode(nextMode);
+    if (nextMode === "audio") {
+      setOutputFormat(isAudioFormat(nextFormat) ? nextFormat : "mp3");
+    } else {
+      setOutputFormat(isVideoFormat(nextFormat) ? nextFormat : "mp4");
+    }
+  }, [searchParams]);
+
+  React.useEffect(() => {
+    // Skip deep-link / query updates so presets like ?mode=audio&format=ogg stick.
+    if (skipNextModeReset.current) {
+      skipNextModeReset.current = false;
+      return;
+    }
     setOutputFormat(mode === "video" ? "mp4" : "mp3");
-    setFile(null); setOutputUrl(null);
+    setFile(null);
+    setOutputUrl(null);
   }, [mode]);
 
   // Simulated progress (server-side — we don't get real progress %)
@@ -85,10 +122,9 @@ export default function VideoAudioConverterPage() {
       formData.append("quality", String(quality));
       formData.append("compress", String(compress));
 
-      const token = getAccessToken();
       const res = await fetch(`${getBackendApiRoot()}/convert/media`, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: getAuthHeaders(),
         body: formData,
       });
 
@@ -353,5 +389,19 @@ export default function VideoAudioConverterPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VideoAudioConverterPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+          Loading converter...
+        </div>
+      }
+    >
+      <VideoAudioConverterPageInner />
+    </React.Suspense>
   );
 }

@@ -131,9 +131,10 @@ function convertTemperature(value: number, from: string, to: string): number {
 
 function convertValue(value: number, from: string, to: string, category: string): number {
   if (category === "temperature") return convertTemperature(value, from, to);
-  const cat = CATEGORIES[category];
-  const base = value * cat.units[from].toBase;
-  return base / cat.units[to].toBase;
+  const fromDef = CATEGORIES[category]?.units?.[from];
+  const toDef = CATEGORIES[category]?.units?.[to];
+  if (!fromDef || !toDef) return Number.NaN;
+  return (value * fromDef.toBase) / toDef.toBase;
 }
 
 function formatResult(n: number): string {
@@ -153,33 +154,34 @@ export default function UnitConverterPage() {
 
   const cat = CATEGORIES[category];
   const units = Object.entries(cat.units);
+  const hasValidUnits = Boolean(cat.units[fromUnit] && cat.units[toUnit]);
 
-  // When category changes, reset units to first two
-  React.useEffect(() => {
-    const keys = Object.keys(CATEGORIES[category].units);
+  const selectCategory = (key: string) => {
+    const keys = Object.keys(CATEGORIES[key].units);
+    setCategory(key);
     setFromUnit(keys[0]);
     setToUnit(keys[1] ?? keys[0]);
     setInputVal("1");
-  }, [category]);
+  };
 
   const result = useMemo(() => {
     const num = parseFloat(inputVal);
-    if (isNaN(num)) return "";
+    if (isNaN(num) || !hasValidUnits) return "";
     if (fromUnit === toUnit) return inputVal;
     return formatResult(convertValue(num, fromUnit, toUnit, category));
-  }, [inputVal, fromUnit, toUnit, category]);
+  }, [inputVal, fromUnit, toUnit, category, hasValidUnits]);
 
   // All unit conversions for the "All conversions" panel
   const allConversions = useMemo(() => {
     const num = parseFloat(inputVal);
-    if (isNaN(num)) return [];
+    if (isNaN(num) || !cat.units[fromUnit]) return [];
     return units.map(([key, def]) => ({
       key,
       label: def.label,
       symbol: def.symbol,
       value: key === fromUnit ? num : formatResult(convertValue(num, fromUnit, key, category)),
     }));
-  }, [inputVal, fromUnit, category, units]);
+  }, [inputVal, fromUnit, category, units, cat.units]);
 
   const swap = () => {
     const prevFrom = fromUnit;
@@ -238,7 +240,7 @@ export default function UnitConverterPage() {
               {Object.entries(CATEGORIES).map(([key, c]) => (
                 <button
                   key={key}
-                  onClick={() => setCategory(key)}
+                  onClick={() => selectCategory(key)}
                   className={cn(
                     "flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-center transition-all duration-200",
                     category === key
@@ -371,7 +373,8 @@ export default function UnitConverterPage() {
               {units.slice(0, 6).map(([key, def]) => {
                 const val = parseFloat(inputVal) || 1;
                 const from = Object.keys(cat.units)[0];
-                const res = key === from ? val : convertValue(val, from, key, category);
+                const converted = key === from ? val : convertValue(val, from, key, category);
+                const res = Number.isFinite(converted) ? converted : val;
                 return (
                   <div
                     key={key}
