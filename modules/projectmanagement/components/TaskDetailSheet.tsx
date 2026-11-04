@@ -63,6 +63,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { TaskTimer } from "./TaskTimer";
 import { History as HistoryIcon, Clock, Trash2 as TrashIcon } from "lucide-react";
 import { useTranslation } from "@/store/use-translation";
+import { useRouter } from "next/navigation";
 
 interface TaskDetailModalProps {
   taskId: string | null;
@@ -88,6 +89,7 @@ const STORY_POINTS = [1, 2, 3, 5, 8, 13, 21];
 
 export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailModalProps) {
   const { t } = useTranslation();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useUser();
   const isSoftwareDev = user?.business_type?.toLowerCase()?.replace('-', ' ') === 'software development';
@@ -523,13 +525,40 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
     return ids;
   }, [groupedComments]);
 
+  const openAttachmentInStorage = (file: any) => {
+    const path =
+      file?.path ||
+      file?.media_details?.relative_path ||
+      file?.file_entry?.media_details?.relative_path ||
+      null;
+
+    if (!path) {
+      toast.error(
+        t(
+          "project_management.attachment_missing_path",
+          "This attachment cannot be opened in storage.",
+        ),
+      );
+      return;
+    }
+
+    const projectId = task?.project_id;
+    const backTo = projectId
+      ? `/dashboard/project-management/projects/${projectId}${taskId ? `?taskId=${taskId}` : ""}`
+      : "/dashboard/project-management/projects";
+
+    router.push(
+      `/dashboard/storage?path=${encodeURIComponent(path)}&backTo=${encodeURIComponent(backTo)}`,
+    );
+  };
+
   const renderFilePreview = (file: any) => {
     if (!file) return null;
-    const mime = file.mime_type || '';
+    const mime = file.mime_type || file.media_details?.mime_type || "";
     const safeUrl = getStorageUrl(file.url);
-    const mediaTitle = file.name || 'Attachment';
+    const mediaTitle = file.name || "Attachment";
 
-    if (mime.startsWith('image/')) {
+    if (mime.startsWith("image/")) {
       return (
         <div className="w-full aspect-video sm:aspect-square rounded-2xl overflow-hidden border border-border/40 shadow-inner">
            <ImageViewer
@@ -542,24 +571,22 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
     }
     
     return (
-      <div className="flex items-center gap-3 p-3 bg-background/50 border border-border/40 rounded-xl hover:bg-background transition-colors group/file">
+      <button
+        type="button"
+        onClick={() => openAttachmentInStorage(file)}
+        className="flex w-full items-center gap-3 p-3 bg-background/50 border border-border/40 rounded-xl hover:bg-background transition-colors group/file text-left"
+      >
         <div className="h-10 w-10 rounded-lg bg-primary/5 flex items-center justify-center border border-border/30">
           <FileIcon className="h-5 w-5 text-primary/70" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-semibold truncate pr-2">{file.name}</p>
-          <div className="flex items-center gap-2">
-            <a 
-              href={file.url || "#"} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-[11px] text-primary hover:underline flex items-center gap-0.5 font-bold uppercase tracking-wider"
-            >
-              <ExternalLink className="h-2.5 w-2.5" /> Download
-            </a>
-          </div>
+          <p className="text-[11px] font-semibold truncate pr-2">{file.name || mediaTitle}</p>
+          <span className="text-[11px] text-primary flex items-center gap-0.5 font-bold uppercase tracking-wider">
+            <ExternalLink className="h-2.5 w-2.5" />{" "}
+            {t("project_management.open_in_storage", "Open in Storage")}
+          </span>
         </div>
-      </div>
+      </button>
     );
   };
 
@@ -1407,10 +1434,7 @@ export function TaskDetailSheet({ taskId, columns, onOpenChange }: TaskDetailMod
                               </div>
                               <div className="flex gap-1 shrink-0">
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => {
-                                  if (file.path) {
-                                    const url = `/dashboard/storage?path=${encodeURIComponent(file.path)}&backTo=${encodeURIComponent(`/dashboard/project-management/projects/${task?.project_id}`)}`;
-                                    window.location.href = url;
-                                  }
+                                  openAttachmentInStorage(file);
                                 }}>
                                   <Eye className="w-4 h-4" />
                                 </Button>

@@ -22,6 +22,7 @@ import { AudioPlayer } from "@/components/ui/audio-player";
 import { PdfViewer } from "@/components/ui/pdf-viewer";
 import { DocumentViewer } from "@/components/ui/document-viewer";
 import { Model3DViewer } from "@/components/ui/model-3d-viewer";
+import { useRouter } from "next/navigation";
 import { getAuthHeaders, getStreamUrl, getBackendStorageUrl, getBackendApiRoot } from "@/lib/runtime-context";
 import { isProtectedTenantFileUrl } from "@/components/ui/secure-asset-image";
 import { projectApi } from "../api";
@@ -61,6 +62,7 @@ const getStorageUrl = (url: string | null | undefined) => {
 
 export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
   const { t } = useTranslation();
+  const router = useRouter();
   const queryClient = useQueryClient();
 
   const [parentId, setParentId] = React.useState<number | null>(null);
@@ -486,13 +488,36 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
     }
   };
 
+  const openAttachmentInStorage = (file: ProjectAttachment) => {
+    const path =
+      file.path ||
+      (typeof file.media_details?.relative_path === "string"
+        ? file.media_details.relative_path
+        : null);
+
+    if (!path) {
+      toast.error(
+        t(
+          "project_management.attachment_missing_path",
+          "This attachment cannot be opened in storage.",
+        ),
+      );
+      return;
+    }
+
+    const backTo = `/dashboard/project-management/projects/${projectId}`;
+    router.push(
+      `/dashboard/storage?path=${encodeURIComponent(path)}&backTo=${encodeURIComponent(backTo)}`,
+    );
+  };
+
   const renderFilePreview = (file: ProjectAttachment) => {
     if (!file) return null;
-    const mime = file.mime_type || '';
+    const mime = file.mime_type || file.media_details?.mime_type || "";
     const safeUrl = getStorageUrl(file.url);
-    const mediaTitle = file.name || 'Attachment';
+    const mediaTitle = file.name || "Attachment";
 
-    if (mime.startsWith('image/')) {
+    if (typeof mime === "string" && mime.startsWith("image/")) {
       return (
         <div className="w-full aspect-video sm:aspect-square rounded-2xl overflow-hidden border border-border/40 shadow-inner group-hover/file:shadow-md transition-all">
            <ImageViewer src={safeUrl} fetchUrl={file.url?.includes('/api/v1/files/') ? file.url : `${getBackendApiRoot()}/files/${(file as any).id}/download`} alt={mediaTitle} />
@@ -500,7 +525,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
       );
     }
     
-    if (mime.startsWith('video/')) {
+    if (typeof mime === "string" && mime.startsWith("video/")) {
       return (
         <div className="flex aspect-video w-full items-center justify-center bg-black rounded-2xl border border-border/50 overflow-hidden shadow-inner relative">
           <VideoPlayer src={safeUrl} nativeSrc={safeUrl} className="w-full h-full" title={mediaTitle} authToken={typeof window !== 'undefined' ? localStorage.getItem('hive_token') : null} />
@@ -508,7 +533,7 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
       );
     }
 
-    if (mime === 'application/pdf') {
+    if (mime === "application/pdf") {
       return (
         <div className="aspect-[3/4] w-full rounded-2xl overflow-hidden border border-border/50 shadow-inner">
           <PdfViewer
@@ -522,17 +547,22 @@ export function ProjectDiscussion({ projectId }: ProjectDiscussionProps) {
     }
 
     return (
-      <div className="flex items-center gap-3 p-3 bg-background/50 border border-border/40 rounded-xl hover:bg-background transition-colors group/file">
+      <button
+        type="button"
+        onClick={() => openAttachmentInStorage(file)}
+        className="flex w-full items-center gap-3 p-3 bg-background/50 border border-border/40 rounded-xl hover:bg-background transition-colors group/file text-left"
+      >
         <div className="h-10 w-10 rounded-lg bg-primary/5 flex items-center justify-center border border-border/30">
           <FileIcon className="h-5 w-5 text-primary/70" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-semibold truncate pr-2">{file.name}</p>
-          <a href={file.url || "#"} target="_blank" rel="noopener noreferrer" className="text-[11px] text-primary hover:underline flex items-center gap-0.5 font-bold uppercase tracking-wider">
-            <ExternalLink className="h-2.5 w-2.5" /> Download
-          </a>
+          <p className="text-[11px] font-semibold truncate pr-2">{file.name || mediaTitle}</p>
+          <span className="text-[11px] text-primary flex items-center gap-0.5 font-bold uppercase tracking-wider">
+            <ExternalLink className="h-2.5 w-2.5" />{" "}
+            {t("project_management.open_in_storage", "Open in Storage")}
+          </span>
         </div>
-      </div>
+      </button>
     );
   };
 

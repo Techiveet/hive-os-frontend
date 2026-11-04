@@ -149,6 +149,7 @@ type FileManagerMediaDetails = {
   size?: number;
   human_size?: string;
   download_name?: string;
+  relative_path?: string;
   url?: string;
   public_url?: string;
   signed_url?: string;
@@ -174,6 +175,7 @@ type FileManagerFolder = {
 
 type FileManagerFile = {
   id: number;
+  folder_id?: number | null;
   is_favorite?: boolean;
   created_at: string;
   media_details?: FileManagerMediaDetails;
@@ -814,6 +816,7 @@ export function FileManagerClient({
 
   const [selectedFile, setSelectedFile] =
     React.useState<FileManagerFile | null>(null);
+  const deepLinkPathRef = React.useRef<string | null>(null);
   const [imageEditorActive, setImageEditorActive] = React.useState(false);
   const [folderName, setFolderName] = React.useState("");
   const [uploadBaseName, setUploadBaseName] = React.useState("");
@@ -882,6 +885,59 @@ export function FileManagerClient({
     () => toCollectionItems<FileManagerFile>(data?.data?.files),
     [data?.data?.files],
   );
+
+  React.useEffect(() => {
+    if (!initialFilePath || !canRead) {
+      return;
+    }
+
+    if (deepLinkPathRef.current === initialFilePath) {
+      return;
+    }
+
+    let active = true;
+
+    (async () => {
+      try {
+        const res = await fetch(
+          `${getBackendApiRoot()}/files/resolve?path=${encodeURIComponent(initialFilePath)}`,
+          { headers: getAuthHeaders() },
+        );
+
+        if (!res.ok) {
+          throw new Error("Failed to resolve attached storage path.");
+        }
+
+        const payload = await res.json();
+        const file = payload?.data as FileManagerFile | undefined;
+
+        if (!active || !file?.id) {
+          return;
+        }
+
+        deepLinkPathRef.current = initialFilePath;
+        setActiveFilter("all");
+        setActiveTypeFilter(null);
+        setActivePlaylistId(null);
+        setCurrentFolderId(file.folder_id ?? null);
+        setSearchQuery(
+          file.media_details?.name ||
+            file.media_details?.title ||
+            file.media_details?.relative_path?.split("/").pop() ||
+            "",
+        );
+        setSelectedFile(file);
+      } catch {
+        if (active) {
+          toast.error("Could not open the attached file in storage.");
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [initialFilePath, canRead]);
 
   React.useEffect(() => {
     if (!selectedFile) {
