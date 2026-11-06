@@ -1,5 +1,6 @@
 // frontend/hooks/use-permissions.ts
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { isTenantSession } from '@/lib/runtime-context';
 
 export function usePermissions() {
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -34,7 +35,13 @@ export function usePermissions() {
     return () => window.removeEventListener("hive_security_cleared", loadFromStorage);
   }, [loadFromStorage]);
 
-  const isSuperAdmin = useMemo(() => roles.includes('Super Admin') || roles.includes('Admin') || roles.includes('Tenant Admin'), [roles]);
+  // Match dashboard-access: Super Admin always; central Admin only on central.
+  // Tenant Admin must use real permission grants (API already enforces Spatie).
+  const isSuperAdmin = useMemo(() => {
+    if (roles.includes('Super Admin')) return true;
+    if (!isTenantSession() && roles.includes('Admin')) return true;
+    return false;
+  }, [roles]);
 
   const hasPermission = useCallback((permission: string) => {
     if (isSuperAdmin) return true;
@@ -47,9 +54,8 @@ export function usePermissions() {
   }, [isSuperAdmin, permissions]);
 
   const hasRole = useCallback((role: string) => {
-    if (isSuperAdmin) return true;
     return roles.includes(role);
-  }, [isSuperAdmin, roles]);
+  }, [roles]);
 
   return { permissions, roles, hasPermission, hasAnyPermission, hasRole, isLoaded, isSuperAdmin };
 }

@@ -15,7 +15,7 @@ import { AuditLogsClient } from "@/modules/core/components/audit-logs-client";
 
 export default function AuditLogsPage() {
   const router = useRouter();
-  const { permissions, roles, isLoaded } = usePermissions();
+  const { hasAnyPermission, isLoaded } = usePermissions();
   const { t, locale } = useTranslation();
   const { startTour } = useTour();
   const [accessStatus, setAccessStatus] = useState<
@@ -23,8 +23,12 @@ export default function AuditLogsPage() {
   >("checking");
 
   const viewLogged = useRef(false);
-  const canViewLogs =
-    roles.includes("Super Admin") || permissions.includes("view_logs");
+  const canViewLogs = hasAnyPermission([
+    "view_logs",
+    "view_audit_log",
+    "view_audit_entries",
+    "view_compliance_reports",
+  ]);
 
   useEffect(() => {
     document.title = "System Audit Logs | HIVE.OS";

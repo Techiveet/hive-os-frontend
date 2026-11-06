@@ -249,7 +249,17 @@ export function MobileSidebar() {
   const canAccessConverter =
     hasAnyPermission(["use_document_converter", "manage_storage"]) &&
     (!isTenantNode || hasModule("document_converter"));
-  const canAccessMail = !isTenantNode || hasMailboxModule;
+  const canAccessMail =
+    hasAnyPermission([
+      "view_mail",
+      "manage_mail",
+      "read_mail_messages",
+      "view_mail_counts",
+      "view_mail_folders",
+      "compose_mail",
+      "send_mail",
+    ]) &&
+    (!isTenantNode || hasMailboxModule);
 
   useEffect(() => {
     setIsMounted(true);

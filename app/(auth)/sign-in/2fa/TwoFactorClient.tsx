@@ -45,6 +45,10 @@ import { resolveHomePath } from "@/lib/home-path";
 
 const POST_LOGIN_REDIRECT_STORAGE_KEY = "hive_post_login_redirect";
 
+// Recovery codes look like XXXXXXXXXX-XXXXXXXXXX (10 + dash + 10).
+const RECOVERY_CODE_LENGTH = 21;
+const RECOVERY_CODE_MIN_LENGTH = 10;
+
 /**
  * A redirect stored before the 2FA step wins; otherwise fall back to the
  * verified user's own home surface (/learn for LMS tenant members who are not
@@ -81,6 +85,7 @@ export default function TwoFactorClient() {
   const { t } = useTranslation();
 
   const [code, setCode] = useState("");
+  const [useRecovery, setUseRecovery] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [portalName, setPortalName] = useState(t("auth.login.central_portal", "HIVE.OS CENTRAL"));
@@ -150,9 +155,20 @@ export default function TwoFactorClient() {
     }
   }, [router, t]);
 
+  // A code is ready to submit when it is a full 6-digit code, or (recovery mode) long enough to be a recovery code.
+  const isCodeReady = useRecovery
+    ? code.trim().length >= RECOVERY_CODE_MIN_LENGTH
+    : code.length === 6;
+
+  const handleToggleRecovery = () => {
+    setUseRecovery((prev) => !prev);
+    setCode("");
+    setError("");
+  };
+
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (code.length !== 6) return;
+    if (!isCodeReady) return;
 
     setLoading(true);
     setError("");
@@ -171,7 +187,7 @@ export default function TwoFactorClient() {
       const pendingEmail = safeSessionStorageGetItem("hive_pending_email") || "";
 
       const payload = {
-        code: code.trim(),
+        code: useRecovery ? code.trim().toUpperCase() : code.trim(),
         two_factor_token: pendingToken,
         temp_token: pendingToken,
         email: pendingEmail,
@@ -222,7 +238,7 @@ export default function TwoFactorClient() {
       await logFrontendAction({
         module: "Auth - 2FA",
         action: "login_success",
-        description: `2FA verification passed.`,
+        description: useRecovery ? "2FA verification passed (recovery code)." : `2FA verification passed.`,
       }).catch(() => {});
       window.location.href = redirectPath;
     } catch (err: unknown) {
@@ -259,8 +275,20 @@ export default function TwoFactorClient() {
     ValidationIcon = AlertCircle;
   } else if (code.length === 0) {
     validationStatus = "neutral";
-    validationMessage = t("auth.2fa.awaiting_input", "AWAITING 6-DIGIT CODE");
+    validationMessage = useRecovery
+      ? t("auth.2fa.awaiting_recovery", "AWAITING RECOVERY CODE")
+      : t("auth.2fa.awaiting_input", "AWAITING 6-DIGIT CODE");
     ValidationIcon = Activity;
+  } else if (useRecovery) {
+    if (isCodeReady) {
+      validationStatus = "success";
+      validationMessage = "CODE ENTERED - READY TO VERIFY";
+      ValidationIcon = ShieldCheck;
+    } else {
+      validationStatus = "warning";
+      validationMessage = "KEEP TYPING RECOVERY CODE";
+      ValidationIcon = Activity;
+    }
   } else if (code.length < 6) {
     validationStatus = "warning";
     validationMessage = `ENTERED ${code.length}/6 DIGITS`;
@@ -317,7 +345,9 @@ export default function TwoFactorClient() {
             <p className="text-muted-foreground font-inter text-sm">
               {setupQr
                 ? t("auth.2fa.enforced_desc", "The system administrator has enforced Global 2FA. You must configure your authenticator app to proceed.")
-                : t("auth.2fa.description", "Open your authenticator app and enter the 6-digit cryptographic code.")}
+                : useRecovery
+                  ? t("auth.2fa.recovery_description", "Enter one of the recovery codes you saved when you enabled 2FA. Each code works only once.")
+                  : t("auth.2fa.description", "Open your authenticator app and enter the 6-digit cryptographic code.")}
             </p>
           </div>
 
@@ -348,24 +378,34 @@ export default function TwoFactorClient() {
                   htmlFor="code"
                   className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground mb-1"
                 >
-                  {t("auth.2fa.protocol_label", "Authentication Protocol")}
+                  {useRecovery
+                    ? t("auth.2fa.recovery_label", "Recovery Code")
+                    : t("auth.2fa.protocol_label", "Authentication Protocol")}
                 </Label>
                 <Input
                   id="code"
                   type="text"
-                  maxLength={6}
+                  maxLength={useRecovery ? RECOVERY_CODE_LENGTH : 6}
                   required
                   autoFocus
                   autoComplete="one-time-code"
+                  autoCapitalize={useRecovery ? "characters" : "off"}
+                  spellCheck={false}
                   value={code}
                   onChange={(e) => {
-                    setCode(e.target.value.replace(/\D/g, ""));
+                    const raw = e.target.value;
+                    setCode(
+                      useRecovery
+                        ? raw.toUpperCase().replace(/[^A-Z0-9-]/g, "")
+                        : raw.replace(/\D/g, "")
+                    );
                     if (error) setError("");
                   }}
-                  placeholder="000 000"
+                  placeholder={useRecovery ? "XXXXXXXXXX-XXXXXXXXXX" : "000 000"}
                   disabled={loading}
                   className={cn(
-                    "h-16 text-3xl tracking-[0.5em] text-center bg-muted/30 border-border focus:ring-2 transition-all font-mono shadow-inner rounded-2xl",
+                    "h-16 text-center bg-muted/30 border-border focus:ring-2 transition-all font-mono shadow-inner rounded-2xl",
+                    useRecovery ? "text-lg tracking-widest" : "text-3xl tracking-[0.5em]",
                     validationStatus === "error"
                       ? "border-destructive focus:ring-destructive/50 text-destructive"
                       : "focus:ring-primary/50"
@@ -387,7 +427,7 @@ export default function TwoFactorClient() {
             </div>
             <Button
               type="submit"
-              disabled={loading || code.length !== 6}
+              disabled={loading || !isCodeReady}
               className="w-full bg-primary text-primary-foreground font-space font-bold uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:hover:scale-100 transition-all h-14 group rounded-xl"
             >
               {loading ? (
@@ -402,6 +442,20 @@ export default function TwoFactorClient() {
                 </span>
               )}
             </Button>
+
+            {/* Recovery codes only exist once 2FA is confirmed, so hide this during forced setup. */}
+            {!setupQr && (
+              <button
+                type="button"
+                onClick={handleToggleRecovery}
+                disabled={loading}
+                className="w-full text-center text-muted-foreground hover:text-foreground transition-colors font-mono text-[11px] uppercase tracking-widest"
+              >
+                {useRecovery
+                  ? t("auth.2fa.use_authenticator", "Use authenticator code instead")
+                  : t("auth.2fa.use_recovery", "Lost your device? Use a recovery code")}
+              </button>
+            )}
           </form>
         </div>
       </div>

@@ -44,8 +44,7 @@ import {
 
 type TwoFactorData = {
   enabled?: boolean;
-  secret?: string;
-  qr_code_url?: string;
+  pending_setup?: boolean;
   confirmed_at?: string | null;
   message?: string;
 };
@@ -56,6 +55,19 @@ type UserProfile = {
   email?: string;
   two_factor_enabled?: boolean;
 };
+
+type AuthAction = "enable" | "disable" | "reconfigure" | "reveal";
+
+async function postJson(path: string, body: Record<string, unknown>, fallback: string) {
+  const res = await fetch(`${getBackendApiRoot()}${path}`, {
+    method: "POST",
+    headers: getAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || fallback);
+  return data;
+}
 
 export function SecurityTabClient() {
   const { t } = useTranslation();
@@ -74,12 +86,14 @@ export function SecurityTabClient() {
   const [hasCopiedCodes, setHasCopiedCodes] = useState(false);
   const [hasCopiedSecret, setHasCopiedSecret] = useState(false);
   const [showQrCode, setShowQrCode] = useState(true);
+  const [revealed, setRevealed] = useState<{ secret: string; qr_code_url: string } | null>(null);
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
-  const [pendingAction, setPendingAction] = useState<"enable" | "disable" | "reconfigure" | null>(null);
+  const [codeInput, setCodeInput] = useState("");
+  const [pendingAction, setPendingAction] = useState<AuthAction | null>(null);
 
-  // 1. Fetch 2FA Status & Barcode Details via React Query
+  // 1. Fetch 2FA status (the backend no longer returns the secret here)
   const {
     data: twoFactorData,
     isLoading: isFetching2FA,
@@ -118,55 +132,55 @@ export function SecurityTabClient() {
   });
 
   const is2FAActive = Boolean(twoFactorData?.enabled || userProfile?.two_factor_enabled);
-  const activeQrUrl = setupQrUrl || twoFactorData?.qr_code_url || "";
-  const activeSecretKey = setupSecretKey || twoFactorData?.secret || "";
+  const activeQrUrl = setupQrUrl || revealed?.qr_code_url || "";
+  const activeSecretKey = setupSecretKey || revealed?.secret || "";
+  const needsCode = pendingAction === "disable" || pendingAction === "reconfigure";
+  // Cancelling an unfinished setup needs only the password; an active 2FA needs the code too.
+  const codeRequired = needsCode && is2FAActive;
 
-  // 3. Password Verification & Action Execution Mutation
+  // 3. Password-verified actions (server checks the password; wrong password = error toast)
   const executeAuthActionMut = useMutation({
     mutationFn: async ({
       action,
       password,
+      code,
     }: {
-      action: "enable" | "disable" | "reconfigure";
-      password?: string;
+      action: AuthAction;
+      password: string;
+      code?: string;
     }) => {
-      if (action === "reconfigure") {
-        await fetch(`${getBackendApiRoot()}/2fa/disable`, {
-          method: "POST",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ password }),
-        });
-      }
-
-      if (action === "enable" || action === "reconfigure") {
-        const res = await fetch(`${getBackendApiRoot()}/2fa/enable`, {
-          method: "POST",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ password }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to generate 2FA");
-        return { action, ...data };
-      } else {
-        const res = await fetch(`${getBackendApiRoot()}/2fa/disable`, {
-          method: "POST",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ password }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to disable 2FA");
-        return { action, ...data };
+      switch (action) {
+        case "enable":
+          return { action, ...(await postJson("/2fa/enable", { password }, "Failed to generate 2FA")) };
+        case "reconfigure":
+          return {
+            action,
+            ...(await postJson("/2fa/reconfigure", { password, code }, "Failed to reconfigure 2FA")),
+          };
+        case "reveal":
+          return { action, ...(await postJson("/2fa/reveal", { password }, "Failed to reveal secret")) };
+        default:
+          return { action, ...(await postJson("/2fa/disable", { password, code }, "Failed to disable 2FA")) };
       }
     },
     onSuccess: (data) => {
       setIsPasswordModalOpen(false);
       setPasswordInput("");
+      setCodeInput("");
+
+      if (data.action === "reveal") {
+        setRevealed({ secret: data.secret, qr_code_url: data.qr_code_url });
+        setShowQrCode(true);
+        return;
+      }
 
       if (data.action === "enable" || data.action === "reconfigure") {
+        setRevealed(null);
         setSetupQrUrl(data.qr_code_url);
         setSetupSecretKey(data.secret);
         setIsSettingUp2FA(true);
         setShowQrCode(true);
+        queryClient.invalidateQueries({ queryKey: ["twoFactorDetails"] });
         logFrontendAction({
           module: "Profile Settings",
           action: "updated",
@@ -180,6 +194,7 @@ export function SecurityTabClient() {
         setSetupQrUrl("");
         setSetupSecretKey("");
         setRecoveryCodes([]);
+        setRevealed(null);
         queryClient.invalidateQueries({ queryKey: ["twoFactorDetails"] });
         queryClient.invalidateQueries({ queryKey: ["authUserProfile"] });
         logFrontendAction({
@@ -217,6 +232,7 @@ export function SecurityTabClient() {
       setVerificationCode("");
       setSetupQrUrl("");
       setSetupSecretKey("");
+      setRevealed(null);
       setShowQrCode(true);
 
       await queryClient.invalidateQueries({ queryKey: ["twoFactorDetails"] });
@@ -237,6 +253,13 @@ export function SecurityTabClient() {
     },
   });
 
+  const openModal = (action: AuthAction) => {
+    setPendingAction(action);
+    setPasswordInput("");
+    setCodeInput("");
+    setIsPasswordModalOpen(true);
+  };
+
   const handleToggleClick = () => {
     if (!canEditProfile) {
       toast.error(
@@ -244,10 +267,8 @@ export function SecurityTabClient() {
       );
       return;
     }
-
-    setPendingAction(is2FAActive ? "disable" : "enable");
-    setPasswordInput("");
-    setIsPasswordModalOpen(true);
+    // Active or mid-setup -> disable/cancel. Otherwise enable.
+    openModal(is2FAActive || isSettingUp2FA ? "disable" : "enable");
   };
 
   const handleReconfigureClick = () => {
@@ -255,15 +276,30 @@ export function SecurityTabClient() {
       toast.error(t("global.lacks_permission", "Your role cannot reconfigure 2FA settings."));
       return;
     }
-    setPendingAction("reconfigure");
-    setPasswordInput("");
-    setIsPasswordModalOpen(true);
+    openModal("reconfigure");
+  };
+
+  const handleRevealToggle = () => {
+    if (revealed) {
+      // Hide and forget the secret again
+      setRevealed(null);
+      return;
+    }
+    if (!canEditProfile) {
+      toast.error(t("global.lacks_permission", "Your role cannot reveal the 2FA secret."));
+      return;
+    }
+    openModal("reveal");
   };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pendingAction || !canEditProfile) return;
-    executeAuthActionMut.mutate({ action: pendingAction, password: passwordInput });
+    executeAuthActionMut.mutate({
+      action: pendingAction,
+      password: passwordInput,
+      code: needsCode && codeInput.trim() ? codeInput.trim() : undefined,
+    });
   };
 
   const handleConfirm2FA = (e: React.FormEvent) => {
@@ -336,6 +372,12 @@ export function SecurityTabClient() {
                 "profile.security.enter_password_desc",
                 "Enter your current account encryption key (password) to authorize this action."
               )}
+              {codeRequired &&
+                " " +
+                  t(
+                    "profile.security.enter_code_desc",
+                    "Also enter a current 6-digit code from your authenticator app, or a recovery code."
+                  )}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handlePasswordSubmit} className="space-y-4 pt-2">
@@ -346,9 +388,22 @@ export function SecurityTabClient() {
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 required
+                autoComplete="current-password"
                 disabled={!canEditProfile || executeAuthActionMut.isPending}
                 className="bg-muted/30 h-12 rounded-xl transition-all focus-visible:ring-primary font-mono"
               />
+              {needsCode && (
+                <Input
+                  type="text"
+                  placeholder={t("profile.security.code_placeholder", "6-digit code or recovery code")}
+                  value={codeInput}
+                  onChange={(e) => setCodeInput(e.target.value)}
+                  required={codeRequired}
+                  autoComplete="one-time-code"
+                  disabled={!canEditProfile || executeAuthActionMut.isPending}
+                  className="bg-muted/30 h-12 rounded-xl transition-all focus-visible:ring-primary font-mono"
+                />
+              )}
             </div>
             <DialogFooter className="pt-2 flex sm:justify-between items-center gap-2">
               <Button
@@ -362,7 +417,12 @@ export function SecurityTabClient() {
               <Button
                 type="submit"
                 className="rounded-xl px-8 shadow-lg font-bold"
-                disabled={!canEditProfile || executeAuthActionMut.isPending || !passwordInput}
+                disabled={
+                  !canEditProfile ||
+                  executeAuthActionMut.isPending ||
+                  !passwordInput ||
+                  (codeRequired && !codeInput.trim())
+                }
               >
                 {executeAuthActionMut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {t("profile.security.authorize_action", "Authorize Action")}
@@ -439,7 +499,7 @@ export function SecurityTabClient() {
             </div>
           )}
 
-          {/* ACTIVE 2FA: PERSISTENT QR BARCODE & SECRET KEY SECTION */}
+          {/* ACTIVE 2FA: BARCODE & SECRET (hidden until revealed with password) */}
           {is2FAActive && (
             <div id="tour-profile-2fa-setup" className="space-y-6 animate-in fade-in duration-500">
               <div className="p-6 bg-gradient-to-br from-emerald-500/5 via-muted/20 to-background rounded-2xl border border-emerald-500/20 shadow-sm space-y-6">
@@ -452,7 +512,7 @@ export function SecurityTabClient() {
                     <p className="text-xs text-muted-foreground">
                       {t(
                         "profile.security.barcode_desc",
-                        "Your active barcode is always accessible here. You can scan it into additional devices or backup authenticators."
+                        "For your security the barcode is hidden. Enter your password to reveal it and add another device or backup authenticator."
                       )}
                     </p>
                   </div>
@@ -461,10 +521,11 @@ export function SecurityTabClient() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setShowQrCode(!showQrCode)}
+                      onClick={handleRevealToggle}
+                      disabled={executeAuthActionMut.isPending}
                       className="rounded-xl text-xs font-mono h-9 border-border/60 bg-background/80"
                     >
-                      {showQrCode ? (
+                      {revealed ? (
                         <>
                           <EyeOff className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />{" "}
                           {t("profile.security.hide_barcode", "Hide Barcode")}
@@ -490,22 +551,12 @@ export function SecurityTabClient() {
                   </div>
                 </div>
 
-                {showQrCode && (
+                {revealed && showQrCode && (
                   <div className="grid md:grid-cols-12 gap-6 items-center">
                     {/* QR Code Container */}
                     <div className="md:col-span-4 flex flex-col items-center justify-center p-4 bg-background/80 rounded-2xl border border-border/60 shadow-inner">
                       <div className="bg-white p-3 rounded-xl shadow-md border border-gray-200">
-                        {activeQrUrl ? (
-                          <QRCodeSVG value={activeQrUrl} size={150} level="M" includeMargin={false} />
-                        ) : isFetching2FA ? (
-                          <div className="h-[150px] w-[150px] flex items-center justify-center bg-gray-50 rounded-lg">
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                          </div>
-                        ) : (
-                          <div className="h-[150px] w-[150px] flex items-center justify-center bg-gray-50 rounded-lg text-xs text-muted-foreground text-center p-2">
-                            {t("profile.security.barcode_unavailable", "Barcode unavailable")}
-                          </div>
-                        )}
+                        <QRCodeSVG value={revealed.qr_code_url} size={150} level="M" includeMargin={false} />
                       </div>
                       <span className="text-[11px] font-mono text-muted-foreground mt-2 tracking-wider flex items-center gap-1">
                         <Scan className="h-3 w-3 text-emerald-500" />{" "}
@@ -522,14 +573,13 @@ export function SecurityTabClient() {
                         </Label>
                         <div className="flex items-center gap-2">
                           <div className="font-mono text-xs sm:text-sm bg-background px-3.5 py-2.5 rounded-xl border border-border/70 flex-1 select-all tracking-wider text-foreground font-semibold shadow-inner truncate">
-                            {activeSecretKey || (isFetching2FA ? t("profile.security.fetching_key", "FETCHING...") : "••••••••••••••••••••••••••••••••")}
+                            {revealed.secret}
                           </div>
                           <Button
                             type="button"
                             variant="outline"
                             size="icon"
                             onClick={copySecretToClipboard}
-                            disabled={!activeSecretKey}
                             className="h-10 w-10 rounded-xl shrink-0 bg-background hover:bg-muted"
                             title={t("profile.security.copy_secret_tooltip", "Copy secret key to clipboard")}
                           >

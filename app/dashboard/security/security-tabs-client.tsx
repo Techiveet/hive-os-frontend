@@ -28,8 +28,24 @@ export function SecurityTabsClient({ tenantId, tenantName, defaultTab: initialTa
   const { hasPermission, hasAnyPermission, isLoaded } = usePermissions();
   const { startTour, isActive, currentStep } = useTour();
 
-  const showUsers = hasAnyPermission(['view_users', 'manage_users']);
-  const showRoles = hasAnyPermission(['view_roles', 'manage_roles']);
+  const showUsers = hasAnyPermission([
+    'view_users',
+    'manage_users',
+    'create_users',
+    'edit_users',
+    'delete_users',
+    'toggle_user_status',
+    'export_users',
+    'impersonate_users',
+  ]);
+  const showRoles = hasAnyPermission([
+    'view_roles',
+    'manage_roles',
+    'create_roles',
+    'edit_roles',
+    'delete_roles',
+    'export_roles',
+  ]);
   const showPerms = hasPermission('view_permissions');
   const isCompletelyDenied = !showUsers && !showRoles && !showPerms;
 

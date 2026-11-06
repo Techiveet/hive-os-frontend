@@ -65,3 +65,36 @@ export const canAccessDashboardPath = (pathname: string, user: DashboardUserAcce
     canAccessModuleRoute(path, access, { businessType: user.business_type ?? null }),
   );
 };
+
+export type DashboardAccessDenialReason = "subscription" | "permission";
+
+/**
+ * Why a dashboard path was blocked. Used so the interstitial does not blame
+ * billing when the real gap is a missing clearance permission.
+ */
+export const getDashboardAccessDenialReason = (
+  pathname: string,
+  user: DashboardUserAccess,
+): DashboardAccessDenialReason => {
+  if (canAccessDashboardPath(pathname, user)) {
+    return "permission";
+  }
+
+  const base = buildRoutePermissionAccess(user);
+  const ignorePermissions: RoutePermissionAccess = {
+    ...base,
+    hasPermission: () => true,
+    hasAnyPermission: () => true,
+  };
+
+  const allowedIfPermissionsWereGranted = canAccessDashboardRoute(
+    pathname,
+    ignorePermissions,
+    (path) =>
+      canAccessModuleRoute(path, ignorePermissions, {
+        businessType: user.business_type ?? null,
+      }),
+  );
+
+  return allowedIfPermissionsWereGranted ? "permission" : "subscription";
+};

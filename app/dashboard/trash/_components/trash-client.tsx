@@ -75,6 +75,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useTranslation } from "@/store/use-translation";
 import { cn } from "@/lib/utils";
 import { initEcho, getTrashChannelName } from "@/lib/echo";
@@ -112,6 +113,10 @@ const RETENTION_PRESETS = [
 export function TrashClient() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
+  const { hasAnyPermission } = usePermissions();
+  const canRestoreTrash = hasAnyPermission(["restore_trash", "manage_trash"]);
+  const canPurgeTrash = hasAnyPermission(["manage_trash"]);
+  const canManageTrashSettings = hasAnyPermission(["manage_trash"]);
 
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = useLocalStorage<number>("trash_table_page_size", 15);
@@ -485,32 +490,36 @@ export function TrashClient() {
           const item = row.original;
           return (
             <div className="flex items-center justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setItemToRestore(item)}
-                className="h-8 px-2.5 rounded-lg border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/50 shadow-sm transition-colors"
-                title={t("trash.restore_item", "Restore Record")}
-              >
-                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                {t("trash.restore", "Restore")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setItemToPurge(item)}
-                className="h-8 px-2.5 rounded-lg border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50 shadow-sm transition-colors"
-                title={t("trash.purge_permanently", "Permanently Purge")}
-              >
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                {t("trash.purge", "Purge")}
-              </Button>
+              {canRestoreTrash && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setItemToRestore(item)}
+                  className="h-8 px-2.5 rounded-lg border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/50 shadow-sm transition-colors"
+                  title={t("trash.restore_item", "Restore Record")}
+                >
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  {t("trash.restore", "Restore")}
+                </Button>
+              )}
+              {canPurgeTrash && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setItemToPurge(item)}
+                  className="h-8 px-2.5 rounded-lg border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50 shadow-sm transition-colors"
+                  title={t("trash.purge_permanently", "Permanently Purge")}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  {t("trash.purge", "Purge")}
+                </Button>
+              )}
             </div>
           );
         },
       },
     ],
-    [t, currentRetentionDays]
+    [t, currentRetentionDays, canRestoreTrash, canPurgeTrash]
   );
 
   return (
@@ -565,11 +574,16 @@ export function TrashClient() {
           </p>
         </div>
 
-        {/* Dynamic Retention Window (Clickable to configure) */}
+        {/* Dynamic Retention Window (Clickable to configure when permitted) */}
         <div
-          onClick={() => setShowRetentionModal(true)}
-          className="group relative cursor-pointer overflow-hidden rounded-2xl border border-border/50 bg-card/40 p-5 shadow-sm backdrop-blur-md transition-all hover:border-emerald-500/50 hover:bg-card/70 hover:shadow-md"
-          title={t("trash.click_to_configure", "Click to customize retention window")}
+          onClick={() => {
+            if (canManageTrashSettings) setShowRetentionModal(true);
+          }}
+          className={cn(
+            "group relative overflow-hidden rounded-2xl border border-border/50 bg-card/40 p-5 shadow-sm backdrop-blur-md transition-all",
+            canManageTrashSettings && "cursor-pointer hover:border-emerald-500/50 hover:bg-card/70 hover:shadow-md"
+          )}
+          title={canManageTrashSettings ? t("trash.click_to_configure", "Click to customize retention window") : undefined}
         >
           <div className="flex items-center justify-between">
             <div>
@@ -589,10 +603,12 @@ export function TrashClient() {
               <Sliders className="h-6 w-6" />
             </div>
           </div>
-          <p className="mt-3 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
-            <Settings2 className="h-3.5 w-3.5" />
-            {t("trash.click_to_edit", "Click to adjust retention duration")}
-          </p>
+          {canManageTrashSettings && (
+            <p className="mt-3 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+              <Settings2 className="h-3.5 w-3.5" />
+              {t("trash.click_to_edit", "Click to adjust retention duration")}
+            </p>
+          )}
         </div>
 
         {/* Modules Covered */}
@@ -671,16 +687,17 @@ export function TrashClient() {
             </SelectContent>
           </Select>
 
-          {/* Retention Settings Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowRetentionModal(true)}
-            className="h-9 rounded-xl border-border/50 bg-background/50 px-3 text-xs shadow-sm hover:border-emerald-500/40 hover:text-emerald-600 dark:hover:text-emerald-400"
-          >
-            <Settings2 className="h-3.5 w-3.5 mr-1.5 text-emerald-500" />
-            {t("trash.btn_retention", "Retention Policy")}
-          </Button>
+          {canManageTrashSettings && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRetentionModal(true)}
+              className="h-9 rounded-xl border-border/50 bg-background/50 px-3 text-xs shadow-sm hover:border-emerald-500/40 hover:text-emerald-600 dark:hover:text-emerald-400"
+            >
+              <Settings2 className="h-3.5 w-3.5 mr-1.5 text-emerald-500" />
+              {t("trash.btn_retention", "Retention Policy")}
+            </Button>
+          )}
 
           {/* Refresh Button */}
           <Button
@@ -696,26 +713,30 @@ export function TrashClient() {
         </div>
 
         {/* Bulk Actions */}
-        {trashedItems.length > 0 && (
+        {trashedItems.length > 0 && (canRestoreTrash || canPurgeTrash) && (
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowRestoreAllConfirm(true)}
-              className="h-9 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 text-xs shadow-sm"
-            >
-              <ArchiveRestore className="mr-1.5 h-4 w-4" />
-              {t("trash.restore_all", "Restore All")}
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowEmptyConfirm(true)}
-              className="h-9 rounded-xl text-xs shadow-sm font-semibold"
-            >
-              <Trash2 className="mr-1.5 h-4 w-4" />
-              {t("trash.empty_trash", "Empty Trash Bin")}
-            </Button>
+            {canRestoreTrash && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRestoreAllConfirm(true)}
+                className="h-9 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 text-xs shadow-sm"
+              >
+                <ArchiveRestore className="mr-1.5 h-4 w-4" />
+                {t("trash.restore_all", "Restore All")}
+              </Button>
+            )}
+            {canPurgeTrash && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowEmptyConfirm(true)}
+                className="h-9 rounded-xl text-xs shadow-sm font-semibold"
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" />
+                {t("trash.empty_trash", "Empty Trash Bin")}
+              </Button>
+            )}
           </div>
         )}
       </div>

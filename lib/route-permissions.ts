@@ -8,15 +8,44 @@ export const PROFILE_ROUTE_PERMISSIONS = [
 export const SECURITY_ROUTE_PERMISSIONS = [
   "view_users",
   "manage_users",
+  "create_users",
+  "edit_users",
+  "delete_users",
+  "toggle_user_status",
+  "export_users",
+  "impersonate_users",
+  "reset_user_passwords",
   "view_roles",
   "manage_roles",
+  "create_roles",
+  "edit_roles",
+  "delete_roles",
+  "export_roles",
   "view_permissions",
+  "manage_permissions",
+  "export_permissions",
+  "seed_permissions",
 ] as const;
 export const TENANTS_ROUTE_PERMISSIONS = [
   "view_tenants",
   "manage_tenants",
+  "provision_tenants",
+  "edit_tenants",
+  "suspend_tenants",
+  "delete_tenants",
+  "export_tenants",
+  "toggle_tenant_status",
+  "toggle_tenant_admin_access",
 ] as const;
 export const LANDING_TEMPLATES_ROUTE_PERMISSIONS = [
+  "view_landing_templates",
+  "manage_landing_templates",
+  "create_landing_templates",
+  "edit_landing_templates",
+  "delete_landing_templates",
+  "import_landing_templates",
+  "assign_landing_templates",
+  "publish_landing_templates",
   "manage_tenants",
   "provision_tenants",
 ] as const;
@@ -28,23 +57,26 @@ export const TRASH_ROUTE_PERMISSIONS = [
   "view_trash",
   "manage_trash",
   "restore_trash",
-  "view_security",
-  "manage_security",
-  "view_users",
-  "manage_users",
-  "view_roles",
-  "manage_roles",
-  "view_logs",
 ] as const;
 
 export const STORAGE_ROUTE_PERMISSIONS = [
   "view_storage",
   "manage_storage",
 ] as const;
-export const CHAT_ROUTE_PERMISSIONS = ["view_chat", "manage_chat"] as const;
-export const VIDEO_CONFERENCING_ROUTE_PERMISSIONS = [
+export const CHAT_ROUTE_PERMISSIONS = [
   "view_chat",
   "manage_chat",
+  "view_chat_conversations",
+  "view_chat_messages",
+  "view_chat_groups",
+  "view_chat_presence",
+  "view_chat_shared_items",
+  "send_chat_messages",
+  "create_chat_conversations",
+  "create_chat_groups",
+] as const;
+export const VIDEO_CONFERENCING_ROUTE_PERMISSIONS = [
+  ...CHAT_ROUTE_PERMISSIONS,
 ] as const;
 export const SUPPORT_BOT_ROUTE_PERMISSIONS = [
   "view_support_bots",
@@ -64,7 +96,12 @@ export const SETTINGS_ROUTE_PERMISSIONS = [
   "manage_hr_settings",
 ] as const;
 export const ALERTS_ROUTE_PERMISSIONS = ["view_alerts"] as const;
-export const AUDIT_LOG_ROUTE_PERMISSIONS = ["view_logs"] as const;
+export const AUDIT_LOG_ROUTE_PERMISSIONS = [
+  "view_logs",
+  "view_audit_log",
+  "view_audit_entries",
+  "view_compliance_reports",
+] as const;
 export const API_DOCS_ROUTE_PERMISSIONS = ["view_api_docs"] as const;
 export const DOCUMENT_CONVERTER_ROUTE_PERMISSIONS = [
   "use_document_converter",
@@ -76,9 +113,19 @@ export const DIRECT_TRANSFER_REVIEW_ROUTE_PERMISSIONS = [
   "manage_general_settings",
 ] as const;
 export const HOSPITALITY_ROUTE_PERMISSIONS = [
+  "view_hospitality",
+  "manage_hospitality",
+  "view_hospitality_dashboard",
   "view_hospitality_tables",
   "view_hospitality_reservations",
   "view_hospitality_service_orders",
+  "view_hospitality_lodging",
+  "manage_hospitality_rooms",
+  "manage_hospitality_stays",
+  "view_hospitality_housekeeping",
+  "manage_hospitality_housekeeping",
+  "view_hospitality_inventory_controls",
+  "view_hospitality_end_of_day",
 ] as const;
 export const B2B_MARKETPLACE_ROUTE_PERMISSIONS = [
   "view_b2b_marketplace",
@@ -507,10 +554,18 @@ export function canAccessDashboardRoute(
     );
   }
 
-  // Tenant-facing template marketplace: every dashboard user gets it (the
-  // page itself shows the tenant-workspace-only screen for central admins).
+  // Tenant-facing template marketplace (requires landing + brand clearance).
   if (matchesPrefix(path, "/dashboard/landing-pages")) {
-    return true;
+    return (
+      isTenantSession() &&
+      access.hasAnyPermission([
+        "manage_brand_settings",
+        "view_landing_templates",
+        "manage_landing_templates",
+        "assign_landing_templates",
+      ]) &&
+      hasSubscribedModule(access, "premium_landing_templates")
+    );
   }
 
   if (matchesPrefix(path, "/dashboard/subscriptions")) {
@@ -521,7 +576,7 @@ export function canAccessDashboardRoute(
 
   if (matchesPrefix(path, "/dashboard/audit-logs")) {
     return (
-      access.hasPermission("view_logs") &&
+      access.hasAnyPermission([...AUDIT_LOG_ROUTE_PERMISSIONS]) &&
       hasSubscribedModule(access, "audit_logs")
     );
   }
@@ -556,9 +611,18 @@ export function canAccessDashboardRoute(
     );
   }
 
-  // Same gate as the MailBox API (tenant_module:mailbox, no extra permission).
   if (matchesPrefix(path, "/dashboard/mail")) {
-    return hasSubscribedModule(access, "mailbox");
+    return (
+      access.hasAnyPermission([
+        "view_mail",
+        "manage_mail",
+        "read_mail_messages",
+        "view_mail_counts",
+        "view_mail_folders",
+        "compose_mail",
+        "send_mail",
+      ]) && hasSubscribedModule(access, "mailbox")
+    );
   }
 
   if (matchesPrefix(path, "/dashboard/chat")) {
@@ -603,7 +667,10 @@ export function canAccessDashboardRoute(
   }
 
   if (matchesPrefix(path, "/dashboard/hospitality")) {
-    return hasSubscribedModule(access, "hospitality");
+    return (
+      access.hasAnyPermission([...HOSPITALITY_ROUTE_PERMISSIONS]) &&
+      hasSubscribedModule(access, "hospitality")
+    );
   }
 
   if (matchesPrefix(path, "/dashboard/b2b-marketplace")) {
@@ -892,7 +959,10 @@ export function canAccessDashboardRoute(
   }
 
   if (matchesPrefix(path, "/dashboard/support-bot")) {
-    return true;
+    return (
+      access.hasAnyPermission([...SUPPORT_BOT_ROUTE_PERMISSIONS]) &&
+      hasSubscribedModule(access, "support_bot")
+    );
   }
 
   if (

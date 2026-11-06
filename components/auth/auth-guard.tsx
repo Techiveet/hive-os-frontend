@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useSystemSettings } from "@/components/providers/settings-provider";
 import { handleAuthFailureResponse, logoutHiveSession, markUserSessionFresh } from "@/lib/auth-sync";
-import { canAccessDashboardPath } from "@/lib/dashboard-access";
+import { canAccessDashboardPath, getDashboardAccessDenialReason } from "@/lib/dashboard-access";
 import { isLmsOnlyUser, readStoredUser } from "@/lib/home-path";
 import {
   getAccessToken,
@@ -61,7 +61,8 @@ function redirectFor(user: SessionUser, pathname: string): string | null {
     pathname !== "/dashboard/subscription-required" &&
     !canAccessDashboardPath(pathname, user)
   ) {
-    return `/dashboard/subscription-required?from=${encodeURIComponent(pathname)}`;
+    const reason = getDashboardAccessDenialReason(pathname, user);
+    return `/dashboard/subscription-required?reason=${reason}&from=${encodeURIComponent(pathname)}`;
   }
 
   return null;

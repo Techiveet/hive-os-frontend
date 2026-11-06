@@ -209,6 +209,7 @@ export function UsersTabClient(props: Props) {
   const canImpersonate = hasAnyPermission(["manage_users", "impersonate_users"]);
   const canToggleStatus = hasAnyPermission(["manage_users", "edit_users", "toggle_user_status"]);
   const canExport = hasAnyPermission(["manage_users", "view_users", "export_users"]);
+  const canCreateRoles = hasAnyPermission(["manage_roles", "create_roles"]);
   const canManageStorage = hasAnyPermission(["manage_storage"]);
   const canBrowseAvatarLibrary = hasAnyPermission(["view_storage", "manage_storage"]);
   const canEditTenantAdministrator = !isCentralAdmin && operatorRoles.includes("Super Admin") && canEdit;
@@ -1717,6 +1718,10 @@ export function UsersTabClient(props: Props) {
                     </div>
                     {isProtectedTenantEdit ? <Input id="role" value="Super Admin" readOnly aria-describedby="role-hint" /> : <Select value={formRoleId} onValueChange={(val) => {
                       if (val === "__create_new") {
+                        if (!canCreateRoles) {
+                          toast.error(t('users.create_role_denied', 'You need create_roles or manage_roles to create a role.'));
+                          return;
+                        }
                         setCreateRoleDialogOpen(true);
                       } else {
                         setFormRoleId(val);
@@ -1750,12 +1755,14 @@ export function UsersTabClient(props: Props) {
                             <div className="flex items-center gap-2 font-medium">{r.name}</div>
                           </SelectItem>
                         ))}
-                        <SelectItem value="__create_new" className="cursor-pointer py-2.5 text-primary font-semibold border-t border-border/40 mt-1">
-                          <div className="flex items-center gap-2">
-                            <PlusCircle className="h-4 w-4" />
-                            {t('users.create_new_role', 'Create New Role')}
-                          </div>
-                        </SelectItem>
+                        {canCreateRoles && (
+                          <SelectItem value="__create_new" className="cursor-pointer py-2.5 text-primary font-semibold border-t border-border/40 mt-1">
+                            <div className="flex items-center gap-2">
+                              <PlusCircle className="h-4 w-4" />
+                              {t('users.create_new_role', 'Create New Role')}
+                            </div>
+                          </SelectItem>
+                        )}
                       </SelectContent>
                     </Select>}
                     <p id="role-hint" className="text-xs text-muted-foreground leading-relaxed">{isProtectedTenantEdit ? 'Administrator access is preserved when updating these credentials.' : t('users.role_hint', 'Choose the clearance level that covers this operator’s permissions.')}</p>

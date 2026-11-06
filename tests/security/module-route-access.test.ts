@@ -90,10 +90,15 @@ asCentral();
 assert.equal(canAccessDashboardPath("/dashboard/finance", { roles: ["Admin"], permissions: [] }), true, "central Admin is unrestricted");
 assert.equal(canAccessDashboardPath("/dashboard/finance", { roles: ["Viewer"], permissions: ["view_profile"] }), false);
 
-// ── Mailbox mirrors the MailBox API: module only ───────────────────────
+// ── Mailbox needs module + mail permission ─────────────────────────────
 asTenant();
-assert.equal(canAccessDashboardPath("/dashboard/mail", noFinance), true, "mailbox is in this plan");
-assert.equal(canAccessDashboardPath("/dashboard/mail", tenantUser([], ["view_finance"])), false, "no mailbox module, no mail");
+assert.equal(
+  canAccessDashboardPath("/dashboard/mail", tenantUser(["mailbox"], ["view_mail"])),
+  true,
+  "mailbox module + view_mail",
+);
+assert.equal(canAccessDashboardPath("/dashboard/mail", noFinance), false, "mailbox module without mail permission");
+assert.equal(canAccessDashboardPath("/dashboard/mail", tenantUser([], ["view_mail"])), false, "mail permission without mailbox module");
 
 // identity-cards and daily-reports were also unruled; their manifests now gate them.
 assert.equal(canAccessDashboardPath("/dashboard/identity-cards", tenantUser([], [])), false);
