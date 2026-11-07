@@ -45,7 +45,7 @@ jobs:
 
       - name: Upload Webpack build diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: webpack-build-diagnostics
           if-no-files-found: ignore
@@ -450,7 +450,7 @@ jobs:
       # never been read.
       - name: Upload browser failure evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: waiter-pos-browser-artifacts
           if-no-files-found: ignore
@@ -470,7 +470,7 @@ jobs:
       # the job log if needed.
       - name: Upload service diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: waiter-pos-service-diagnostics
           if-no-files-found: ignore
