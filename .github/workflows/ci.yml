@@ -161,7 +161,7 @@ jobs:
       # it. Tags must match Compose's generated names, {project}-{service}, or
       # Compose will not find them and will build again.
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build the backend image with a layer cache
         uses: docker/build-push-action@v6
