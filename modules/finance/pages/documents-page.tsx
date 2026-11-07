@@ -17,6 +17,7 @@ import api from "@/modules/shared/api/http";
 import { financeApi } from "@/modules/finance/api";
 import type { FinanceAccount, FinanceContact, FinanceDocument } from "@/modules/finance/types";
 import { BusyLabel, FinanceError, FinanceShell, FinanceStatus, FinanceTable, FinanceTableSkeleton, Money, useDebouncedValue } from "@/modules/finance/pages/components/finance-shell";
+import { notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
 
 const types = {
   sales: [["sales_quote", "Sales quote"], ["sales_order", "Sales order"], ["sales_invoice", "Sales invoice"], ["customer_receipt", "Customer receipt"], ["credit_note", "Credit note"]],
@@ -72,7 +73,12 @@ export default function FinanceDocumentsPage({ group }: { group: "sales" | "purc
   const action = useMutation({
     mutationFn: ({ document, action, payload = {} }: { document: FinanceDocument; action: "approve" | "post" | "pay" | "void"; payload?: Record<string, unknown> }) => financeApi.documentAction(document.id, action, payload),
     onMutate: ({ document }) => setBusyId(document.id),
-    onSuccess: async (_, variables) => { await client.invalidateQueries({ queryKey: ["finance"] }); setPaying(null); setBusyId(null); toast.success(`Document ${variables.action === "pay" ? "payment recorded" : `${variables.action}ed`}.`); },
+    onSuccess: async (data, variables) => {
+      await client.invalidateQueries({ queryKey: ["finance"] });
+      setPaying(null);
+      setBusyId(null);
+      notifyMutationOutcome(data, { savedMessage: `Document ${variables.action === "pay" ? "payment recorded" : `${variables.action}ed`}.`, queryClient: client });
+    },
     onError: (error) => {
       const msg = getErrorMessage(error, "The document action could not be completed.");
       // Backend throws this from the journal/ledger layer during "post".

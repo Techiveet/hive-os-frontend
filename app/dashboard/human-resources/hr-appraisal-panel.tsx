@@ -66,7 +66,7 @@ export function HrAppraisalPanel({ employees }: { employees: any[] }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h3 className="text-lg font-bold">Performance Appraisals & Goal Tracking (OKRs)</h3>
+          <h3 className="text-lg font-bold">Performance Appraisals &amp; Goal Tracking (OKRs)</h3>
           <p className="text-xs text-slate-500">
             Conduct 360-degree feedback reviews, track probation 60-day evaluations, and score annual achievements.
           </p>

@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+# Exclude generated dependencies and private runtime data, never source,
+# tests, docs or environment files. Review any future exception individually.
+[allowlist]
+description = "Generated dependencies and runtime artifacts only"
+paths = [
+  '''(^|/)(vendor|node_modules|\.git|\.next[^/]*|coverage|playwright-report|test-results)/''',
+  '''(^|/)(storage|backups|reports|tmp|\.playwright|\.codex-validation)/''',
+]

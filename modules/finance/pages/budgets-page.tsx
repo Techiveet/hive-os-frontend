@@ -16,6 +16,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { financeApi } from "@/modules/finance/api";
 import type { FinanceAccount, FinanceBudget } from "@/modules/finance/types";
 import { BusyLabel, FinanceError, FinanceShell, FinanceStatus, FinanceTable, FinanceTableSkeleton, Money, useDebouncedValue } from "@/modules/finance/pages/components/finance-shell";
+import { notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
 
 export default function FinanceBudgetsPage() {
   const [searchInput, setSearchInput] = useState("");
@@ -61,7 +62,11 @@ export default function FinanceBudgetsPage() {
   const action = useMutation({
     mutationFn: ({ budget, action }: { budget: FinanceBudget; action: "approve" | "lock" | "archive" }) => financeApi.budgetAction(budget.id, action),
     onMutate: ({ budget }) => setBusyId(budget.id),
-    onSuccess: async (_, variables) => { await client.invalidateQueries({ queryKey: ["finance", "budgets"] }); setBusyId(null); toast.success(`Budget ${variables.action}d.`); },
+    onSuccess: async (data, variables) => {
+      await client.invalidateQueries({ queryKey: ["finance", "budgets"] });
+      setBusyId(null);
+      notifyMutationOutcome(data, { savedMessage: `Budget ${variables.action}d.`, queryClient: client });
+    },
     onError: (error) => { toast.error(getErrorMessage(error, "Budget action could not be completed.")); setBusyId(null); },
   });
 

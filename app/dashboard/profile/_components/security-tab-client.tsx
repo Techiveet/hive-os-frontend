@@ -1,7 +1,7 @@
 // app/dashboard/profile/_components/security-tab-client.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,7 +32,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { logFrontendAction } from "@/lib/api";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTranslation } from "@/store/use-translation";
-import { getAuthHeaders, getBackendApiRoot, getWorkspaceScopeKey } from "@/lib/runtime-context";
+import { getAccessToken, getAuthHeaders, getBackendApiRoot, getWorkspaceScopeKey } from "@/lib/runtime-context";
 import {
   Dialog,
   DialogContent,
@@ -44,8 +44,6 @@ import {
 
 type TwoFactorData = {
   enabled?: boolean;
-  secret?: string;
-  qr_code_url?: string;
   confirmed_at?: string | null;
   message?: string;
 };
@@ -73,11 +71,43 @@ export function SecurityTabClient() {
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [hasCopiedCodes, setHasCopiedCodes] = useState(false);
   const [hasCopiedSecret, setHasCopiedSecret] = useState(false);
-  const [showQrCode, setShowQrCode] = useState(true);
+  const [showQrCode, setShowQrCode] = useState(false);
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
-  const [pendingAction, setPendingAction] = useState<"enable" | "disable" | "reconfigure" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"enable" | "disable" | "reconfigure" | "reveal" | null>(null);
+
+  const [passwordError, setPasswordError] = useState("");
+  const requestGeneration = useRef(0);
+  const passwordDialogTrigger = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const clearSensitiveState = () => {
+      requestGeneration.current += 1;
+      setSetupQrUrl(""); setSetupSecretKey(""); setRecoveryCodes([]);
+      setShowQrCode(false); setPasswordInput(""); setPasswordError("");
+      setIsPasswordModalOpen(false); setPendingAction(null); setIsSettingUp2FA(false);
+      queryClient.removeQueries({ queryKey: ["twoFactorDetails"] });
+    };
+    let identity = `${getWorkspaceScopeKey()}:${getAccessToken() ?? ""}`;
+    const handleSecurityEvent = (event: Event) => {
+      const currentIdentity = `${getWorkspaceScopeKey()}:${getAccessToken() ?? ""}`;
+      if (event.type === "hive_session_cleared" || currentIdentity !== identity) {
+        identity = currentIdentity;
+        clearSensitiveState();
+      }
+    };
+    clearSensitiveState();
+    const events = ["hive_session_cleared", "hive_session_changed", "hive_security_cleared"];
+    events.forEach((event) => window.addEventListener(event, handleSecurityEvent));
+    return () => { requestGeneration.current += 1; events.forEach((event) => window.removeEventListener(event, handleSecurityEvent)); };
+  }, [scopeKey, queryClient]);
+
+  useEffect(() => {
+    if (!setupSecretKey || isSettingUp2FA) return;
+    const timer = setTimeout(() => { setSetupSecretKey(""); setSetupQrUrl(""); setShowQrCode(false); }, 60000);
+    return () => clearTimeout(timer);
+  }, [setupSecretKey, isSettingUp2FA]);
 
   // 1. Fetch 2FA Status & Barcode Details via React Query
   const {
@@ -85,7 +115,7 @@ export function SecurityTabClient() {
     isLoading: isFetching2FA,
     refetch: refetch2FA,
   } = useQuery<TwoFactorData>({
-    queryKey: ["twoFactorDetails", scopeKey],
+    queryKey: ["twoFactorStatus", scopeKey],
     queryFn: async () => {
       const res = await fetch(`${getBackendApiRoot()}/2fa/qr`, {
         headers: getAuthHeaders(),
@@ -118,39 +148,43 @@ export function SecurityTabClient() {
   });
 
   const is2FAActive = Boolean(twoFactorData?.enabled || userProfile?.two_factor_enabled);
-  const activeQrUrl = setupQrUrl || twoFactorData?.qr_code_url || "";
-  const activeSecretKey = setupSecretKey || twoFactorData?.secret || "";
+  const activeQrUrl = setupQrUrl;
+  const activeSecretKey = setupSecretKey;
 
   // 3. Password Verification & Action Execution Mutation
   const executeAuthActionMut = useMutation({
+    gcTime: 0,
     mutationFn: async ({
       action,
       password,
+      generation,
     }: {
-      action: "enable" | "disable" | "reconfigure";
+      action: "enable" | "disable" | "reconfigure" | "reveal";
       password?: string;
+      generation: number;
     }) => {
-      if (action === "reconfigure") {
-        await fetch(`${getBackendApiRoot()}/2fa/disable`, {
-          method: "POST",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ password }),
-        });
+      const apiRoot = getBackendApiRoot();
+      const headers = getAuthHeaders({ "Content-Type": "application/json" });
+      if (generation !== requestGeneration.current) throw new Error("The security session changed.");
+      if (action === "reveal") {
+        const res = await fetch(`${apiRoot}/2fa/qr`, { method: "POST", headers: headers, body: JSON.stringify({ password }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Could not authorize authenticator access");
+        return { action, ...data };
       }
-
       if (action === "enable" || action === "reconfigure") {
-        const res = await fetch(`${getBackendApiRoot()}/2fa/enable`, {
+        const res = await fetch(`${apiRoot}/2fa/${action === "reconfigure" ? "reconfigure" : "enable"}`, {
           method: "POST",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
+          headers: headers,
           body: JSON.stringify({ password }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || "Failed to generate 2FA");
         return { action, ...data };
       } else {
-        const res = await fetch(`${getBackendApiRoot()}/2fa/disable`, {
+        const res = await fetch(`${apiRoot}/2fa/disable`, {
           method: "POST",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
+          headers: headers,
           body: JSON.stringify({ password }),
         });
         const data = await res.json();
@@ -158,10 +192,16 @@ export function SecurityTabClient() {
         return { action, ...data };
       }
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
+      if (variables.generation !== requestGeneration.current) return;
       setIsPasswordModalOpen(false);
-      setPasswordInput("");
+      setPasswordInput(""); setPasswordError("");
 
+      if (data.action === "reveal") {
+        setSetupQrUrl(data.qr_code_url || ""); setSetupSecretKey(data.secret || "");
+        setShowQrCode(true);
+        return;
+      }
       if (data.action === "enable" || data.action === "reconfigure") {
         setSetupQrUrl(data.qr_code_url);
         setSetupSecretKey(data.secret);
@@ -180,7 +220,7 @@ export function SecurityTabClient() {
         setSetupQrUrl("");
         setSetupSecretKey("");
         setRecoveryCodes([]);
-        queryClient.invalidateQueries({ queryKey: ["twoFactorDetails"] });
+        queryClient.invalidateQueries({ queryKey: ["twoFactorStatus"] });
         queryClient.invalidateQueries({ queryKey: ["authUserProfile"] });
         logFrontendAction({
           module: "Profile Settings",
@@ -192,14 +232,18 @@ export function SecurityTabClient() {
         );
       }
     },
-    onError: (error: unknown) => {
+    onError: (error: unknown, variables) => {
+      if (variables.generation !== requestGeneration.current) return;
+      setPasswordError(getErrorMessage(error, t("global.error", "Action Failed")));
       toast.error(getErrorMessage(error, t("global.error", "Action Failed")));
     },
   });
 
   // 4. Confirm 2FA Code Mutation
   const confirm2FAMut = useMutation({
-    mutationFn: async (code: string) => {
+    gcTime: 0,
+    mutationFn: async ({ code, generation }: { code: string; generation: number }) => {
+      if (generation !== requestGeneration.current) throw new Error("The security session changed.");
       const res = await fetch(`${getBackendApiRoot()}/2fa/confirm`, {
         method: "POST",
         headers: getAuthHeaders({ "Content-Type": "application/json" }),
@@ -211,15 +255,16 @@ export function SecurityTabClient() {
       }
       return data;
     },
-    onSuccess: async (data) => {
+    onSuccess: async (data, variables) => {
+      if (variables.generation !== requestGeneration.current) return;
       setRecoveryCodes(data.recovery_codes || []);
       setIsSettingUp2FA(false);
       setVerificationCode("");
       setSetupQrUrl("");
       setSetupSecretKey("");
-      setShowQrCode(true);
+      setShowQrCode(false);
 
-      await queryClient.invalidateQueries({ queryKey: ["twoFactorDetails"] });
+      await queryClient.invalidateQueries({ queryKey: ["twoFactorStatus"] });
       await queryClient.invalidateQueries({ queryKey: ["authUserProfile"] });
       await refetch2FA();
 
@@ -232,10 +277,18 @@ export function SecurityTabClient() {
         t("profile.security.activated_success", "Security Upgraded! Two-Factor Authentication is now active.")
       );
     },
-    onError: (error: unknown) => {
+    onError: (error: unknown, variables) => {
+      if (variables.generation !== requestGeneration.current) return;
       toast.error(getErrorMessage(error, t("global.error", "Verification Failed")));
     },
   });
+
+  useEffect(() => {
+    if (executeAuthActionMut.isSuccess || executeAuthActionMut.isError) executeAuthActionMut.reset();
+  }, [executeAuthActionMut.isSuccess, executeAuthActionMut.isError, executeAuthActionMut.reset]);
+  useEffect(() => {
+    if (confirm2FAMut.isSuccess || confirm2FAMut.isError) confirm2FAMut.reset();
+  }, [confirm2FAMut.isSuccess, confirm2FAMut.isError, confirm2FAMut.reset]);
 
   const handleToggleClick = () => {
     if (!canEditProfile) {
@@ -246,7 +299,8 @@ export function SecurityTabClient() {
     }
 
     setPendingAction(is2FAActive ? "disable" : "enable");
-    setPasswordInput("");
+    setPasswordInput(""); setPasswordError("");
+    passwordDialogTrigger.current = document.activeElement as HTMLElement | null;
     setIsPasswordModalOpen(true);
   };
 
@@ -256,14 +310,25 @@ export function SecurityTabClient() {
       return;
     }
     setPendingAction("reconfigure");
-    setPasswordInput("");
+    setPasswordInput(""); setPasswordError("");
+    passwordDialogTrigger.current = document.activeElement as HTMLElement | null;
+    setIsPasswordModalOpen(true);
+  };
+
+  const handleBarcodeToggle = () => {
+    if (showQrCode) {
+      setShowQrCode(false); setSetupQrUrl(""); setSetupSecretKey("");
+      return;
+    }
+    setPendingAction("reveal"); setPasswordInput(""); setPasswordError("");
+    passwordDialogTrigger.current = document.activeElement as HTMLElement | null;
     setIsPasswordModalOpen(true);
   };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pendingAction || !canEditProfile) return;
-    executeAuthActionMut.mutate({ action: pendingAction, password: passwordInput });
+    executeAuthActionMut.mutate({ action: pendingAction, password: passwordInput, generation: requestGeneration.current });
   };
 
   const handleConfirm2FA = (e: React.FormEvent) => {
@@ -273,7 +338,7 @@ export function SecurityTabClient() {
       toast.error(t("profile.security.code_length_error", "Please enter a valid 6-digit code."));
       return;
     }
-    confirm2FAMut.mutate(verificationCode);
+    confirm2FAMut.mutate({ code: verificationCode, generation: requestGeneration.current });
   };
 
   const copyRecoveryCodesToClipboard = () => {
@@ -324,8 +389,8 @@ export function SecurityTabClient() {
   return (
     <div className="space-y-6">
       {/* PASSWORD AUTHORIZATION MODAL */}
-      <Dialog open={isPasswordModalOpen} onOpenChange={setIsPasswordModalOpen}>
-        <DialogContent className="sm:max-w-md rounded-[2rem] bg-card/95 backdrop-blur-xl border-border/50 shadow-2xl">
+      <Dialog open={isPasswordModalOpen} onOpenChange={(open) => { setIsPasswordModalOpen(open); if (!open) { setPasswordInput(""); setPasswordError(""); } }}>
+        <DialogContent onCloseAutoFocus={(event) => { event.preventDefault(); passwordDialogTrigger.current?.focus(); }} className="sm:max-w-md rounded-[2rem] bg-card/95 backdrop-blur-xl border-border/50 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl font-space">
               <KeyRound className="h-5 w-5 text-primary" />
@@ -339,22 +404,28 @@ export function SecurityTabClient() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handlePasswordSubmit} className="space-y-4 pt-2">
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="mfa-current-password" className="text-foreground">{t("profile.security.current_password_required", "Current password (required)")}</Label>
               <Input
+                id="mfa-current-password"
+                autoComplete="current-password"
+                aria-invalid={Boolean(passwordError)}
+                aria-describedby={passwordError ? "mfa-password-error" : undefined}
                 type="password"
                 placeholder={t("profile.security.password_placeholder", "Enter current account password")}
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 required
                 disabled={!canEditProfile || executeAuthActionMut.isPending}
-                className="bg-muted/30 h-12 rounded-xl transition-all focus-visible:ring-primary font-mono"
+                className="bg-muted/30 h-12 rounded-xl border-foreground/60 placeholder:text-foreground/70 transition-all focus-visible:border-foreground focus-visible:ring-foreground font-mono"
               />
+              {passwordError && <p id="mfa-password-error" role="alert" className="text-sm text-foreground">{passwordError}</p>}
             </div>
             <DialogFooter className="pt-2 flex sm:justify-between items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
-                className="rounded-xl"
+                className="rounded-xl border-foreground/60 focus-visible:ring-foreground"
                 onClick={() => setIsPasswordModalOpen(false)}
               >
                 {t("global.cancel", "Cancel")}
@@ -406,6 +477,7 @@ export function SecurityTabClient() {
           </div>
           <div className="flex items-center gap-3">
             <Switch
+              aria-label={t("profile.security.title", "Two-Factor Authentication (2FA)")}
               checked={is2FAActive || isSettingUp2FA}
               onCheckedChange={handleToggleClick}
               disabled={!canEditProfile || executeAuthActionMut.isPending}
@@ -440,7 +512,7 @@ export function SecurityTabClient() {
           )}
 
           {/* ACTIVE 2FA: PERSISTENT QR BARCODE & SECRET KEY SECTION */}
-          {is2FAActive && (
+          {is2FAActive && !isSettingUp2FA && (
             <div id="tour-profile-2fa-setup" className="space-y-6 animate-in fade-in duration-500">
               <div className="p-6 bg-gradient-to-br from-emerald-500/5 via-muted/20 to-background rounded-2xl border border-emerald-500/20 shadow-sm space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/40">
@@ -451,8 +523,8 @@ export function SecurityTabClient() {
                     </h3>
                     <p className="text-xs text-muted-foreground">
                       {t(
-                        "profile.security.barcode_desc",
-                        "Your active barcode is always accessible here. You can scan it into additional devices or backup authenticators."
+                        "profile.security.barcode_reauthorization_desc",
+                        "Confirm your current password to reveal the barcode. It is hidden again after one minute."
                       )}
                     </p>
                   </div>
@@ -461,7 +533,8 @@ export function SecurityTabClient() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setShowQrCode(!showQrCode)}
+                      onClick={handleBarcodeToggle}
+                      disabled={!canEditProfile || executeAuthActionMut.isPending}
                       className="rounded-xl text-xs font-mono h-9 border-border/60 bg-background/80"
                     >
                       {showQrCode ? (
@@ -558,6 +631,7 @@ export function SecurityTabClient() {
           {/* SETUP IN PROGRESS CARD (WHEN INITIATING OR RECONFIGURING) */}
           {isSettingUp2FA && (
             <div className="p-6 bg-gradient-to-br from-primary/5 via-muted/20 to-background rounded-2xl border border-primary/20 shadow-sm space-y-6 animate-in slide-in-from-top-4 duration-300">
+              {is2FAActive && <p className="text-sm text-foreground">{t("profile.security.replacement_pending", "Your current authenticator remains active until you confirm the replacement code.")}</p>}
               <div className="grid md:grid-cols-2 gap-8 items-center">
                 {/* QR Code Presentation */}
                 <div className="flex flex-col items-center justify-center p-6 bg-background/60 rounded-2xl border border-border/60 shadow-inner">
@@ -596,6 +670,7 @@ export function SecurityTabClient() {
                         variant="outline"
                         size="icon"
                         onClick={copySecretToClipboard}
+                        aria-label={t("profile.security.copy_secret_key", "Copy authenticator secret key")}
                         disabled={!activeSecretKey}
                         className="h-9 w-9 rounded-xl shrink-0"
                       >
@@ -609,16 +684,19 @@ export function SecurityTabClient() {
                   </div>
 
                   <div className="space-y-2 pt-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <Label htmlFor="mfa-confirmation-code" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                       {t("profile.security.enter_code_prompt", "2. Enter 6-Digit Code")}
                     </Label>
                     <Input
+                      id="mfa-confirmation-code"
                       type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
                       maxLength={6}
                       placeholder="000000"
                       value={verificationCode}
                       onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
-                      className="font-mono text-center tracking-[0.5em] text-2xl h-14 bg-background rounded-xl border-border focus-visible:ring-primary shadow-inner"
+                      className="font-mono text-center tracking-[0.5em] text-2xl h-14 bg-background rounded-xl border-foreground/60 placeholder:text-foreground/70 focus-visible:ring-foreground shadow-inner"
                       disabled={!canEditProfile || confirm2FAMut.isPending}
                       autoFocus
                       required

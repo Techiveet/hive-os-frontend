@@ -5,3 +5,22 @@ node_modules
 npm-debug.log
 tsconfig.tsbuildinfo
 .env*
+
+# Browser traces, local validation output and private build inputs.
+/.codex-validation/
+/.playwright/
+/playwright-report/
+/test-results/
+/coverage/
+/.next-dev*
+/.next-e2e/
+/out/
+/build/
+/.vercel/
+**/*.orig
+**/*.tmp.*
+**/*.pem
+*.tsbuildinfo
+*-debug.log*
+*-error.log*
+/p4g3_build.log

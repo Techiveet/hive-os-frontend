@@ -86,7 +86,7 @@ export default function UnitDetailPage() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["property"] });
 
   const save = useMutation({
-    mutationFn: ({ kind, values }: { kind: Exclude<DialogKind, null>; values: FormValues }) => {
+    mutationFn: async ({ kind, values }: { kind: Exclude<DialogKind, null>; values: FormValues }) => {
       if (kind === "edit") return propertyApi.updateUnit(unitId, values);
       if (kind === "status") return propertyApi.changeUnitStatus(unitId, values.status, values.reason);
       return propertyApi.saveRetailProfile(unitId, values);

@@ -17,6 +17,9 @@ import {
 const QUERY_CACHE_NAMESPACE = "query-cache:v1";
 const MAX_CACHE_AGE_MS = 24 * 60 * 60 * 1000;
 
+const containsMfaMaterial = (key: readonly unknown[]): boolean =>
+  key[0] === "twoFactorDetails" || key[0] === "twoFactorStatus";
+
 /*
  * localStorage is ~5MB for the whole origin, shared with the session, the
  * queued offline mutations and the pending uploads. Dehydrating the entire
@@ -62,8 +65,10 @@ export const restorePersistedQueryCache = (queryClient: QueryClient): void => {
     // Strip any previously-persisted product detail queries (they are now excluded
     // from persistence, but old snapshots might still contain them).
     if (parsed.state?.queries) {
+      const hadMfaMaterial = parsed.state.queries.some((q) => containsMfaMaterial(q.queryKey));
       parsed.state.queries = parsed.state.queries.filter((q) => {
         const key = q.queryKey;
+        if (containsMfaMaterial(key)) return false;
         return !(
           Array.isArray(key) &&
           key[0] === "inventory" &&
@@ -71,6 +76,9 @@ export const restorePersistedQueryCache = (queryClient: QueryClient): void => {
           key[2] === "detail"
         );
       });
+      // Old versions persisted the active TOTP seed. Remove only this optional
+      // query snapshot immediately; queued offline work is preserved.
+      if (hadMfaMaterial) safeLocalStorageRemoveItem(storageKey);
     }
 
     hydrate(queryClient, parsed.state);
@@ -113,6 +121,7 @@ const persistQueryCache = (queryClient: QueryClient): void => {
       // be fetched fresh so edits (e.g. currency, prices) are never masked by
       // a stale localStorage snapshot.
       const key = query.queryKey;
+      if (containsMfaMaterial(key)) return false;
       if (
         Array.isArray(key) &&
         key[0] === "inventory" &&

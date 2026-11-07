@@ -143,6 +143,7 @@ type FileManagerVideoVersion = {
 };
 
 type FileManagerMediaDetails = {
+  media_id?: number;
   title?: string;
   name?: string;
   mime_type?: string;
@@ -1722,7 +1723,8 @@ export function FileManagerClient({
     let hlsUrl = "";
     if (media.hls_path) {
       const cleanPath = media.hls_path.replace(/^\/?(storage\/)?/, "");
-      hlsUrl = `${getBackendApiRoot()}/files/stream/${cleanPath.split("/")[0]}/playlist.m3u8`;
+      const mediaId = media.media_id ?? cleanPath.split("/")[0];
+      hlsUrl = `${getBackendApiRoot()}/files/stream/${mediaId}/playlist.m3u8`;
     }
 
     if (mime.startsWith("image/")) {

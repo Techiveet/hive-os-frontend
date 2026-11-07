@@ -31,6 +31,7 @@ import {
   Money,
   useDebouncedValue,
 } from "@/modules/finance/pages/components/finance-shell";
+import { isWorkflowPendingSubmission, notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -151,6 +152,10 @@ export default function FinanceOperationsPage() {
     onSuccess: async (data, variables) => {
       await refresh();
       setFormResetKey((value) => value + 1);
+      if (isWorkflowPendingSubmission(data)) {
+        notifyMutationOutcome(data, { savedMessage: `${variables.label} completed.`, queryClient: client });
+        return;
+      }
       if (variables.label === "Asset depreciation" && data && typeof data === "object" && "processed" in data) {
         const processed = Number((data as { processed: number }).processed);
         if (processed === 0) {

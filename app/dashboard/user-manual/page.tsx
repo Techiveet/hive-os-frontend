@@ -361,10 +361,10 @@ export default function UserManualPage() {
                 <div className="flex items-center gap-2 mb-2 font-mono text-xs font-bold text-primary">
                   <span>CHAPTER 00</span>
                   <span>•</span>
-                  <span>SECURITY & AUTHENTICATION</span>
+                  <span>SECURITY &amp; AUTHENTICATION</span>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
-                  Central Administrator Authentication & Gateway Handshake
+                  Central Administrator Authentication &amp; Gateway Handshake
                 </h2>
                 <p className="text-sm text-muted-foreground mt-2">
                   Official operational procedure for establishing cryptographic uplink, authenticating as Central Super Administrator, and accessing the Central Command workspace.
@@ -376,7 +376,7 @@ export default function UserManualPage() {
                 <div className="p-4 rounded-2xl border border-primary/30 bg-primary/5">
                   <div className="flex items-center gap-2 text-primary font-bold text-sm mb-1">
                     <Globe className="w-4 h-4" />
-                    Target Domain & Gateway
+                    Target Domain &amp; Gateway
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     Always verify your address bar shows the Central Master Gateway:{" "}
@@ -537,7 +537,7 @@ export default function UserManualPage() {
                       5
                     </div>
                     <div className="space-y-2 flex-1">
-                      <h4 className="font-bold text-foreground">Session Decryption & Automatic Redirect</h4>
+                      <h4 className="font-bold text-foreground">Session Decryption &amp; Automatic Redirect</h4>
                       <p className="text-muted-foreground text-xs leading-relaxed">
                         Upon successful credentials verification:
                       </p>
@@ -559,14 +559,14 @@ export default function UserManualPage() {
                 <div className="flex items-center gap-2 mb-2 font-mono text-xs font-bold text-emerald-500">
                   <span>CHAPTER 00-T</span>
                   <span>•</span>
-                  <span>SECURITY & AUTHENTICATION</span>
+                  <span>SECURITY &amp; AUTHENTICATION</span>
                   <span>•</span>
                   <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 font-mono text-[10px] bg-emerald-500/10">
                     TENANT OPERATOR
                   </Badge>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
-                  Tenant Workspace Sign-In & Operational Authentication
+                  Tenant Workspace Sign-In &amp; Operational Authentication
                 </h2>
                 <p className="text-sm text-muted-foreground mt-2">
                   Official operational procedure for logging into your organization&apos;s isolated Hive.OS workspace, verifying subdomain routing, authenticating operator credentials, and beginning your shift securely.
@@ -749,14 +749,14 @@ export default function UserManualPage() {
                 <div className="flex items-center gap-2 mb-2 font-mono text-xs font-bold text-primary">
                   <span>CHAPTER 01</span>
                   <span>•</span>
-                  <span>CORE OPERATIONS & TELEMETRY</span>
+                  <span>CORE OPERATIONS &amp; TELEMETRY</span>
                   <span>•</span>
                   <Badge variant="outline" className="border-primary/40 text-primary font-mono text-[10px]">
-                    CENTRAL & TENANT
+                    CENTRAL &amp; TENANT
                   </Badge>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
-                  Executive Dashboard & Mission Control Cockpit
+                  Executive Dashboard &amp; Mission Control Cockpit
                 </h2>
                 <p className="text-sm text-muted-foreground mt-2">
                   Complete operational manual for the Hive.OS central mission control: understanding live telemetry, triggering administrative quick actions (including cache flushing), reading real-time analytics, and managing tenant infrastructure.
@@ -845,7 +845,7 @@ export default function UserManualPage() {
               <div className="space-y-6 pt-4 border-t border-border/50">
                 <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                   <Compass className="w-5 h-5 text-primary" />
-                  Functional Anatomy & Subsystem Breakdown
+                  Functional Anatomy &amp; Subsystem Breakdown
                 </h3>
                 <p className="text-xs text-muted-foreground">
                   Below is a detailed guide explaining what each numbered section on the Mission Control dashboard does and how to operate it:
@@ -859,7 +859,7 @@ export default function UserManualPage() {
                         1
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Sidebar Navigation & In-App User Manual
+                        Sidebar Navigation &amp; In-App User Manual
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-blue-500/40 text-blue-500 ml-auto">
                         NAVIGATION
@@ -871,7 +871,7 @@ export default function UserManualPage() {
                       </p>
                       <ul className="list-disc pl-5 space-y-1">
                         <li><strong className="text-foreground">Module Search:</strong> Filter modules on the fly with the top search input.</li>
-                        <li><strong className="text-foreground">Core Workspaces:</strong> Dashboard, System Audit Logs, Identity & Access (RBAC), Module Subscriptions, and Tenant Accounts.</li>
+                        <li><strong className="text-foreground">Core Workspaces:</strong> Dashboard, System Audit Logs, Identity &amp; Access (RBAC), Module Subscriptions, and Tenant Accounts.</li>
                         <li><strong className="text-foreground">User Manual Link:</strong> Dedicated button launching this in-app documentation guide directly from anywhere in Hive.OS.</li>
                         <li><strong className="text-foreground">Disconnect Node:</strong> Securely invalidates session tokens, clears client state, and returns to the Central Gateway.</li>
                       </ul>
@@ -885,7 +885,7 @@ export default function UserManualPage() {
                         2
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Global Command Bar & Interactive System Tours
+                        Global Command Bar &amp; Interactive System Tours
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-cyan-500/40 text-cyan-500 ml-auto">
                         GLOBAL COMMAND
@@ -907,7 +907,7 @@ export default function UserManualPage() {
                         3
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Mission Control Quick Actions & Cache Flush
+                        Mission Control Quick Actions &amp; Cache Flush
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/40 text-emerald-500 ml-auto">
                         OPERATIONS
@@ -947,7 +947,7 @@ export default function UserManualPage() {
                         4
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Cluster Infrastructure & RBAC Key Metrics
+                        Cluster Infrastructure &amp; RBAC Key Metrics
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-cyan-500/40 text-cyan-500 ml-auto">
                         LIVE TELEMETRY
@@ -984,16 +984,16 @@ export default function UserManualPage() {
                         5
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        24H Telemetry & All 55 Registered Modules Chart
+                        24H Telemetry &amp; All 55 Registered Modules Chart
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-purple-500/40 text-purple-500 ml-auto">
-                        ANALYTICS & CATALOG
+                        ANALYTICS &amp; CATALOG
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground leading-relaxed space-y-2">
                       <ul className="list-disc pl-5 space-y-1">
-                        <li><strong className="text-foreground">Live Telemetry & Throughput (Left):</strong> Continuous 24-hour visual curve tracking API request rates across all tenant shards, capturing peak operational hours.</li>
-                        <li><strong className="text-foreground">Modules & Subscriptions (Right):</strong> Horizontal distribution chart showcasing all 55 registered system modules (Warehouse, Accounting, HRM, Logistics, AI Copilot, etc.) with subscribed tenant counts. Features interactive dragging and zoom controls without clipping.</li>
+                        <li><strong className="text-foreground">Live Telemetry &amp; Throughput (Left):</strong> Continuous 24-hour visual curve tracking API request rates across all tenant shards, capturing peak operational hours.</li>
+                        <li><strong className="text-foreground">Modules &amp; Subscriptions (Right):</strong> Horizontal distribution chart showcasing all 55 registered system modules (Warehouse, Accounting, HRM, Logistics, AI Copilot, etc.) with subscribed tenant counts. Features interactive dragging and zoom controls without clipping.</li>
                       </ul>
                     </div>
                   </div>
@@ -1005,16 +1005,16 @@ export default function UserManualPage() {
                         6
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        24H Activity Flow & PostgreSQL / Redis Memory Distribution
+                        24H Activity Flow &amp; PostgreSQL / Redis Memory Distribution
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-blue-500/40 text-blue-500 ml-auto">
-                        STORAGE & SESSIONS
+                        STORAGE &amp; SESSIONS
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground leading-relaxed space-y-2">
                       <ul className="list-disc pl-5 space-y-1">
                         <li><strong className="text-foreground">24H Activity Flow (Left):</strong> Compares automated background system executions (green curve) versus authenticated human operator sessions (blue curve).</li>
-                        <li><strong className="text-foreground">Storage & Cache Allocation (Right):</strong> Visual distribution of PostgreSQL storage usage across core database tables alongside Redis in-memory cache allocation.</li>
+                        <li><strong className="text-foreground">Storage &amp; Cache Allocation (Right):</strong> Visual distribution of PostgreSQL storage usage across core database tables alongside Redis in-memory cache allocation.</li>
                       </ul>
                     </div>
                   </div>
@@ -1026,10 +1026,10 @@ export default function UserManualPage() {
                         7
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Revenue Intelligence, Shard Health & Traffic Origins
+                        Revenue Intelligence, Shard Health &amp; Traffic Origins
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/40 text-emerald-500 ml-auto">
-                        FINANCE & HEALTH
+                        FINANCE &amp; HEALTH
                       </Badge>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
@@ -1058,10 +1058,10 @@ export default function UserManualPage() {
                         8
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Zero-Anomaly Alerts Feed & Live System Audit Trail
+                        Zero-Anomaly Alerts Feed &amp; Live System Audit Trail
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-amber-500/40 text-amber-500 ml-auto">
-                        SECURITY & AUDIT
+                        SECURITY &amp; AUDIT
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground leading-relaxed space-y-2">
@@ -1093,14 +1093,14 @@ export default function UserManualPage() {
                 <div className="flex items-center gap-2 mb-2 font-mono text-xs font-bold text-primary">
                   <span>CHAPTER 02</span>
                   <span>•</span>
-                  <span>SECURITY & FORENSIC AUDITING</span>
+                  <span>SECURITY &amp; FORENSIC AUDITING</span>
                   <span>•</span>
                   <Badge variant="outline" className="border-primary/40 text-primary font-mono text-[10px]">
-                    CENTRAL & TENANT
+                    CENTRAL &amp; TENANT
                   </Badge>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
-                  System Audit Logs & Forensic Investigation
+                  System Audit Logs &amp; Forensic Investigation
                 </h2>
                 <p className="text-sm text-muted-foreground mt-2">
                   Complete operational manual for tracking every administrative action, filtering anomalous events across tenant shards, inspecting before/after JSON diff payloads, and exporting tamper-evident audit trails.
@@ -1140,7 +1140,7 @@ export default function UserManualPage() {
                     FIGURE 2.1
                   </Badge>
                   <span className="text-xs font-bold font-space text-foreground">
-                    System Audit Logs Console & Investigation Workbench
+                    System Audit Logs Console &amp; Investigation Workbench
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1189,7 +1189,7 @@ export default function UserManualPage() {
               <div className="space-y-6 pt-4 border-t border-border/50">
                 <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                   <Compass className="w-5 h-5 text-primary" />
-                  Functional Anatomy & Subsystem Breakdown
+                  Functional Anatomy &amp; Subsystem Breakdown
                 </h3>
                 <p className="text-xs text-muted-foreground">
                   Below is a detailed walkthrough explaining what each numbered section on the System Audit Logs page does and how to investigate actions:
@@ -1203,7 +1203,7 @@ export default function UserManualPage() {
                         1
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Sidebar Navigation & Direct Route
+                        Sidebar Navigation &amp; Direct Route
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-cyan-500/40 text-cyan-500 ml-auto">
                         NAVIGATION
@@ -1226,7 +1226,7 @@ export default function UserManualPage() {
                         2
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Page Tour & Universal Command Header
+                        Page Tour &amp; Universal Command Header
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-blue-500/40 text-blue-500 ml-auto">
                         GLOBAL CONTROLS
@@ -1236,7 +1236,7 @@ export default function UserManualPage() {
                       <ul className="list-disc pl-5 space-y-1">
                         <li><strong className="text-foreground">Page Tour (<Compass className="w-3 h-3 inline text-primary" />):</strong> Click the Page Tour dropdown in the breadcrumb bar to launch an interactive, spotlighted walkthrough of the audit console.</li>
                         <li><strong className="text-foreground">Global Search (<kbd className="px-1 py-0.5 bg-muted rounded font-mono">Ctrl + K</kbd>):</strong> Instantly find users, tenants, or records across the entire platform.</li>
-                        <li><strong className="text-foreground">Language & Alerts:</strong> Toggle language preferences and view pending system notifications without leaving the audit workbench.</li>
+                        <li><strong className="text-foreground">Language &amp; Alerts:</strong> Toggle language preferences and view pending system notifications without leaving the audit workbench.</li>
                       </ul>
                     </div>
                   </div>
@@ -1248,7 +1248,7 @@ export default function UserManualPage() {
                         3
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Central Audit Operations & Telemetry KPI Cards
+                        Central Audit Operations &amp; Telemetry KPI Cards
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/40 text-emerald-500 ml-auto">
                         LIVE TELEMETRY
@@ -1296,7 +1296,7 @@ export default function UserManualPage() {
                         Retention Modes: Active Live Logs vs Cold Storage Vault
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-purple-500/40 text-purple-500 ml-auto">
-                        STORAGE & COMPLIANCE
+                        STORAGE &amp; COMPLIANCE
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground leading-relaxed space-y-2">
@@ -1328,19 +1328,19 @@ export default function UserManualPage() {
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                         <div className="p-3 bg-background/50 rounded-xl border border-border/50">
-                          <strong className="text-foreground font-mono text-[11px] block text-primary">Event Category & Module</strong>
-                          Filter by all activity, authentication, security events, or target specific modules like <code className="text-foreground">Security & Access</code>, <code className="text-foreground">Warehouse</code>, or <code className="text-foreground">System Audit</code>.
+                          <strong className="text-foreground font-mono text-[11px] block text-primary">Event Category &amp; Module</strong>
+                          Filter by all activity, authentication, security events, or target specific modules like <code className="text-foreground">Security &amp; Access</code>, <code className="text-foreground">Warehouse</code>, or <code className="text-foreground">System Audit</code>.
                         </div>
                         <div className="p-3 bg-background/50 rounded-xl border border-border/50">
-                          <strong className="text-foreground font-mono text-[11px] block text-primary">Operator & Exact Event</strong>
+                          <strong className="text-foreground font-mono text-[11px] block text-primary">Operator &amp; Exact Event</strong>
                           Filter by specific staff members (e.g. <code className="text-foreground">Hive Overlord</code>, <code className="text-foreground">Midyas Asmera</code>) or specific action verbs (<code className="text-foreground">logged_in</code>, <code className="text-foreground">updated</code>, <code className="text-foreground">viewed</code>).
                         </div>
                         <div className="p-3 bg-background/50 rounded-xl border border-border/50">
-                          <strong className="text-foreground font-mono text-[11px] block text-primary">Node Scope & Tenant Shard</strong>
+                          <strong className="text-foreground font-mono text-[11px] block text-primary">Node Scope &amp; Tenant Shard</strong>
                           Inspect platform-wide actions (<code className="text-foreground">All nodes</code>), central apex operations (<code className="text-foreground">central</code>), or isolate a tenant (<code className="text-foreground">lanouveil</code>, <code className="text-foreground">techive</code>, <code className="text-foreground">savory-lounge</code>).
                         </div>
                         <div className="p-3 bg-background/50 rounded-xl border border-border/50">
-                          <strong className="text-foreground font-mono text-[11px] block text-primary">Quick Date Presets & Range</strong>
+                          <strong className="text-foreground font-mono text-[11px] block text-primary">Quick Date Presets &amp; Range</strong>
                           One-click filters for <code className="text-foreground">Today</code>, <code className="text-foreground">7 days</code>, <code className="text-foreground">30 days</code>, <code className="text-foreground">90 days</code>, or precise calendar <code className="text-foreground">From / To</code> bounds.
                         </div>
                       </div>
@@ -1357,7 +1357,7 @@ export default function UserManualPage() {
                         6
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Search, CSV/JSON Export & Print Controls
+                        Search, CSV/JSON Export &amp; Print Controls
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-cyan-500/40 text-cyan-500 ml-auto">
                         DATA EXPORT
@@ -1381,7 +1381,7 @@ export default function UserManualPage() {
                         7
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Forensic Audit Table & Payload Diff Inspection
+                        Forensic Audit Table &amp; Payload Diff Inspection
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/40 text-emerald-500 ml-auto">
                         EVIDENCE LEDGER
@@ -1392,9 +1392,9 @@ export default function UserManualPage() {
                         High-precision tamper-evident audit stream displaying key forensic fields:
                       </p>
                       <ul className="list-disc pl-5 space-y-1">
-                        <li><strong className="text-foreground">ID & Action:</strong> Unique sequential identifier (e.g. <code className="text-primary font-mono">#127</code>) and action pill (<code className="text-foreground font-mono">viewed</code>, <code className="text-foreground font-mono">logged_in</code>, <code className="text-foreground font-mono">session_initialized</code>).</li>
+                        <li><strong className="text-foreground">ID &amp; Action:</strong> Unique sequential identifier (e.g. <code className="text-primary font-mono">#127</code>) and action pill (<code className="text-foreground font-mono">viewed</code>, <code className="text-foreground font-mono">logged_in</code>, <code className="text-foreground font-mono">session_initialized</code>).</li>
                         <li><strong className="text-foreground">Activity Description:</strong> Human-readable summary of the transaction (e.g. <em>"Opened the System Audit Logs datatable module."</em>).</li>
-                        <li><strong className="text-foreground">Module & Operator:</strong> Functional domain affected and identity of the actor (e.g. <code className="text-foreground">Hive Overlord</code>, <code className="text-foreground">Lanouveil Controller</code>).</li>
+                        <li><strong className="text-foreground">Module &amp; Operator:</strong> Functional domain affected and identity of the actor (e.g. <code className="text-foreground">Hive Overlord</code>, <code className="text-foreground">Lanouveil Controller</code>).</li>
                         <li><strong className="text-foreground">Node Origin:</strong> Indicates whether the event occurred in the <code className="text-primary font-mono">central</code> apex or an isolated tenant shard (<code className="text-foreground font-mono">lanouveil</code>, <code className="text-foreground font-mono">techive</code>).</li>
                         <li><strong className="text-foreground">Timestamp:</strong> Exact date and time recorded in UTC / Africa/Nairobi timezone.</li>
                         <li><strong className="text-foreground">👁 Inspect Details (Highlighted):</strong> Clicking the eye icon opens the forensic modal displaying:
@@ -1415,7 +1415,7 @@ export default function UserManualPage() {
                         8
                       </div>
                       <h4 className="font-bold text-sm text-foreground">
-                        Pagination & Rows Per Page Controls
+                        Pagination &amp; Rows Per Page Controls
                       </h4>
                       <Badge variant="outline" className="text-[10px] font-mono border-blue-500/40 text-blue-500 ml-auto">
                         PAGINATION
@@ -1454,14 +1454,14 @@ export default function UserManualPage() {
                 <div className="flex items-center gap-2 mb-2 font-mono text-xs font-bold text-primary">
                   <span>CHAPTER 03</span>
                   <span>•</span>
-                  <span>IDENTITY & ACCESS GOVERNANCE (RBAC)</span>
+                  <span>IDENTITY &amp; ACCESS GOVERNANCE (RBAC)</span>
                   <span>•</span>
                   <Badge variant="outline" className="border-primary/40 text-primary font-mono text-[10px]">
-                    CENTRAL & TENANT
+                    CENTRAL &amp; TENANT
                   </Badge>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
-                  Identity & Access Control Matrix (RBAC)
+                  Identity &amp; Access Control Matrix (RBAC)
                 </h2>
                 <p className="text-sm text-muted-foreground mt-2">
                   Complete operational manual for managing human and machine operator identities, enforcing granular role clearances, locking/unlocking account access, cloning clearance levels, inspecting forensic audit telemetry, and exploring the complete cryptographic capability dictionary across all three subsystems.
@@ -1571,7 +1571,7 @@ export default function UserManualPage() {
                         className="rounded-xl font-space font-bold text-xs gap-1.5 h-8"
                       >
                         <Pencil className="w-3.5 h-3.5 text-indigo-400" />
-                        4. Profile & Clearance (Edit)
+                        4. Profile &amp; Clearance (Edit)
                       </Button>
                       <Button
                         size="sm"
@@ -1580,7 +1580,7 @@ export default function UserManualPage() {
                         className="rounded-xl font-space font-bold text-xs gap-1.5 h-8"
                       >
                         <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                        5. Purge & Soft-Delete (Delete)
+                        5. Purge &amp; Soft-Delete (Delete)
                       </Button>
                     </div>
 
@@ -1601,7 +1601,7 @@ export default function UserManualPage() {
                             FIGURE 3.1-A
                           </Badge>
                           <span className="text-xs font-bold font-space text-foreground">
-                            Operators Directory Workbench & Live Identity Controls
+                            Operators Directory Workbench &amp; Live Identity Controls
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1650,7 +1650,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <Compass className="w-5 h-5 text-primary" />
-                          Functional Anatomy & Subsystem Breakdown (Zones 1 - 8)
+                          Functional Anatomy &amp; Subsystem Breakdown (Zones 1 - 8)
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           Below is a detailed walkthrough explaining what each numbered section on the Operators Directory page does and how to manage node operators:
@@ -1664,7 +1664,7 @@ export default function UserManualPage() {
                                 1
                               </div>
                               <h4 className="font-bold text-sm text-foreground">
-                                Sidebar Navigation & Direct Security Route
+                                Sidebar Navigation &amp; Direct Security Route
                               </h4>
                               <Badge variant="outline" className="text-[10px] font-mono border-cyan-500/40 text-cyan-500 ml-auto">
                                 NAVIGATION
@@ -1672,7 +1672,7 @@ export default function UserManualPage() {
                             </div>
                             <div className="text-xs text-muted-foreground leading-relaxed space-y-2">
                               <p>
-                                Click <strong className="text-foreground">Identity & Access</strong> in the left sidebar or navigate directly to <code className="text-primary font-mono bg-muted/50 px-1 py-0.5 rounded">{origin}/dashboard/security</code>.
+                                Click <strong className="text-foreground">Identity &amp; Access</strong> in the left sidebar or navigate directly to <code className="text-primary font-mono bg-muted/50 px-1 py-0.5 rounded">{origin}/dashboard/security</code>.
                               </p>
                               <p>
                                 The navigation pill illuminates in glowing cyan when active, indicating you are inside the central authentication, RBAC authorization, and user management matrix. Tab persistence ensures your chosen tab is maintained across browser reloads.
@@ -1687,7 +1687,7 @@ export default function UserManualPage() {
                                 2
                               </div>
                               <h4 className="font-bold text-sm text-foreground">
-                                Page Tour Trigger & Breadcrumb Navigation
+                                Page Tour Trigger &amp; Breadcrumb Navigation
                               </h4>
                               <Badge variant="outline" className="text-[10px] font-mono border-blue-500/40 text-blue-500 ml-auto">
                                 GLOBAL CONTROLS
@@ -1734,7 +1734,7 @@ export default function UserManualPage() {
                                 4
                               </div>
                               <h4 className="font-bold text-sm text-foreground">
-                                System Operators Header & Provisioning Action
+                                System Operators Header &amp; Provisioning Action
                               </h4>
                               <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/40 text-emerald-500 ml-auto">
                                 PROVISIONING
@@ -1755,10 +1755,10 @@ export default function UserManualPage() {
                                 5
                               </div>
                               <h4 className="font-bold text-sm text-foreground">
-                                Multi-Dimensional Operator Filter Suite & Date Presets
+                                Multi-Dimensional Operator Filter Suite &amp; Date Presets
                               </h4>
                               <Badge variant="outline" className="text-[10px] font-mono border-amber-500/40 text-amber-500 ml-auto">
-                                FILTERS & PRESETS
+                                FILTERS &amp; PRESETS
                               </Badge>
                             </div>
                             <div className="text-xs text-muted-foreground leading-relaxed space-y-2">
@@ -1784,10 +1784,10 @@ export default function UserManualPage() {
                                 6
                               </div>
                               <h4 className="font-bold text-sm text-foreground">
-                                Deep Matrix Search & Ledger Export Suite
+                                Deep Matrix Search &amp; Ledger Export Suite
                               </h4>
                               <Badge variant="outline" className="text-[10px] font-mono border-cyan-500/40 text-cyan-500 ml-auto">
-                                SEARCH & EXPORT
+                                SEARCH &amp; EXPORT
                               </Badge>
                             </div>
                             <div className="text-xs text-muted-foreground leading-relaxed space-y-2">
@@ -1808,7 +1808,7 @@ export default function UserManualPage() {
                                 7
                               </div>
                               <h4 className="font-bold text-sm text-foreground">
-                                Pinned Identity Anchors (Fixed Columns: # Sequence & Operator)
+                                Pinned Identity Anchors (Fixed Columns: # Sequence &amp; Operator)
                               </h4>
                               <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/40 text-emerald-500 ml-auto">
                                 FIXED COLUMNS
@@ -1826,10 +1826,10 @@ export default function UserManualPage() {
                                   <strong className="text-foreground">Sequential Row Number (#):</strong> Displays a clean, consecutive counter (<code className="text-primary font-bold">1, 2, 3...</code>) across all pages. This gives every person an easy row number for quick reference and team discussions.
                                 </li>
                                 <li>
-                                  <strong className="text-foreground">Operator (Photo, Name & Email):</strong> Stays permanently visible on the left side while you scroll horizontally through clearance roles, access statuses, and dates, so you always know whose row you are looking at.
+                                  <strong className="text-foreground">Operator (Photo, Name &amp; Email):</strong> Stays permanently visible on the left side while you scroll horizontally through clearance roles, access statuses, and dates, so you always know whose row you are looking at.
                                 </li>
                                 <li>
-                                  <strong className="text-foreground">Elevation Shadow & Divider:</strong> A subtle shadow clearly separates the pinned identity columns from the scrolling information, keeping the table clean, organized, and effortless to read.
+                                  <strong className="text-foreground">Elevation Shadow &amp; Divider:</strong> A subtle shadow clearly separates the pinned identity columns from the scrolling information, keeping the table clean, organized, and effortless to read.
                                 </li>
                               </ul>
                             </div>
@@ -1842,7 +1842,7 @@ export default function UserManualPage() {
                                 8
                               </div>
                               <h4 className="font-bold text-sm text-foreground">
-                                Instant Access Lock Switch & Security Action Hub
+                                Instant Access Lock Switch &amp; Security Action Hub
                               </h4>
                               <Badge variant="outline" className="text-[10px] font-mono border-rose-500/40 text-rose-500 ml-auto">
                                 SECURITY CONTROLS
@@ -1918,7 +1918,7 @@ export default function UserManualPage() {
                                 MODIFY
                               </Badge>
                             </div>
-                            <h4 className="font-bold text-sm text-foreground">Edit Profile & Role</h4>
+                            <h4 className="font-bold text-sm text-foreground">Edit Profile &amp; Role</h4>
                             <p className="text-xs text-muted-foreground">Update legal name, email, promote/demote clearance, and reset credentials safely.</p>
                           </button>
 
@@ -1934,7 +1934,7 @@ export default function UserManualPage() {
                                 PURGE
                               </Badge>
                             </div>
-                            <h4 className="font-bold text-sm text-foreground">Soft-Delete & Trash</h4>
+                            <h4 className="font-bold text-sm text-foreground">Soft-Delete &amp; Trash</h4>
                             <p className="text-xs text-muted-foreground">Revoke active sessions, soft-delete to 30-day Trash Bin, and restore records anytime.</p>
                           </button>
                         </div>
@@ -1991,7 +1991,7 @@ export default function UserManualPage() {
                             <div className="flex items-center gap-2">
                               <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">1. AVATAR PROFILE ASSET</Badge>
                             </div>
-                            <h5 className="font-bold text-xs text-foreground">Visual Identity & Media Storage</h5>
+                            <h5 className="font-bold text-xs text-foreground">Visual Identity &amp; Media Storage</h5>
                             <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
                               <li><strong className="text-foreground">Upload New:</strong> Allows selecting a high-resolution image file (JPG, PNG, GIF, WebP up to 5MB). The asset is compressed and stored on secure cloud/local media buckets.</li>
                               <li><strong className="text-foreground">Library:</strong> Opens the system avatar library to choose from pre-rendered procedural badge seeds.</li>
@@ -2105,7 +2105,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <Eye className="w-5 h-5 text-blue-500" />
-                          Identity Inspection Anatomy & Audit Shortcut
+                          Identity Inspection Anatomy &amp; Audit Shortcut
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           The Operator Detail sheet provides read-only security clarity without risk of accidental data mutation:
@@ -2114,7 +2114,7 @@ export default function UserManualPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="p-4 rounded-xl border border-border/60 bg-card/30 space-y-2">
                             <div className="flex items-center gap-2">
-                              <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono">1. IDENTITY BANNER & AVATAR</Badge>
+                              <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono">1. IDENTITY BANNER &amp; AVATAR</Badge>
                             </div>
                             <h5 className="font-bold text-xs text-foreground">Visual Profile Card</h5>
                             <p className="text-xs text-muted-foreground">
@@ -2136,7 +2136,7 @@ export default function UserManualPage() {
                             <div className="flex items-center gap-2">
                               <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono">3. METADATA TELEMETRY GRID</Badge>
                             </div>
-                            <h5 className="font-bold text-xs text-foreground">Database Sequence & Timestamps</h5>
+                            <h5 className="font-bold text-xs text-foreground">Database Sequence &amp; Timestamps</h5>
                             <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
                               <li><strong className="text-foreground">Joined:</strong> Immutable registration timestamp (e.g. <code>Oct 21, 2026</code>).</li>
                               <li><strong className="text-foreground">Operator ID:</strong> Internal primary database key (e.g. <code>14</code>) for API query correlations.</li>
@@ -2148,7 +2148,7 @@ export default function UserManualPage() {
                             <div className="flex items-center gap-2">
                               <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono">4. FORENSIC ACTION HUB</Badge>
                             </div>
-                            <h5 className="font-bold text-xs text-foreground">Deep Links & Communications</h5>
+                            <h5 className="font-bold text-xs text-foreground">Deep Links &amp; Communications</h5>
                             <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
                               <li><strong className="text-foreground">Send Email:</strong> Launches the default mail client addressed to the operator.</li>
                               <li><strong className="text-foreground">Audit Trail Shortcut:</strong> One-click navigation that redirects straight to <code className="text-primary font-mono">{origin}/dashboard/audit-logs</code> pre-filtered for this operator&apos;s events!</li>
@@ -2185,7 +2185,7 @@ export default function UserManualPage() {
                             FIGURE 3.1-D
                           </Badge>
                           <span className="text-xs font-bold font-space text-foreground">
-                            Edit Profile & Clearance Level Workflow (&ldquo;Edit Profile&rdquo; Modal)
+                            Edit Profile &amp; Clearance Level Workflow (&ldquo;Edit Profile&rdquo; Modal)
                           </span>
                         </div>
                         <Badge variant="outline" className="font-mono text-xs text-indigo-500 border-indigo-500/30">
@@ -2211,7 +2211,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <Pencil className="w-5 h-5 text-indigo-500" />
-                          Field Breakdown & Non-Destructive Update Rules
+                          Field Breakdown &amp; Non-Destructive Update Rules
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           Modifying an existing identity adheres to strict zero-downtime security protocols:
@@ -2231,7 +2231,7 @@ export default function UserManualPage() {
 
                           <div className="p-4 rounded-xl border border-border/60 bg-card/30 space-y-2">
                             <div className="flex items-center gap-2">
-                              <Badge className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-mono">2. LEGAL NAME & EMAIL</Badge>
+                              <Badge className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-mono">2. LEGAL NAME &amp; EMAIL</Badge>
                             </div>
                             <h5 className="font-bold text-xs text-foreground">Identity Corrections</h5>
                             <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
@@ -2244,7 +2244,7 @@ export default function UserManualPage() {
                             <div className="flex items-center gap-2">
                               <Badge className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-mono">3. CLEARANCE RE-ASSIGNMENT</Badge>
                             </div>
-                            <h5 className="font-bold text-xs text-foreground">Role Promotion & Demotion</h5>
+                            <h5 className="font-bold text-xs text-foreground">Role Promotion &amp; Demotion</h5>
                             <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
                               <li>Change the operator&apos;s assigned Spatie role with a single click.</li>
                               <li>Permissions take effect immediately upon their next authenticated API request. Cached Spatie permission stores are flushed automatically.</li>
@@ -2293,11 +2293,11 @@ export default function UserManualPage() {
                             FIGURE 3.1-E
                           </Badge>
                           <span className="text-xs font-bold font-space text-foreground">
-                            Purge Operator Confirmation & Soft-Delete Dialog
+                            Purge Operator Confirmation &amp; Soft-Delete Dialog
                           </span>
                         </div>
                         <Badge variant="outline" className="font-mono text-xs text-rose-500 border-rose-500/30">
-                          ACCESS REVOCATION & TRASH
+                          ACCESS REVOCATION &amp; TRASH
                         </Badge>
                       </div>
 
@@ -2319,7 +2319,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <Trash2 className="w-5 h-5 text-rose-500" />
-                          Cryptographic Purge Protocol & 30-Day Trash Bin Recovery
+                          Cryptographic Purge Protocol &amp; 30-Day Trash Bin Recovery
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           Deleting an operator is designed to protect cluster safety while preventing irreversible data loss:
@@ -2371,7 +2371,7 @@ export default function UserManualPage() {
                         <div className="p-5 rounded-2xl border border-rose-500/30 bg-rose-500/5 space-y-3">
                           <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
                             <AlertCircle className="w-4 h-4 text-rose-500" />
-                            How to Safely Purge & Restore an Operator
+                            How to Safely Purge &amp; Restore an Operator
                           </h4>
                           <ol className="list-decimal pl-5 text-xs text-muted-foreground space-y-1.5">
                             <li>Click the red <strong className="text-foreground">Delete (<Trash2 className="w-3 h-3 inline text-destructive" />)</strong> icon on an operator row (or select multiple checkboxes for bulk purge).</li>
@@ -2442,7 +2442,7 @@ export default function UserManualPage() {
                         className="rounded-xl font-space font-bold text-xs gap-1.5 h-8"
                       >
                         <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                        5. Purge & Soft-Delete (Delete)
+                        5. Purge &amp; Soft-Delete (Delete)
                       </Button>
                     </div>
 
@@ -2463,7 +2463,7 @@ export default function UserManualPage() {
                             FIGURE 3.2-A
                           </Badge>
                           <span className="text-xs font-bold font-space text-foreground">
-                            Access Control Matrix & Clearance Level Governance
+                            Access Control Matrix &amp; Clearance Level Governance
                           </span>
                         </div>
                         <Badge variant="outline" className="font-mono text-xs text-emerald-500 border-emerald-500/30">
@@ -2557,7 +2557,7 @@ export default function UserManualPage() {
                               </div>
                               <ArrowRight className="w-4 h-4 text-rose-500/50 group-hover:text-rose-400 group-hover:translate-x-0.5 transition-all" />
                             </div>
-                            <h4 className="font-bold text-sm text-foreground">Purge & Trash</h4>
+                            <h4 className="font-bold text-sm text-foreground">Purge &amp; Trash</h4>
                             <p className="text-[11px] text-muted-foreground mt-1">
                               Safely soft-delete unused roles with 30-day retention in the Global Trash Bin.
                             </p>
@@ -2569,7 +2569,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <ShieldCheck className="w-5 h-5 text-primary" />
-                          Role Hierarchy & Capability Binding Architecture
+                          Role Hierarchy &amp; Capability Binding Architecture
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           The Access Control Matrix defines cryptographic clearance tiers and maps them to granular capability nodes enforced by backend policies:
@@ -2622,7 +2622,7 @@ export default function UserManualPage() {
                               <span>Strictly counts consecutively from <code>1, 2, 3..</code> across pages instead of exposing internal database keys.</span>
                             </div>
                             <div className="space-y-1">
-                              <strong className="text-foreground block">• Pinned Role Name & Badge:</strong>
+                              <strong className="text-foreground block">• Pinned Role Name &amp; Badge:</strong>
                               <span>Stays fixed on the left while scrolling sideways, showing the role icon, clear title, one-click copy button, and security guard label.</span>
                             </div>
                             <div className="space-y-1">
@@ -2732,7 +2732,7 @@ export default function UserManualPage() {
                             <div className="flex items-center gap-2">
                               <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">1. ROLE DESIGNATION</Badge>
                             </div>
-                            <h5 className="font-bold text-xs text-foreground">Role Title & Purpose</h5>
+                            <h5 className="font-bold text-xs text-foreground">Role Title &amp; Purpose</h5>
                             <p className="text-xs text-muted-foreground">
                               Enter a descriptive, recognizable name for the job role (e.g. <strong className="text-foreground">Logistics Auditor</strong>, <strong className="text-foreground">Warehouse Supervisor</strong>, or <strong className="text-foreground">Billing Specialist</strong>). This name will be displayed on operator profiles, table badges, and audit logs.
                             </p>
@@ -2750,9 +2750,9 @@ export default function UserManualPage() {
 
                           <div className="p-4 rounded-xl border border-border/60 bg-card/30 space-y-2">
                             <div className="flex items-center gap-2">
-                              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">3. CAPABILITY SEARCH & FILTERS</Badge>
+                              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">3. CAPABILITY SEARCH &amp; FILTERS</Badge>
                             </div>
-                            <h5 className="font-bold text-xs text-foreground">Live Filtering & Quick Pills</h5>
+                            <h5 className="font-bold text-xs text-foreground">Live Filtering &amp; Quick Pills</h5>
                             <p className="text-xs text-muted-foreground">
                               With over 150 granular system permissions, you can type in the search bar (e.g. &ldquo;orders&rdquo; or &ldquo;delete&rdquo;) to instantly filter the list. Use the quick filter pills (<Badge variant="outline" className="text-[10px] font-mono">All</Badge>, <Badge variant="outline" className="text-[10px] font-mono">Active</Badge>, <Badge variant="outline" className="text-[10px] font-mono">Available</Badge>) to see only selected or unselected permissions.
                             </p>
@@ -2760,9 +2760,9 @@ export default function UserManualPage() {
 
                           <div className="p-4 rounded-xl border border-border/60 bg-card/30 space-y-2">
                             <div className="flex items-center gap-2">
-                              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">4. BATCH ACTIONS & SAVE</Badge>
+                              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">4. BATCH ACTIONS &amp; SAVE</Badge>
                             </div>
-                            <h5 className="font-bold text-xs text-foreground">Select All & Save Clearance</h5>
+                            <h5 className="font-bold text-xs text-foreground">Select All &amp; Save Clearance</h5>
                             <p className="text-xs text-muted-foreground">
                               Use <strong className="text-foreground">Select All</strong> to grant all filtered permissions in one click, or <strong className="text-foreground">Clear All</strong> to start fresh. When ready, click the primary <strong className="text-foreground">Create Clearance Level</strong> button to register the role immediately.
                             </p>
@@ -2826,7 +2826,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <Eye className="w-5 h-5 text-blue-500" />
-                          Clearance Profile Inspection Anatomy & Forensic Audit
+                          Clearance Profile Inspection Anatomy &amp; Forensic Audit
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           The Clearance Profile modal lets supervisors and security auditors inspect exactly what powers a role possesses without any danger of accidentally changing settings:
@@ -2835,9 +2835,9 @@ export default function UserManualPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="p-4 rounded-xl border border-border/60 bg-card/30 space-y-2">
                             <div className="flex items-center gap-2">
-                              <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono">1. CLEARANCE BADGE & COPY</Badge>
+                              <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono">1. CLEARANCE BADGE &amp; COPY</Badge>
                             </div>
-                            <h5 className="font-bold text-xs text-foreground">Role Title & One-Click Copy</h5>
+                            <h5 className="font-bold text-xs text-foreground">Role Title &amp; One-Click Copy</h5>
                             <p className="text-xs text-muted-foreground">
                               Displays the full official role title with its security shield badge. Click the <strong className="text-foreground">Copy (<Copy className="w-3 h-3 inline text-primary" />)</strong> icon to instantly copy the role title to your clipboard for documentation or messaging.
                             </p>
@@ -2930,7 +2930,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <Pencil className="w-5 h-5 text-indigo-500" />
-                          Clearance Reconfiguration Anatomy & Live Synchronization
+                          Clearance Reconfiguration Anatomy &amp; Live Synchronization
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           Modify existing clearance levels to grant new duties or remove obsolete permissions as organizational requirements evolve:
@@ -3009,7 +3009,7 @@ export default function UserManualPage() {
                             FIGURE 3.2-E
                           </Badge>
                           <span className="text-xs font-bold font-space text-foreground">
-                            Safe Role Soft-Delete & Trash Bin Workflow (&ldquo;Purge Clearance Level&rdquo; Modal)
+                            Safe Role Soft-Delete &amp; Trash Bin Workflow (&ldquo;Purge Clearance Level&rdquo; Modal)
                           </span>
                         </div>
                         <Badge variant="outline" className="font-mono text-xs text-rose-500 border-rose-500/30">
@@ -3035,7 +3035,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <Trash2 className="w-5 h-5 text-rose-500" />
-                          Role Decommissioning Safeguards & Trash Recovery
+                          Role Decommissioning Safeguards &amp; Trash Recovery
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           Deleting a role uses a safe two-step verification process and sends the role to the Global Trash Bin to protect against accidental deletion:
@@ -3132,7 +3132,7 @@ export default function UserManualPage() {
                         className="rounded-xl font-space font-bold text-xs gap-1.5 h-8"
                       >
                         <Filter className="w-3.5 h-3.5 text-cyan-400" />
-                        2. Discovery & Search
+                        2. Discovery &amp; Search
                       </Button>
                       <Button
                         size="sm"
@@ -3141,7 +3141,7 @@ export default function UserManualPage() {
                         className="rounded-xl font-space font-bold text-xs gap-1.5 h-8"
                       >
                         <Key className="w-3.5 h-3.5 text-amber-400" />
-                        3. Protocol Anatomy & Context
+                        3. Protocol Anatomy &amp; Context
                       </Button>
                       <Button
                         size="sm"
@@ -3171,7 +3171,7 @@ export default function UserManualPage() {
                             FIGURE 3.3-A
                           </Badge>
                           <span className="text-xs font-bold font-space text-foreground">
-                            Capability Dictionary & Granular Protocols Ledger
+                            Capability Dictionary &amp; Granular Protocols Ledger
                           </span>
                         </div>
                         <Badge variant="outline" className="font-mono text-xs text-cyan-500 border-cyan-500/30">
@@ -3214,7 +3214,7 @@ export default function UserManualPage() {
                               </div>
                               <ArrowRight className="w-4 h-4 text-cyan-500/50 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" />
                             </div>
-                            <h4 className="font-bold text-sm text-foreground">Discovery & Search</h4>
+                            <h4 className="font-bold text-sm text-foreground">Discovery &amp; Search</h4>
                             <p className="text-[11px] text-muted-foreground mt-1">
                               Filter 1,072 capabilities by module domain, action type, scope, or instant keyword search.
                             </p>
@@ -3260,7 +3260,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <Fingerprint className="w-5 h-5 text-primary" />
-                          Live Capability Telemetry & Metrics Breakdown
+                          Live Capability Telemetry &amp; Metrics Breakdown
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           The Capability Dictionary serves as the central security dictionary, cataloging every authorization key enforced across backend API endpoints and frontend controls:
@@ -3341,11 +3341,11 @@ export default function UserManualPage() {
                             FIGURE 3.3-B
                           </Badge>
                           <span className="text-xs font-bold font-space text-foreground">
-                            Capability Discovery, Keyword Search & Multi-Domain Filtering
+                            Capability Discovery, Keyword Search &amp; Multi-Domain Filtering
                           </span>
                         </div>
                         <Badge variant="outline" className="font-mono text-xs text-cyan-500 border-cyan-500/30">
-                          SEARCH & FILTERS
+                          SEARCH &amp; FILTERS
                         </Badge>
                       </div>
 
@@ -3367,7 +3367,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <Filter className="w-5 h-5 text-cyan-400" />
-                          Filter Subsystem Anatomy & Discovery Tools
+                          Filter Subsystem Anatomy &amp; Discovery Tools
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           With 1,072 individual authorization protocols in the system, the filtering suite enables finding any permission in seconds:
@@ -3380,7 +3380,7 @@ export default function UserManualPage() {
                             </div>
                             <h5 className="font-bold text-xs text-foreground">Filter by Functional Business Area</h5>
                             <p className="text-xs text-muted-foreground">
-                              Select from core business domains (e.g. <strong className="text-foreground">Identity & Access</strong>, <strong className="text-foreground">Inventory & Warehouse</strong>, <strong className="text-foreground">HR & Attendance</strong>, <strong className="text-foreground">Logistics Fleet</strong>, <strong className="text-foreground">Finance</strong>) to view only capabilities belonging to that specific module.
+                              Select from core business domains (e.g. <strong className="text-foreground">Identity &amp; Access</strong>, <strong className="text-foreground">Inventory &amp; Warehouse</strong>, <strong className="text-foreground">HR &amp; Attendance</strong>, <strong className="text-foreground">Logistics Fleet</strong>, <strong className="text-foreground">Finance</strong>) to view only capabilities belonging to that specific module.
                             </p>
                           </div>
 
@@ -3390,7 +3390,7 @@ export default function UserManualPage() {
                             </div>
                             <h5 className="font-bold text-xs text-foreground">Filter by Operational Power</h5>
                             <p className="text-xs text-muted-foreground">
-                              Isolate permissions by the action they grant: <strong className="text-foreground">View</strong> (read-only queries), <strong className="text-foreground">Create</strong> (adding new records), <strong className="text-foreground">Update</strong> (editing), <strong className="text-foreground">Delete</strong> (soft-delete & purge), or <strong className="text-foreground">Manage</strong> (full administrative authority).
+                              Isolate permissions by the action they grant: <strong className="text-foreground">View</strong> (read-only queries), <strong className="text-foreground">Create</strong> (adding new records), <strong className="text-foreground">Update</strong> (editing), <strong className="text-foreground">Delete</strong> (soft-delete &amp; purge), or <strong className="text-foreground">Manage</strong> (full administrative authority).
                             </p>
                           </div>
 
@@ -3419,7 +3419,7 @@ export default function UserManualPage() {
                         <div className="p-5 rounded-2xl border border-cyan-500/30 bg-cyan-500/5 space-y-3">
                           <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
                             <Compass className="w-4 h-4 text-cyan-400" />
-                            How to Search & Filter System Capabilities (Step-by-Step)
+                            How to Search &amp; Filter System Capabilities (Step-by-Step)
                           </h4>
                           <ol className="list-decimal pl-5 text-xs text-muted-foreground space-y-1.5">
                             <li>Open the <strong className="text-foreground">Capability Dictionary</strong> tab on the Security page.</li>
@@ -3445,7 +3445,7 @@ export default function UserManualPage() {
                             FIGURE 3.3-C
                           </Badge>
                           <span className="text-xs font-bold font-space text-foreground">
-                            Protocol Anatomy & Natural Language Context Generator
+                            Protocol Anatomy &amp; Natural Language Context Generator
                           </span>
                         </div>
                         <Badge variant="outline" className="font-mono text-xs text-amber-500 border-amber-500/30">
@@ -3471,7 +3471,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <Key className="w-5 h-5 text-amber-400" />
-                          Protocol Anatomy & Human-Readable Translations
+                          Protocol Anatomy &amp; Human-Readable Translations
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           Every row in the ledger provides clear context so non-technical operators and auditors can easily understand technical system permissions:
@@ -3523,7 +3523,7 @@ export default function UserManualPage() {
                         <div className="p-5 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-3">
                           <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
                             <Compass className="w-4 h-4 text-amber-400" />
-                            How to Inspect & Copy Protocol Codes for Security Policies
+                            How to Inspect &amp; Copy Protocol Codes for Security Policies
                           </h4>
                           <ol className="list-decimal pl-5 text-xs text-muted-foreground space-y-1.5">
                             <li>Find the target capability in the table (e.g. <code>action_inventory_documents</code>).</li>
@@ -3549,7 +3549,7 @@ export default function UserManualPage() {
                             FIGURE 3.3-D
                           </Badge>
                           <span className="text-xs font-bold font-space text-foreground">
-                            Cryptographic Compliance & Ledger Export Suite
+                            Cryptographic Compliance &amp; Ledger Export Suite
                           </span>
                         </div>
                         <Badge variant="outline" className="font-mono text-xs text-emerald-500 border-emerald-500/30">
@@ -3575,7 +3575,7 @@ export default function UserManualPage() {
                       <div className="space-y-6 pt-4 border-t border-border/50">
                         <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                           <Download className="w-5 h-5 text-emerald-500" />
-                          Compliance Export Tools & Audit Reporting Suite
+                          Compliance Export Tools &amp; Audit Reporting Suite
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           Security compliance certifications require regular evidence of access permissions. The Export Suite provides 4 instant options:
@@ -3586,7 +3586,7 @@ export default function UserManualPage() {
                             <div className="flex items-center gap-2">
                               <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">1. ONE-CLICK JSON EXPORT</Badge>
                             </div>
-                            <h5 className="font-bold text-xs text-foreground">Structured JSON for Automation & SIEM</h5>
+                            <h5 className="font-bold text-xs text-foreground">Structured JSON for Automation &amp; SIEM</h5>
                             <p className="text-xs text-muted-foreground">
                               Click the <strong className="text-foreground">JSON</strong> button to instantly copy the complete protocol dictionary in structured JSON format. Perfect for importing into SIEM security analyzers, automated vulnerability scanners, or custom compliance tooling.
                             </p>
@@ -3596,7 +3596,7 @@ export default function UserManualPage() {
                             <div className="flex items-center gap-2">
                               <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">2. ONE-CLICK CSV EXPORT</Badge>
                             </div>
-                            <h5 className="font-bold text-xs text-foreground">Spreadsheet Table for Excel & Sheets</h5>
+                            <h5 className="font-bold text-xs text-foreground">Spreadsheet Table for Excel &amp; Sheets</h5>
                             <p className="text-xs text-muted-foreground">
                               Click the <strong className="text-foreground">CSV</strong> button to copy all currently filtered capability rows directly to clipboard. You can paste them straight into Microsoft Excel or Google Sheets for internal audits and quarterly compliance reporting.
                             </p>
@@ -3669,7 +3669,7 @@ export default function UserManualPage() {
                   </Badge>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
-                  Multi-Tenancy & Workspace Governance
+                  Multi-Tenancy &amp; Workspace Governance
                 </h2>
                 <p className="text-sm text-muted-foreground mt-2">
                   Official operational procedures for provisioning isolated tenant nodes, executing automated database migrations, configuring tenant subdomains, and managing subscription resource quotas.
@@ -3691,7 +3691,7 @@ export default function UserManualPage() {
                 <div className="p-4 rounded-2xl border border-purple-500/30 bg-purple-500/5 space-y-1.5">
                   <div className="flex items-center gap-2 text-purple-400 font-bold text-sm">
                     <Database className="w-4 h-4" />
-                    Strict Database & Schema Isolation
+                    Strict Database &amp; Schema Isolation
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     Every organization operates on isolated PostgreSQL schemas with dedicated encryption keys, ensuring zero cross-tenant data leaks.
@@ -3726,7 +3726,7 @@ export default function UserManualPage() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                     <Activity className="w-5 h-5 text-indigo-400" />
-                    1. Platform Pulse & Real-Time Cluster Telemetry
+                    1. Platform Pulse &amp; Real-Time Cluster Telemetry
                   </h3>
                   <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
                     FIGURE 4.1
@@ -3771,10 +3771,10 @@ export default function UserManualPage() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                     <Server className="w-5 h-5 text-indigo-400" />
-                    2. Central Directory Cockpit & Multi-Criteria Filtering
+                    2. Central Directory Cockpit &amp; Multi-Criteria Filtering
                   </h3>
                   <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
-                    FIGURE 4.2 & 4.3
+                    FIGURE 4.2 &amp; 4.3
                   </Badge>
                 </div>
 
@@ -3796,7 +3796,7 @@ export default function UserManualPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                   <div className="space-y-2">
                     <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
-                      Figure 4.3: Table Registry & Action Columns
+                      Figure 4.3: Table Registry &amp; Action Columns
                     </span>
                     <div className="rounded-xl border border-border/70 overflow-hidden bg-black/40">
                       <img
@@ -3856,7 +3856,7 @@ export default function UserManualPage() {
                     <div className="h-6 w-6 rounded-full bg-indigo-500 text-white flex items-center justify-center font-mono font-bold text-xs">
                       1
                     </div>
-                    <h4 className="font-bold text-sm text-foreground">Phase 1: Node Infrastructure & Wildcard Subdomain Routing</h4>
+                    <h4 className="font-bold text-sm text-foreground">Phase 1: Node Infrastructure &amp; Wildcard Subdomain Routing</h4>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     Define the organization&apos;s legal name and system Node ID. The Node ID automatically generates the primary wildcard routing address (e.g., <code className="text-primary font-mono">starlight.techiveet.com</code>).
@@ -3879,7 +3879,7 @@ export default function UserManualPage() {
                     <div className="h-6 w-6 rounded-full bg-purple-500 text-white flex items-center justify-center font-mono font-bold text-xs">
                       2
                     </div>
-                    <h4 className="font-bold text-sm text-foreground">Phase 2: Business Landing Customization & Monaco JSON Editor</h4>
+                    <h4 className="font-bold text-sm text-foreground">Phase 2: Business Landing Customization &amp; Monaco JSON Editor</h4>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     Select the vertical business type and preset variant. The embedded Monaco Code Editor provides live JSON syntax verification, schema validation, and real-time iframe previews.
@@ -3887,7 +3887,7 @@ export default function UserManualPage() {
                   <div className="rounded-xl border border-border/70 overflow-hidden shadow-lg bg-black/40">
                     <img
                       src="/manual-screenshots/04-tenants-provision-modal-landing.png"
-                      alt="Provision Modal - Business Landing & Template Editor"
+                      alt="Provision Modal - Business Landing &amp; Template Editor"
                       className="w-full h-auto"
                     />
                   </div>
@@ -3925,7 +3925,7 @@ export default function UserManualPage() {
                     <div className="h-6 w-6 rounded-full bg-emerald-500 text-white flex items-center justify-center font-mono font-bold text-xs">
                       4
                     </div>
-                    <h4 className="font-bold text-sm text-foreground">Phase 4: Super Administrator Credentials & Automated Dispatch</h4>
+                    <h4 className="font-bold text-sm text-foreground">Phase 4: Super Administrator Credentials &amp; Automated Dispatch</h4>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     Set the primary tenant administrator&apos;s name, corporate email, and initial password. Clicking &ldquo;Provision&rdquo; dispatches the background worker queue to establish the schema, run migrations, and seed default RBAC roles.
@@ -3950,7 +3950,7 @@ export default function UserManualPage() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                     <Pencil className="w-5 h-5 text-indigo-400" />
-                    4. Node Reconfiguration & Capacity Scaling
+                    4. Node Reconfiguration &amp; Capacity Scaling
                   </h3>
                   <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
                     FIGURE 4.9
@@ -3980,10 +3980,10 @@ export default function UserManualPage() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                     <Eye className="w-5 h-5 text-indigo-400" />
-                    5. Deep Metric Inspection & Workspace Telemetry
+                    5. Deep Metric Inspection &amp; Workspace Telemetry
                   </h3>
                   <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
-                    FIGURE 4.10 & 4.11
+                    FIGURE 4.10 &amp; 4.11
                   </Badge>
                 </div>
 
@@ -3994,7 +3994,7 @@ export default function UserManualPage() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
-                      Figure 4.10: Activity & Users Tab
+                      Figure 4.10: Activity &amp; Users Tab
                     </span>
                     <div className="rounded-xl border border-border/70 overflow-hidden bg-black/40 shadow-xl">
                       <img
@@ -4010,7 +4010,7 @@ export default function UserManualPage() {
 
                   <div className="space-y-2 pt-2">
                     <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
-                      Figure 4.11: Configuration & Domains Tab
+                      Figure 4.11: Configuration &amp; Domains Tab
                     </span>
                     <div className="rounded-xl border border-border/70 overflow-hidden bg-black/40 shadow-xl">
                       <img
@@ -4033,7 +4033,7 @@ export default function UserManualPage() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                     <Globe className="w-5 h-5 text-indigo-400" />
-                    6. Custom Domain Management & Cryptographic DNS Setup
+                    6. Custom Domain Management &amp; Cryptographic DNS Setup
                   </h3>
                   <Badge variant="outline" className="font-mono text-[10px] text-indigo-400 border-indigo-500/30">
                     FIGURE 4.12
@@ -4072,7 +4072,7 @@ export default function UserManualPage() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold font-space text-foreground flex items-center gap-2">
                     <ShieldAlert className="w-5 h-5 text-destructive" />
-                    7. Emergency Suspension & Fatal Purge Protocols
+                    7. Emergency Suspension &amp; Fatal Purge Protocols
                   </h3>
                   <Badge variant="outline" className="font-mono text-[10px] text-destructive border-destructive/30">
                     FIGURE 4.13
@@ -4144,14 +4144,14 @@ export default function UserManualPage() {
                 <div className="flex items-center gap-2 mb-2 font-mono text-xs font-bold text-emerald-500">
                   <span>CHAPTER 05</span>
                   <span>•</span>
-                  <span>SUPPLY CHAIN & LOGISTICS</span>
+                  <span>SUPPLY CHAIN &amp; LOGISTICS</span>
                   <span>•</span>
                   <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 font-mono text-[10px] bg-emerald-500/10">
                     TENANT OPERATOR
                   </Badge>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-space font-black tracking-tight text-foreground">
-                  Warehouse Operations & Spatial Storage
+                  Warehouse Operations &amp; Spatial Storage
                 </h2>
                 <p className="text-sm text-muted-foreground mt-2">
                   Complete operational manual for managing physical warehouse locations, organizing zones, aisles, and racks, receiving shipments, generating QR codes, and picking inventory accurately.
@@ -4173,7 +4173,7 @@ export default function UserManualPage() {
                 <div className="p-4 rounded-2xl border border-blue-500/30 bg-blue-500/5 space-y-1.5">
                   <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
                     <QrCode className="w-4 h-4" />
-                    Industrial QR & Barcode Integration
+                    Industrial QR &amp; Barcode Integration
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     Generate and print industrial QR code labels for any bin or pallet with one click, compatible with standard laser printers and thermal barcode rolls.
@@ -4193,7 +4193,7 @@ export default function UserManualPage() {
                 <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-1.5">
                   <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
                     <Truck className="w-4 h-4" />
-                    Directed Pick & Dispatch Routes
+                    Directed Pick &amp; Dispatch Routes
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     Hive.OS calculates the shortest physical walking route through warehouse aisles so operators pick orders quickly with zero backtracking.
@@ -4205,7 +4205,7 @@ export default function UserManualPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
-                    Figure 5.1: Warehouse Spatial Topology & Inventory Management Cockpit
+                    Figure 5.1: Warehouse Spatial Topology &amp; Inventory Management Cockpit
                   </span>
                   <Badge variant="outline" className="font-mono text-[10px] text-emerald-400 border-emerald-500/30">
                     TENANT LOGISTICS
@@ -4261,7 +4261,7 @@ export default function UserManualPage() {
                       3
                     </div>
                     <div className="space-y-2 flex-1">
-                      <h4 className="font-bold text-foreground">Receiving Inbound Shipments & Goods Receipt</h4>
+                      <h4 className="font-bold text-foreground">Receiving Inbound Shipments &amp; Goods Receipt</h4>
                       <p className="text-muted-foreground text-xs leading-relaxed">
                         When goods arrive at the receiving dock, click <strong className="text-foreground">Inbound Receiving</strong>, verify the delivery invoice, scan the supplier barcodes, and click <strong className="text-foreground">Assign Bin</strong> to record the goods in storage.
                       </p>
@@ -4285,7 +4285,7 @@ export default function UserManualPage() {
                       5
                     </div>
                     <div className="space-y-2 flex-1">
-                      <h4 className="font-bold text-foreground">Order Picking & Dispatch Verification</h4>
+                      <h4 className="font-bold text-foreground">Order Picking &amp; Dispatch Verification</h4>
                       <p className="text-muted-foreground text-xs leading-relaxed">
                         When customer work orders are created, pickers follow the system-optimized route through the aisles. At the packing station, items are scanned to confirm quantity before being sealed and dispatched with tracking airway bills.
                       </p>

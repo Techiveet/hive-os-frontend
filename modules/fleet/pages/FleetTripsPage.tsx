@@ -90,7 +90,7 @@ export default function FleetTripsPage() {
   });
 
   const move = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const value = odometer ? Number(odometer) : undefined;
 
       return odometerFor!.action === "start"
