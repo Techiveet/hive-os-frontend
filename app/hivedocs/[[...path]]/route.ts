@@ -15,14 +15,26 @@ const getBackendOrigin = (): string => {
   }
 };
 
+const SAFE_HOST_PATTERN = /^[a-zA-Z0-9.-]+(?::\d{1,5})?$/;
+
 const getPublicOrigin = (request: NextRequest): string => {
-  const host =
+  const rawHost = (
     request.headers.get("x-forwarded-host") ||
     request.headers.get("host") ||
-    request.nextUrl.host;
-  const protocol =
+    request.nextUrl.host
+  )
+    .split(",")[0]
+    .trim();
+  const rawProtocol = (
     request.headers.get("x-forwarded-proto") ||
-    request.nextUrl.protocol.replace(":", "");
+    request.nextUrl.protocol.replace(":", "")
+  )
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+
+  const protocol = rawProtocol === "https" ? "https" : "http";
+  const host = SAFE_HOST_PATTERN.test(rawHost) ? rawHost : request.nextUrl.host;
 
   return `${protocol}://${host}`;
 };
@@ -32,9 +44,19 @@ const proxyDocs = async (
   context: { params: Promise<{ path?: string[] }> },
 ) => {
   const { path = [] } = await context.params;
+  if (path.some((segment) => segment === ".." || segment === "." || segment.includes("\\") || segment.includes("/"))) {
+    return new Response("Invalid documentation path.", { status: 400 });
+  }
+
   const backendOrigin = getBackendOrigin();
-  const docsPath = path.length ? `/hivedocs/${path.join("/")}` : "/hivedocs/";
-  const targetUrl = new URL(`${backendOrigin}${docsPath}`);
+  const docsPath = path.length ? `/hivedocs/${path.map(encodeURIComponent).join("/")}` : "/hivedocs/";
+  const targetUrl = new URL(docsPath, backendOrigin);
+  if (
+    targetUrl.origin !== new URL(backendOrigin).origin ||
+    (targetUrl.pathname !== "/hivedocs" && !targetUrl.pathname.startsWith("/hivedocs/"))
+  ) {
+    return new Response("Invalid documentation path.", { status: 400 });
+  }
   targetUrl.search = request.nextUrl.search;
 
   const upstream = await fetch(targetUrl, {

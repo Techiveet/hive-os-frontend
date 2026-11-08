@@ -14,15 +14,38 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SafeRichText } from "@/components/security/safe-rich-text";
 import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/errors";
-import EmojiPicker from "emoji-picker-react";
-import { FileManagerClient } from "@/components/dashboard/file-manager-client";
-import { ImageViewer } from "@/components/ui/image-viewer";
-import { VideoPlayer } from "@/components/ui/video-player";
-import { AudioPlayer } from "@/components/ui/audio-player";
-import { PdfViewer } from "@/components/ui/pdf-viewer";
-import { DocumentViewer } from "@/components/ui/document-viewer";
-import { Model3DViewer } from "@/components/ui/model-3d-viewer";
+import dynamic from "next/dynamic";
 import { getAuthHeaders, getStreamUrl, getBackendStorageUrl, getBackendApiRoot } from "@/lib/runtime-context";
+
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
+const FileManagerClient = dynamic(
+  () => import("@/components/dashboard/file-manager-client").then((m) => m.FileManagerClient),
+  { ssr: false }
+);
+const ImageViewer = dynamic(
+  () => import("@/components/ui/image-viewer").then((m) => m.ImageViewer),
+  { ssr: false }
+);
+const VideoPlayer = dynamic(
+  () => import("@/components/ui/video-player").then((m) => m.VideoPlayer),
+  { ssr: false }
+);
+const AudioPlayer = dynamic(
+  () => import("@/components/ui/audio-player").then((m) => m.AudioPlayer),
+  { ssr: false }
+);
+const PdfViewer = dynamic(
+  () => import("@/components/ui/pdf-viewer").then((m) => m.PdfViewer),
+  { ssr: false }
+);
+const DocumentViewer = dynamic(
+  () => import("@/components/ui/document-viewer").then((m) => m.DocumentViewer),
+  { ssr: false }
+);
+const Model3DViewer = dynamic(
+  () => import("@/components/ui/model-3d-viewer").then((m) => m.Model3DViewer),
+  { ssr: false }
+);
 import { isProtectedTenantFileUrl } from "@/components/ui/secure-asset-image";
 import { projectApi } from "../api";
 import { ProjectComment, ProjectAttachment } from "../types";

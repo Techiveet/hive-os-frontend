@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import type { Metadata } from "next";
 
 export type ModuleSeoOverride = {
@@ -140,10 +141,11 @@ const tenantHeadersForRequest = (requestHeaders?: HeaderReader): Record<string, 
 };
 
 /**
- * Fetches the central super-admin SEO configuration (server-side, cached 5 min).
+ * Fetches the central super-admin SEO configuration (server-side, cached 5 min,
+ * and deduplicated per-request via React cache()).
  * Returns {} on any failure so the app still renders with built-in defaults.
  */
-export async function fetchSeoSettings(): Promise<Partial<SeoSettings>> {
+export const fetchSeoSettings = cache(async (): Promise<Partial<SeoSettings>> => {
   const base = (process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
   if (!base) return {};
   try {
@@ -154,7 +156,7 @@ export async function fetchSeoSettings(): Promise<Partial<SeoSettings>> {
   } catch {
     return {};
   }
-}
+});
 
 /**
  * Fetches brand settings for the current request workspace. On tenant domains
@@ -170,7 +172,7 @@ export async function fetchPublicBrandSettings(requestHeaders?: HeaderReader): P
         Accept: "application/json",
         ...tenantHeadersForRequest(requestHeaders),
       },
-      cache: "no-store",
+      next: { revalidate: 60 },
     });
     if (!res.ok) return {};
     const json = await res.json();

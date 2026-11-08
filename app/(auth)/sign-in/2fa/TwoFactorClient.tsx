@@ -179,6 +179,7 @@ export default function TwoFactorClient() {
 
       const res = await fetch(apiUrl, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",

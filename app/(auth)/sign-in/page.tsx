@@ -135,6 +135,7 @@ export default function LoginPage() {
     try {
       const res = await fetch(apiUrl, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",

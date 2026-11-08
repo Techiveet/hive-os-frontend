@@ -9,7 +9,9 @@ import suggestion from "@/components/ui/mention-suggestion";
 import { Button } from "@/components/ui/button";
 import { Smile, Paperclip, Send, Loader2, X, FileIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import EmojiPicker from "emoji-picker-react";
+import dynamic from "next/dynamic";
+
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
 interface DiscussionComposerProps {
   onSend: (content: string, attachments: any[]) => void | Promise<void>;

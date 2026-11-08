@@ -1,11 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { DiffEditor } from "@monaco-editor/react";
+import dynamic from "next/dynamic";
 import { RotateCcw, FileCode, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TemplateLibraryCard, TemplateVersionItem, fetchVersionDiff, rollbackVersion, VersionDiffPayload } from "../../lib/api";
+
+const DiffEditor = dynamic(
+  () => import("@monaco-editor/react").then((m) => m.DiffEditor),
+  { ssr: false }
+);
 
 interface MonacoDiffWorkspaceProps {
   template: TemplateLibraryCard;
