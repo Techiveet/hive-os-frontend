@@ -63,6 +63,14 @@ const nextConfig: NextConfig = {
     // of compile latency for a substantially lower peak footprint.
     webpackMemoryOptimizations: true,
     preloadEntriesOnStart: false,
+    optimizePackageImports: [
+      "lucide-react",
+      "@heroicons/react",
+      "date-fns",
+      "framer-motion",
+      "recharts",
+      "echarts",
+    ],
   },
 
   async headers() {
@@ -122,15 +130,21 @@ const nextConfig: NextConfig = {
   turbopack: {},
 };
 
-export default withSentryConfig(nextConfig, {
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  silent: !process.env.CI,
-  authToken: process.env.SENTRY_AUTH_TOKEN,
-  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
-  webpack: {
-    treeshake: {
-      removeDebugLogging: true,
-    },
-  },
-});
+const enableSentryBuildPlugin =
+  process.env.NODE_ENV === "production" ||
+  Boolean(process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN);
+
+export default enableSentryBuildPlugin
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      silent: !process.env.CI,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+      webpack: {
+        treeshake: {
+          removeDebugLogging: true,
+        },
+      },
+    })
+  : nextConfig;

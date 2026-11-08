@@ -76,7 +76,12 @@ export function SessionTimeoutProvider({ children }: SessionTimeoutProviderProps
 
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json', ...getTenantHeaders() }
+        credentials: 'include',
+        headers: {
+          ...(token && !token.startsWith('cookie-session:') ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Accept': 'application/json',
+          ...getTenantHeaders()
+        }
       });
 
       await handleAuthFailureResponse(response);

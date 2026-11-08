@@ -23,7 +23,7 @@ const revokeSessionToken = async (
       credentials: "include",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${token}`,
+        ...(token && !token.startsWith("cookie-session:") ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.stopImpersonation ? { "X-Stop-Impersonation": "1" } : {}),
         ...tenantHeaders,
       },
@@ -171,7 +171,9 @@ export const stopImpersonation = async (targetRedirectUrl = "/dashboard") => {
       const endpoint = originalContext && originalContext !== "central" ? "/tenant/user" : "/user";
       const headers: Record<string, string> = {
         Accept: "application/json",
-        Authorization: `Bearer ${originalToken}`,
+        ...(originalToken && !originalToken.startsWith("cookie-session:")
+          ? { Authorization: `Bearer ${originalToken}` }
+          : {}),
       };
       Object.assign(
         headers,
@@ -337,7 +339,7 @@ const runUserSessionSync = async () => {
         credentials: "include",
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${token}`,
+          ...(token && !token.startsWith("cookie-session:") ? { Authorization: `Bearer ${token}` } : {}),
           ...getTenantHeaders(),
         },
       }

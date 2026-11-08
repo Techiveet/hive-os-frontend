@@ -514,7 +514,7 @@ export const getAuthHeaders = (
   };
 
   const token = getAccessToken();
-  if (token) {
+  if (token && !token.startsWith("cookie-session:")) {
     headers.Authorization = `Bearer ${token}`;
   }
 

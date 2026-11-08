@@ -24,6 +24,7 @@ const isCentralOnlyEndpoint = (url?: string): boolean => {
 };
 
 export const api = axios.create({
+  withCredentials: true,
   headers: {
     Accept: "application/json",
   },
@@ -32,7 +33,9 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
     const token = getAccessToken();
-    if (token) config.headers.Authorization = `Bearer ${token}`;
+    if (token && !token.startsWith("cookie-session:")) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
 
     const backendUrl = getBackendApiRoot();
 
