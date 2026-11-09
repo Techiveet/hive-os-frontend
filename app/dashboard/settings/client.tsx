@@ -1173,39 +1173,41 @@ function GeneralSettings() {
     isTenantNode !== null &&
     roles.some((role) => ["super admin", "admin", "tenant admin"].includes(role.toLowerCase()));
 
-  const saveMut = useMutation({
-    mutationFn: () => {
-      const {
-        maintenance_mode,
-        maintenance_message,
-        enable_communication_encryption,
-        ...basePayload
-      } = formData;
+  const buildGeneralPayload = (data: typeof formData) => {
+    const {
+      maintenance_mode,
+      maintenance_message,
+      enable_communication_encryption,
+      ...basePayload
+    } = data;
 
-      const payload = {
-        ...basePayload,
-        ...(isTenantNode === false
-          ? {
-              maintenance_mode,
-              maintenance_message,
-            }
-          : {}),
-        ...(canManageCommunicationEncryption
-          ? {
-              enable_communication_encryption,
-            }
-          : {}),
-      };
+    return {
+      ...basePayload,
+      ...(isTenantNode === false
+        ? {
+            maintenance_mode,
+            maintenance_message,
+          }
+        : {}),
+      ...(canManageCommunicationEncryption
+        ? {
+            enable_communication_encryption,
+          }
+        : {}),
+    };
+  };
+
+  const saveMut = useMutation({
+    mutationFn: (override?: typeof formData) => {
+      const data = override ?? formData;
 
       return apiFetch("/settings/general", {
         method: "POST",
-        body: JSON.stringify(payload),
-      });
+        body: JSON.stringify(buildGeneralPayload(data)),
+      }).then((response) => ({ response, data }));
     },
-    onSuccess: () => {
-      const nextEnabledState = Boolean(
-        formData.enable_communication_encryption,
-      );
+    onSuccess: ({ data }) => {
+      const nextEnabledState = Boolean(data.enable_communication_encryption);
       const currentChatConfig = useChatStore.getState().encryptionConfig;
       const currentMailConfig = useMailStore.getState().encryptionConfig;
       useChatStore.getState().setEncryptionConfig({
@@ -1233,10 +1235,68 @@ function GeneralSettings() {
   if (isLoading) return <SettingsPanelSkeleton />;
 
   const handleToggle = (key: keyof typeof formData) => {
-    setFormData((prev) => ({
-      ...prev,
-      [key]: !prev[key as keyof typeof formData],
-    }));
+    const previous = formData;
+    const next = {
+      ...formData,
+      [key]: !formData[key as keyof typeof formData],
+    } as typeof formData;
+
+    setFormData(next);
+
+    // Access toggles used to only flip local state until Commit — easy to lose on refresh.
+    // Send only toggle keys; backend merges the rest from stored settings/defaults so
+    // empty system_email_* fields cannot 422 this request.
+    if (
+      key === "enable_registration" ||
+      key === "require_2fa" ||
+      key === "enable_communication_encryption" ||
+      key === "maintenance_mode"
+    ) {
+      const togglePayload = {
+        enable_registration: next.enable_registration,
+        require_2fa: next.require_2fa,
+        ...(canManageCommunicationEncryption
+          ? {
+              enable_communication_encryption:
+                next.enable_communication_encryption,
+            }
+          : {}),
+        ...(isTenantNode === false
+          ? {
+              maintenance_mode: next.maintenance_mode,
+              maintenance_message: next.maintenance_message,
+            }
+          : {}),
+      };
+
+      void apiFetch("/settings/general", {
+        method: "POST",
+        body: JSON.stringify(togglePayload),
+      })
+        .then(() => {
+          useChatStore.getState().setEncryptionConfig({
+            ...useChatStore.getState().encryptionConfig,
+            enabled: Boolean(next.enable_communication_encryption),
+          });
+          useMailStore.getState().setEncryptionConfig({
+            ...useMailStore.getState().encryptionConfig,
+            enabled: Boolean(next.enable_communication_encryption),
+          });
+          toast.success(
+            t(
+              "settings.general_updated",
+              "System Configuration Updated Successfully!",
+            ),
+          );
+          queryClient.invalidateQueries({ queryKey: ["globalSystemSettings"] });
+        })
+        .catch((err: unknown) => {
+          setFormData(previous);
+          toast.error(
+            toErrorMessage(err, "Failed to update general settings."),
+          );
+        });
+    }
   };
 
   return (
@@ -1550,11 +1610,11 @@ function GeneralSettings() {
             </h2>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div
             onClick={() => handleToggle("enable_registration")}
             className={cn(
-              "flex items-center gap-4 p-4 rounded-xl border cursor-pointer",
+              "flex min-w-0 items-center gap-4 overflow-hidden p-4 rounded-xl border cursor-pointer",
               formData.enable_registration
                 ? "bg-purple-500/10 border-purple-500/30"
                 : "bg-muted/30",
@@ -1570,20 +1630,20 @@ function GeneralSettings() {
                 )}
               />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <Label className="text-sm font-bold cursor-pointer">
                 {t("settings.allow_registration", "Allow Public Registration")}
               </Label>
             </div>
             <Switch
               checked={formData.enable_registration}
-              className="data-[state=checked]:bg-purple-500 pointer-events-none"
+              className="shrink-0 data-[state=checked]:bg-purple-500 pointer-events-none"
             />
           </div>
           <div
             onClick={() => handleToggle("require_2fa")}
             className={cn(
-              "flex items-center gap-4 p-4 rounded-xl border cursor-pointer",
+              "flex min-w-0 items-center gap-4 overflow-hidden p-4 rounded-xl border cursor-pointer",
               formData.require_2fa
                 ? "bg-amber-500/10 border-amber-500/30"
                 : "bg-muted/30",
@@ -1599,21 +1659,21 @@ function GeneralSettings() {
                 )}
               />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <Label className="text-sm font-bold cursor-pointer">
                 {t("settings.enforce_2fa", "Enforce Global 2FA")}
               </Label>
             </div>
             <Switch
               checked={formData.require_2fa}
-              className="data-[state=checked]:bg-amber-500 pointer-events-none"
+              className="shrink-0 data-[state=checked]:bg-amber-500 pointer-events-none"
             />
           </div>
           {canManageCommunicationEncryption ? (
             <div
               onClick={() => handleToggle("enable_communication_encryption")}
               className={cn(
-                "flex items-start gap-4 p-4 rounded-xl border cursor-pointer",
+                "md:col-span-2 flex min-w-0 items-start gap-4 overflow-hidden p-4 rounded-xl border cursor-pointer",
                 formData.enable_communication_encryption
                   ? "bg-emerald-500/10 border-emerald-500/30"
                   : "bg-muted/30",
@@ -1629,14 +1689,14 @@ function GeneralSettings() {
                   )}
                 />
               </div>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1 pr-2">
                 <Label className="text-sm font-bold cursor-pointer">
                   {t(
                     "settings.communication_encryption",
                     "Communication Encryption",
                   )}
                 </Label>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-muted-foreground break-words">
                   {t(
                     "settings.communication_encryption_desc",
                     "Enable secure chat and mailbox encryption in the browser, plus protected communication storage for this workspace.",
@@ -1645,13 +1705,13 @@ function GeneralSettings() {
               </div>
               <Switch
                 checked={formData.enable_communication_encryption}
-                className="data-[state=checked]:bg-emerald-500 pointer-events-none"
+                className="shrink-0 mt-1 data-[state=checked]:bg-emerald-500 pointer-events-none"
               />
             </div>
           ) : (
             <div
               className={cn(
-                "flex items-start gap-4 p-4 rounded-xl border",
+                "md:col-span-2 flex min-w-0 items-start gap-4 overflow-hidden p-4 rounded-xl border",
                 formData.enable_communication_encryption
                   ? "bg-emerald-500/10 border-emerald-500/30"
                   : "bg-muted/30",
@@ -1667,14 +1727,14 @@ function GeneralSettings() {
                   )}
                 />
               </div>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1 pr-2">
                 <Label className="text-sm font-bold">
                   {t(
                     "settings.communication_encryption",
                     "Communication Encryption",
                   )}
                 </Label>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-muted-foreground break-words">
                   {isTenantNode
                     ? t(
                         "settings.communication_encryption_tenant_locked",
@@ -1689,7 +1749,7 @@ function GeneralSettings() {
               <Switch
                 checked={formData.enable_communication_encryption}
                 disabled
-                className="data-[state=checked]:bg-emerald-500"
+                className="shrink-0 mt-1 data-[state=checked]:bg-emerald-500"
               />
             </div>
           )}

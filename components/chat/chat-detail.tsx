@@ -1025,7 +1025,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
                       : (replyingTo ? 'Type your reply...' : 'Type a message...')
                     : 'Chat is read-only for your role'
                 }
-                className="flex-1 min-h-[36px] max-h-[100px] py-2 bg-transparent border-none focus:ring-0 text-sm"
+              className="flex-1 min-h-[36px] max-h-[100px] px-3 py-2 bg-transparent border-none focus:ring-0 text-sm"
               />
 
               <Popover>

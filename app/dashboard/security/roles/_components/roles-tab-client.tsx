@@ -58,6 +58,21 @@ type TableQuery = {
   sortDir?: string | null;
 };
 
+function extractRolesTotal(response: Record<string, unknown>): number {
+  const data = Array.isArray(response.data)
+    ? response.data
+    : Array.isArray(response.roles)
+      ? response.roles
+      : Array.isArray(response)
+        ? response
+        : [];
+  const meta = response.meta as Record<string, unknown> | undefined;
+  const pagination = response.pagination as Record<string, unknown> | undefined;
+  const candidate = meta?.total ?? pagination?.total ?? response.total;
+
+  return typeof candidate === "number" ? candidate : data.length;
+}
+
 export function RolesTabClient({
   tenantId,
   tenantName,
@@ -172,9 +187,7 @@ export function RolesTabClient({
       else if (payload.data && Array.isArray(payload.data)) rawRoles = payload.data;
       else if (payload.roles && Array.isArray(payload.roles)) rawRoles = payload.roles;
 
-      let total = rawRoles.length;
-      if (res.meta?.total !== undefined) total = res.meta.total;
-      else if (res.pagination?.total !== undefined) total = res.pagination.total;
+      const total = extractRolesTotal(res);
 
       return { rows: rawRoles, total };
     },
