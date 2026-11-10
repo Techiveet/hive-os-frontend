@@ -18,6 +18,15 @@ import { authenticatedDownload } from '@/lib/authenticated-download';
 import { getAuthHeaders } from '@/lib/runtime-context';
 import { SecureAttachmentImage } from '@/components/chat/chat-detail';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 type SharedImage = {
   url?: string;
@@ -46,6 +55,8 @@ export default function ChatInfoSidebar() {
   const { activeConversationId, conversations, setInfoSidebarOpen, deleteConversation, setActiveConversation } = useChatStore();
   const [sharedItems, setSharedItems] = useState<SharedItems>({ images: [], files: [], links: [] });
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'clear' | 'delete' | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
   
   const conversation = conversations.find(c => c.id === activeConversationId);
 
@@ -72,7 +83,8 @@ export default function ChatInfoSidebar() {
   }, [fetchSharedItems]);
 
   const handleClearChat = async () => {
-    if (!activeConversationId || !confirm('Are you sure you want to clear all messages? This cannot be undone.')) return;
+    if (!activeConversationId) return;
+    setActionBusy(true);
     try {
       await api.delete(`/chat/conversations/${activeConversationId}/messages`);
       toast.success('Chat cleared');
@@ -80,11 +92,15 @@ export default function ChatInfoSidebar() {
       window.location.reload(); 
     } catch {
       toast.error('Failed to clear chat');
+    } finally {
+      setActionBusy(false);
+      setPendingAction(null);
     }
   };
 
   const handleDeleteChat = async () => {
-    if (!activeConversationId || !confirm('Delete this conversation entirely?')) return;
+    if (!activeConversationId) return;
+    setActionBusy(true);
     try {
       await api.delete(`/chat/conversations/${activeConversationId}`);
       deleteConversation(activeConversationId);
@@ -93,6 +109,9 @@ export default function ChatInfoSidebar() {
       toast.success('Conversation deleted');
     } catch {
       toast.error('Failed to delete conversation');
+    } finally {
+      setActionBusy(false);
+      setPendingAction(null);
     }
   };
 
@@ -241,7 +260,7 @@ export default function ChatInfoSidebar() {
            <SectionLabel label="Danger Zone" color="text-red-500" />
            <div className="space-y-3">
               <button 
-                onClick={handleClearChat}
+                onClick={() => setPendingAction('clear')}
                 className="w-full flex items-center justify-between px-5 py-4 rounded-2xl bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 hover:bg-red-100 transition-colors group"
               >
                 <div className="flex items-center gap-4 text-red-600">
@@ -252,7 +271,7 @@ export default function ChatInfoSidebar() {
               </button>
               
               <button 
-                onClick={handleDeleteChat}
+                onClick={() => setPendingAction('delete')}
                 className="w-full flex items-center justify-between px-5 py-4 rounded-2xl bg-red-500 text-white shadow-xl shadow-red-500/20 hover:bg-red-600 transition-all active:scale-[0.98]"
               >
                 <div className="flex items-center gap-4">
@@ -264,6 +283,32 @@ export default function ChatInfoSidebar() {
            </div>
         </div>
       </div>
+      <AlertDialog open={pendingAction !== null} onOpenChange={(open) => { if (!open && !actionBusy) setPendingAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingAction === 'delete' ? 'Delete this conversation?' : 'Clear all messages?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingAction === 'delete'
+                ? 'The conversation will be removed from your chat list. This cannot be undone.'
+                : 'Every message in this conversation will be cleared. This cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionBusy}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={actionBusy}
+              onClick={() => void (pendingAction === 'delete' ? handleDeleteChat() : handleClearChat())}
+            >
+              {actionBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+              {pendingAction === 'delete' ? 'Delete conversation' : 'Clear messages'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

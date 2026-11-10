@@ -6,6 +6,7 @@ import { format, isToday, isYesterday } from 'date-fns';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import EmojiPicker from 'emoji-picker-react';
 import {
+  ArrowDown,
   ArrowLeft,
   Check,
   CheckCheck,
@@ -189,7 +190,7 @@ export const SecureAttachmentImage = ({
     );
   }
 
-  return <img src={blobUrl} alt={alt} className={className} />;
+  return <img src={blobUrl} alt={alt} className={className} loading="lazy" decoding="async" />;
 };
 
 const AttachmentCard = ({
@@ -342,6 +343,10 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
   const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentMetadata | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const previousMessageCountRef = useRef(0);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [unseenCount, setUnseenCount] = useState(0);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const conversationChannelRef = useRef<PresenceChannel | null>(null);
@@ -367,11 +372,42 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
   useEffect(() => {
     setReplyingTo(null);
     setPendingAttachment(null);
+    stickToBottomRef.current = true;
+    previousMessageCountRef.current = 0;
+    setShowJumpToLatest(false);
+    setUnseenCount(0);
   }, [activeConversationId]);
 
+  // Follow new messages only while the reader is at the bottom (or sent the message);
+  // otherwise leave their scroll position alone and offer a jump button.
   useEffect(() => {
+    const total = conversationMessages.length;
+    const added = total - previousMessageCountRef.current;
+    const last = conversationMessages[total - 1];
+    const sentByMe = Boolean(last) && String(last.sender_id) === String(currentUser?.id);
+
+    if (stickToBottomRef.current || sentByMe || previousMessageCountRef.current === 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setUnseenCount(0);
+    } else if (added > 0) {
+      setUnseenCount((count) => count + added);
+    }
+    previousMessageCountRef.current = total;
+  }, [conversationMessages, currentUser?.id]);
+
+  const handleMessagesScroll = (event: React.UIEvent<HTMLOListElement>) => {
+    const element = event.currentTarget;
+    const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+    stickToBottomRef.current = nearBottom;
+    setShowJumpToLatest(!nearBottom);
+    if (nearBottom) setUnseenCount(0);
+  };
+
+  const jumpToLatest = () => {
+    stickToBottomRef.current = true;
+    setUnseenCount(0);
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversationMessages]);
+  };
 
   useEffect(() => {
     const token = getAccessToken() || localStorage.getItem('token');
@@ -835,7 +871,12 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
             />
           </header>
 
-          <ol className="flex flex-1 flex-col gap-3 overflow-y-auto p-4" aria-label="Conversation messages">
+          <div className="relative flex min-h-0 flex-1 flex-col">
+          <ol
+            onScroll={handleMessagesScroll}
+            className="flex flex-1 flex-col gap-3 overflow-y-auto p-4"
+            aria-label="Conversation messages"
+          >
             <AnimatePresence>
               {conversationMessages.map((message) => {
                 const isOwn = String(message.sender_id) === String(currentUser?.id);
@@ -924,7 +965,9 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
                           "flex items-center gap-1.5 text-[11px] text-muted-foreground px-1",
                           isOwn ? "justify-end" : "justify-start"
                         )}>
-                          <span>{formatMessageTime(message.created_at)}</span>
+                          <time dateTime={message.created_at} title={format(new Date(message.created_at), 'PPPP p')}>
+                            {formatMessageTime(message.created_at)}
+                          </time>
                           {isOwn && (
                             message.is_read
                               ? <CheckCheck className="h-3 w-3 text-emerald-500" />
@@ -939,6 +982,18 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
             </AnimatePresence>
             <div ref={messagesEndRef} />
           </ol>
+          {showJumpToLatest && (
+            <button
+              type="button"
+              onClick={jumpToLatest}
+              aria-label={unseenCount > 0 ? `Jump to latest, ${unseenCount} new message${unseenCount === 1 ? '' : 's'}` : 'Jump to latest message'}
+              className="absolute bottom-3 right-4 inline-flex min-h-10 items-center gap-2 rounded-full border bg-background px-4 text-sm font-medium shadow-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ArrowDown className="h-4 w-4" aria-hidden="true" />
+              {unseenCount > 0 ? `${unseenCount} new` : 'Latest'}
+            </button>
+          )}
+          </div>
 
           <div className="px-4 h-6">
             {typingIndicatorUsers.length > 0 && (

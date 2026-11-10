@@ -59,6 +59,13 @@ import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
 
 const CALL_TOPIC = "hive-call-v1";
 const GALLERY_PAGE_SIZE = 12;
+const TIME_WARNING_MS = 5 * 60_000;
+const TIME_LIMIT_GRACE_MS = 2 * 60_000;
+const EXTEND_OPTIONS = [
+  { minutes: 15, label: "+15 min" },
+  { minutes: 30, label: "+30 min" },
+  { minutes: 60, label: "+1 hour" },
+] as const;
 const REACTIONS = ["👍", "👏", "❤️", "😂", "🎉", "👋"] as const;
 
 type Media = {
@@ -90,7 +97,11 @@ type MeetingUser = {
   email: string;
   avatar_url?: string | null;
   chat_public_key?: string | null;
+  chat_encryption_public_key?: string | null;
 };
+
+const meetingUserPublicKey = (user: MeetingUser) =>
+  user.chat_public_key || user.chat_encryption_public_key || null;
 
 type CallEncryptionMaterial = {
   material: ArrayBuffer;
@@ -115,7 +126,8 @@ type CallPacket =
   | { v: 1; type: "reaction"; id: string; emoji: string }
   | { v: 1; type: "caption"; id: string; text: string }
   | { v: 1; type: "mute-all" }
-  | { v: 1; type: "recording"; active: boolean };
+  | { v: 1; type: "recording"; active: boolean }
+  | { v: 1; type: "extended"; endsAt: number };
 
 type SpeechRecognitionResultEventLike = {
   resultIndex: number;
@@ -304,7 +316,7 @@ export function VideoCallButton({
   const [localHand, setLocalHand] = useState(false);
   const [messages, setMessages] = useState<CallChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [reaction, setReaction] = useState<Overlay | null>(null);
+  const [reactions, setReactions] = useState<Overlay[]>([]);
   const [reactionMenuOpen, setReactionMenuOpen] = useState(false);
   const [caption, setCaption] = useState<Overlay | null>(null);
   const [captionsOn, setCaptionsOn] = useState(false);
@@ -312,6 +324,11 @@ export function VideoCallButton({
   const [remoteRecording, setRemoteRecording] = useState(false);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [meetingEndsAt, setMeetingEndsAt] = useState<number | null>(null);
+  const [dismissedWarningFor, setDismissedWarningFor] = useState<number | null>(null);
+  const [extending, setExtending] = useState(false);
+  const [extendError, setExtendError] = useState("");
+  const [muteOnEntry, setMuteOnEntry] = useState(false);
   const [browserFullscreen, setBrowserFullscreen] = useState(false);
   const [inviteQuery, setInviteQuery] = useState("");
   const [inviteResults, setInviteResults] = useState<MeetingUser[]>([]);
@@ -345,6 +362,11 @@ export function VideoCallButton({
     const payload = new TextEncoder().encode(encrypted);
     if (payload.byteLength > 14_000) throw new Error("Call message is too large.");
     await room.localParticipant.publishData(payload, { reliable: true, topic: CALL_TOPIC });
+  };
+
+  const showReaction = (item: Overlay) => {
+    setReactions((current) => [...current.filter((entry) => entry.id !== item.id).slice(-5), item]);
+    window.setTimeout(() => setReactions((current) => current.filter((entry) => entry.id !== item.id)), 3_500);
   };
 
   const stopCaptions = () => {
@@ -387,13 +409,23 @@ export function VideoCallButton({
     setMessages([]);
     setRemoteRecording(false);
     setReactionMenuOpen(false);
+    setReactions([]);
     setStartedAt(null);
     setElapsed(0);
+    setMeetingEndsAt(null);
+    setDismissedWarningFor(null);
+    setExtending(false);
+    setExtendError("");
+    setMuteOnEntry(false);
     setAudioPlaybackBlocked(false);
     setStatus("Call ended");
   };
 
   useEffect(() => setHost(isHost), [isHost]);
+
+  useEffect(() => {
+    if (muteOnEntry && !host) setJoinMic(false);
+  }, [muteOnEntry, host]);
 
   useEffect(() => {
     if (!autoOpen || disabled) return;
@@ -425,7 +457,15 @@ export function VideoCallButton({
       if (document.hidden || disabled) return;
       try {
         const { data } = await api.get(endpoint);
-        if (alive) setActive(Boolean(data.active));
+        if (!alive) return;
+        setActive(Boolean(data.active));
+        setMuteOnEntry(Boolean(data.mute_on_entry));
+        if (typeof data.is_host === "boolean") setHost(data.is_host);
+        // While in the call, pick up a deadline the host extended (or a later real start time).
+        if (roomRef.current && typeof data.meeting_ends_at === "string") {
+          const endsAt = Date.parse(data.meeting_ends_at);
+          if (Number.isFinite(endsAt)) setMeetingEndsAt((current) => (current === null || endsAt > current ? endsAt : current));
+        }
       } catch {
         if (alive) setActive(false);
       }
@@ -447,16 +487,28 @@ export function VideoCallButton({
   }, [startedAt]);
 
   useEffect(() => {
+    if (!connected || !meetingEndsAt) return;
+    // The ending popup lets the host extend; only when the grace period runs out do we leave.
+    const finish = () => {
+      setError("This meeting reached its scheduled time limit.");
+      setStatus("Time limit reached");
+      if (host) void api.post(`${endpoint}/end`).catch(() => undefined);
+      leave();
+    };
+    const remaining = meetingEndsAt + TIME_LIMIT_GRACE_MS - Date.now();
+    if (remaining <= 0) {
+      finish();
+      return;
+    }
+    const timeout = window.setTimeout(finish, remaining);
+    return () => window.clearTimeout(timeout);
+  }, [connected, meetingEndsAt, host, endpoint]);
+
+  useEffect(() => {
     const change = () => setBrowserFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", change);
     return () => document.removeEventListener("fullscreenchange", change);
   }, []);
-
-  useEffect(() => {
-    if (!reaction) return;
-    const timeout = window.setTimeout(() => setReaction(null), 3_500);
-    return () => window.clearTimeout(timeout);
-  }, [reaction]);
 
   useEffect(() => {
     if (!caption) return;
@@ -475,7 +527,16 @@ export function VideoCallButton({
     const timeout = window.setTimeout(async () => {
       try {
         const { data } = await api.get("/chat/video-meetings/users", { params: { q: query } });
-        if (alive) setInviteResults(data.data || data || []);
+        const rows = (data.data || data || []) as MeetingUser[];
+        // Search API returns chat_encryption_public_key; invite UI historically expected chat_public_key.
+        if (alive) {
+          setInviteResults(
+            rows.map((user) => ({
+              ...user,
+              chat_public_key: meetingUserPublicKey(user),
+            })),
+          );
+        }
       } catch (cause) {
         if (alive) setInviteNotice(getErrorMessage(cause, "Could not search registered users."));
       }
@@ -560,7 +621,7 @@ export function VideoCallButton({
             return next;
           });
         } else if (packet.type === "reaction" && typeof packet.emoji === "string" && typeof packet.id === "string" && REACTIONS.includes(packet.emoji as typeof REACTIONS[number])) {
-          setReaction({ id: `${participant.identity}-${packet.id}`, sender, text: packet.emoji });
+          showReaction({ id: `${participant.identity}-${packet.id}`, sender, text: packet.emoji });
         } else if (packet.type === "caption" && typeof packet.text === "string" && typeof packet.id === "string") {
           setCaption({ id: `${participant.identity}-${packet.id}`, sender, text: packet.text.slice(0, 300) });
         } else if (packet.type === "mute-all" && participantIsHost(participant)) {
@@ -568,6 +629,12 @@ export function VideoCallButton({
           setStatus(`${sender} muted everyone.`);
         } else if (packet.type === "recording" && typeof packet.active === "boolean" && participantIsHost(participant)) {
           setRemoteRecording(packet.active);
+        } else if (packet.type === "extended" && typeof packet.endsAt === "number" && participantIsHost(participant)) {
+          const now = Date.now();
+          if (packet.endsAt > now && packet.endsAt < now + 24 * 3_600_000) {
+            setMeetingEndsAt(packet.endsAt);
+            setStatus(`${sender} extended the meeting.`);
+          }
         }
       } catch {
         // Ignore malformed data messages from conference peers.
@@ -614,7 +681,10 @@ export function VideoCallButton({
       .on(RoomEvent.TrackMuted, refresh)
       .on(RoomEvent.TrackUnmuted, refresh)
       .on(RoomEvent.ParticipantConnected, refresh)
-      .on(RoomEvent.ParticipantDisconnected, refresh)
+      .on(RoomEvent.ParticipantDisconnected, (leaving) => {
+        if (participantIsHost(leaving as RemoteParticipant)) setRemoteRecording(false);
+        refresh();
+      })
       .on(RoomEvent.ActiveSpeakersChanged, (speakers) => setActiveSpeaker(speakers[0]?.identity || null))
       .on(RoomEvent.DataReceived, onData)
       .on(RoomEvent.MediaDevicesChanged, () => void navigator.mediaDevices.enumerateDevices().then(setDevices))
@@ -639,11 +709,20 @@ export function VideoCallButton({
         await activeRoom.disconnect();
         return;
       }
-      setHost(Boolean(data.is_host));
+      const joinedAsHost = Boolean(data.is_host);
+      const entryMuted = Boolean(data.mute_on_entry) && !joinedAsHost;
+      setHost(joinedAsHost);
+      setMuteOnEntry(Boolean(data.mute_on_entry));
+      if (typeof data.meeting_ends_at === "string") {
+        const endsAt = Date.parse(data.meeting_ends_at);
+        setMeetingEndsAt(Number.isFinite(endsAt) ? endsAt : null);
+      } else {
+        setMeetingEndsAt(null);
+      }
       void activeRoom.startAudio().then(() => setAudioPlaybackBlocked(!activeRoom.canPlaybackAudio)).catch(() => setAudioPlaybackBlocked(true));
       setConnected(true);
       setStartedAt(Date.now());
-      setStatus("Connected");
+      setStatus(entryMuted ? "Connected · muted on entry" : "Connected");
       refresh();
       for (const device of ["mic", "camera"] as const) {
         if (current !== generation.current) {
@@ -651,7 +730,7 @@ export function VideoCallButton({
           return;
         }
         try {
-          if (device === "mic" && joinMic && (!data.mute_on_entry || data.is_host)) await activeRoom.localParticipant.setMicrophoneEnabled(true, undefined, { name: "microphone" });
+          if (device === "mic" && joinMic && !entryMuted) await activeRoom.localParticipant.setMicrophoneEnabled(true, undefined, { name: "microphone" });
           if (device === "camera" && joinCamera) await activeRoom.localParticipant.setCameraEnabled(true, undefined, { name: "camera" });
         } catch {
           if (current === generation.current) setError("You joined, but a device could not start. Check browser permissions and use the call controls to retry.");
@@ -732,7 +811,7 @@ export function VideoCallButton({
 
   const sendReaction = async (emoji: typeof REACTIONS[number]) => {
     const idValue = crypto.randomUUID();
-    setReaction({ id: idValue, sender: "You", text: emoji });
+    showReaction({ id: idValue, sender: "You", text: emoji });
     setReactionMenuOpen(false);
 
     try {
@@ -776,6 +855,24 @@ export function VideoCallButton({
     }
   };
 
+  const extendMeeting = async (minutes: number) => {
+    if (!host || extending) return;
+    setExtending(true);
+    setExtendError("");
+    try {
+      const { data } = await api.post(`${endpoint}/extend`, { minutes });
+      const endsAt = Date.parse(data.meeting_ends_at);
+      if (!Number.isFinite(endsAt)) throw new Error("The server did not return the new end time.");
+      setMeetingEndsAt(endsAt);
+      setStatus(`Meeting extended by ${minutes} minutes.`);
+      await publishPacket({ v: 1, type: "extended", endsAt }).catch(() => undefined);
+    } catch (cause) {
+      setExtendError(getErrorMessage(cause, "Could not extend the meeting."));
+    } finally {
+      setExtending(false);
+    }
+  };
+
   const startRecording = async () => {
     if (!host || recording) return;
     if (!navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === "undefined") {
@@ -783,7 +880,14 @@ export function VideoCallButton({
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      setStatus("Choose this Hive call tab in the browser prompt to record it.");
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+        preferCurrentTab: true,
+        selfBrowserSurface: "include",
+        systemAudio: "include",
+      } as DisplayMediaStreamOptions);
       const mimeType = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((type) => MediaRecorder.isTypeSupported(type));
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       recordingChunksRef.current = [];
@@ -805,6 +909,7 @@ export function VideoCallButton({
       recorderRef.current = recorder;
       recorder.start(1_000);
       setRecording(true);
+      setStatus("Recording on this device · the file downloads when you stop.");
       await publishPacket({ v: 1, type: "recording", active: true });
     } catch (cause) {
       setError(cause instanceof Error && cause.name === "NotAllowedError"
@@ -855,7 +960,7 @@ export function VideoCallButton({
     const link = kind === "chat" ? `${window.location.origin}/dashboard/chat?conversation=${encodeURIComponent(String(id))}&call=1` : window.location.href;
     try {
       await navigator.clipboard.writeText(link);
-      setInviteNotice("Invite link copied.");
+      setInviteNotice("Invite link copied. Only invited Hive users can join — uninvited people cannot enter.");
     } catch {
       setInviteNotice(link);
     }
@@ -867,7 +972,7 @@ export function VideoCallButton({
     setInviteNotice("");
     try {
       const selectedUsers = inviteResults.filter((user) => selectedInvitees.has(user.id));
-      const missingSecureIdentity = selectedUsers.find((user) => !user.chat_public_key);
+      const missingSecureIdentity = selectedUsers.find((user) => !meetingUserPublicKey(user));
       if (missingSecureIdentity) {
         throw new Error(`${missingSecureIdentity.name} must open secure Chat or Mail once before joining an encrypted call.`);
       }
@@ -875,7 +980,7 @@ export function VideoCallButton({
       if (!sourceMaterial) throw new Error("The encrypted call key is unavailable. Rejoin the call and try again.");
       const participantKeys = await wrapCommunicationKeyMaterial(
         sourceMaterial,
-        selectedUsers.map((user) => ({ id: user.id, publicKey: user.chat_public_key as string })),
+        selectedUsers.map((user) => ({ id: user.id, publicKey: meetingUserPublicKey(user) as string })),
       );
       const { data } = await api.post(`/chat/video-meetings/${id}/invite`, {
         user_ids: [...selectedInvitees],
@@ -896,6 +1001,7 @@ export function VideoCallButton({
   const switchDevice = async (kindValue: MediaDeviceKind, deviceId: string) => {
     try {
       await roomRef.current?.switchActiveDevice(kindValue, deviceId, true);
+      setDevices((current) => [...current]);
     } catch {
       setError("The selected device could not be activated.");
     }
@@ -938,6 +1044,10 @@ export function VideoCallButton({
   const selectableInvitees = inviteResults.filter((user) => !existingIds.has(user.id));
   const audioTracks = media.filter((item) => item.track.kind === Track.Kind.Audio);
   const controlClass = "min-h-11 min-w-11 border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring";
+  const remainingMs = connected && meetingEndsAt ? meetingEndsAt - Date.now() : null;
+  const timeUp = remainingMs !== null && remainingMs <= 0;
+  const timeWarningVisible = remainingMs !== null && remainingMs <= TIME_WARNING_MS && (timeUp || dismissedWarningFor !== meetingEndsAt);
+  const timeCountdown = remainingMs === null || meetingEndsAt === null ? "" : formatDuration(Math.max(0, Math.ceil(((timeUp ? meetingEndsAt + TIME_LIMIT_GRACE_MS : meetingEndsAt) - Date.now()) / 1_000)));
   const moduleLocked = moduleAccess !== null && !hasModule("video_conferencing");
 
   if (moduleLocked) {
@@ -972,21 +1082,37 @@ export function VideoCallButton({
           <>
             <DialogTitle ref={heading} tabIndex={-1}>{title || "Video call"}</DialogTitle>
             <DialogDescription className="text-foreground">
-              Only members of this {kind === "chat" ? "conversation" : "mail message"} can join. Choose your microphone and camera before joining.
+              Only invited members of this {kind === "chat" ? "conversation" : "mail message"} can join. Uninvited people with a shared link cannot enter.
               Audio, video, screen sharing, captions, reactions, and in-call messages are end-to-end encrypted with your Hive communication key.
             </DialogDescription>
             <div className="flex items-center gap-2 rounded-lg border border-emerald-700 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-400 dark:text-emerald-200">
               <Lock aria-hidden="true" className="size-4" /> End-to-end encryption required
             </div>
+            {host ? (
+              <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                Leaving disconnects only you — the meeting keeps running for others. Use <span className="font-medium text-foreground">End for all</span> to close it for everyone.
+              </p>
+            ) : null}
             <p role="status" className="text-sm">{status}</p>
             {error && <p role="alert" className="text-sm font-medium text-destructive">{error}</p>}
             <div className="rounded-lg border border-foreground p-4">
               <p className="mb-3 text-sm">Your devices stay off until you join the call.</p>
               <div className="flex flex-wrap gap-2 [&_button]:min-h-11 [&_button]:border-foreground">
-                <Button variant="outline" disabled={busy} onClick={() => setJoinMic((value) => !value)}>{joinMic ? "Join muted" : "Join with microphone"}</Button>
+                <Button
+                  variant="outline"
+                  disabled={busy || (muteOnEntry && !host)}
+                  onClick={() => setJoinMic((value) => !value)}
+                >
+                  {muteOnEntry && !host ? "Muted on entry" : joinMic ? "Join muted" : "Join with microphone"}
+                </Button>
                 <Button variant="outline" disabled={busy} onClick={() => setJoinCamera((value) => !value)}>{joinCamera ? "Join without camera" : "Join with camera"}</Button>
               </div>
-              <p className="mt-3 text-sm">Microphone {joinMic ? "on" : "off"} / Camera {joinCamera ? "on" : "off"} when you join</p>
+              <p className="mt-3 text-sm">
+                Microphone {muteOnEntry && !host ? "off (host requirement)" : joinMic ? "on" : "off"} / Camera {joinCamera ? "on" : "off"} when you join
+              </p>
+              {muteOnEntry && !host ? (
+                <p className="mt-2 text-sm text-muted-foreground">Host enabled mute on entry — you can unmute yourself after joining.</p>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2 [&_button]:min-h-11 [&_button]:border-foreground">
               <Button variant="outline" disabled={busy} onClick={() => void join()}>{busy ? "Connecting…" : "Join call"}</Button>
@@ -994,7 +1120,7 @@ export function VideoCallButton({
             </div>
           </>
         ) : (
-          <div ref={conferenceRoot} className="flex h-[100dvh] min-h-0 flex-col bg-background text-foreground">
+          <div ref={conferenceRoot} className="relative flex h-[100dvh] min-h-0 flex-col bg-background text-foreground">
             <header className="flex min-h-16 items-center justify-between gap-3 border-b border-border bg-card px-3 py-2 sm:px-5">
               <div className="min-w-0">
                 <DialogTitle ref={heading} tabIndex={-1} className="truncate text-base font-semibold text-foreground sm:text-lg">{title || "Hive video conference"}</DialogTitle>
@@ -1037,7 +1163,7 @@ export function VideoCallButton({
                     <div className="hidden w-48 shrink-0 space-y-2 overflow-y-auto xl:block">{tiles.filter((tile) => tile.key !== featuredTile.key).map((tile) => <ParticipantTile key={tile.key} tile={tile} handRaised={hands.has(tile.identity)} pinned={pinnedTile === tile.key} onPin={() => setPinnedTile(tile.key)} />)}</div>
                   </div>
                 ) : null}
-                {reaction && <div key={reaction.id} role="status" className="pointer-events-none absolute left-1/2 top-20 z-30 -translate-x-1/2 rounded-2xl bg-black/80 px-5 py-3 text-center shadow-xl"><div className="text-4xl" aria-hidden="true">{reaction.text}</div><p className="text-sm text-white">{reaction.sender}</p></div>}
+                {reactions.length > 0 && <div aria-live="polite" className="pointer-events-none absolute left-1/2 top-20 z-30 flex -translate-x-1/2 flex-col items-center gap-2">{reactions.map((item) => <div key={item.id} className="rounded-2xl bg-black/80 px-5 py-2 text-center shadow-xl"><div className="text-3xl" aria-hidden="true">{item.text}</div><p className="text-xs text-white">{item.sender}</p></div>)}</div>}
                 {caption && <div key={caption.id} aria-live="polite" className="absolute bottom-5 left-1/2 z-30 max-w-[min(90%,44rem)] -translate-x-1/2 rounded-xl bg-black/90 px-5 py-3 text-center text-white shadow-xl"><span className="font-semibold text-white">{caption.sender}: </span>{caption.text}</div>}
               </main>
 
@@ -1055,11 +1181,11 @@ export function VideoCallButton({
                   <Button type="button" variant="outline" className={cn("w-full", controlClass)} onClick={() => void copyInviteLink()}><Copy aria-hidden="true" />Copy meeting link</Button>
                   {kind === "chat" ? <><div><label htmlFor={`invite-search-${id}`} className="mb-1 block text-sm font-medium text-foreground">Find a registered user</label><div className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" /><Input id={`invite-search-${id}`} aria-describedby={`invite-help-${id}`} value={inviteQuery} onChange={(event) => setInviteQuery(event.target.value)} placeholder="Name or email" className="min-h-11 border-border bg-background pl-9 text-foreground" /></div><p id={`invite-help-${id}`} className="mt-1 text-xs text-muted-foreground">Only users with a secure Hive identity can join this encrypted call.</p></div>
                     {inviteQuery.trim().length > 0 && inviteQuery.trim().length < 2 && <p className="text-sm text-muted-foreground">Enter at least two characters.</p>}
-                    <fieldset className="space-y-2"><legend className="sr-only">Select registered users to invite</legend>{selectableInvitees.map((user) => <label key={user.id} className={cn("flex min-h-12 items-center gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm", user.chat_public_key ? "cursor-pointer text-foreground" : "cursor-not-allowed text-muted-foreground")}><input type="checkbox" disabled={!user.chat_public_key} checked={selectedInvitees.has(user.id)} onChange={() => setSelectedInvitees((current) => { const next = new Set(current); if (next.has(user.id)) next.delete(user.id); else next.add(user.id); return next; })} className="size-5 accent-primary" /><span className="min-w-0"><span className="block truncate font-semibold">{user.name}</span><span className="block truncate text-muted-foreground">{user.email}{user.chat_public_key ? "" : " · secure identity required"}</span></span></label>)}</fieldset>
+                    <fieldset className="space-y-2"><legend className="sr-only">Select registered users to invite</legend>{selectableInvitees.map((user) => { const secure = Boolean(meetingUserPublicKey(user)); return <label key={user.id} className={cn("flex min-h-12 items-center gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm", secure ? "cursor-pointer text-foreground" : "cursor-not-allowed text-muted-foreground")}><input type="checkbox" disabled={!secure} checked={selectedInvitees.has(user.id)} onChange={() => setSelectedInvitees((current) => { const next = new Set(current); if (next.has(user.id)) next.delete(user.id); else next.add(user.id); return next; })} className="size-5 accent-primary" /><span className="min-w-0"><span className="block truncate font-semibold">{user.name}</span><span className="block truncate text-muted-foreground">{user.email}{secure ? "" : " · secure identity required"}</span></span></label>; })}</fieldset>
                     <Button type="button" className="min-h-11 w-full" disabled={inviteBusy || selectedInvitees.size === 0} onClick={() => void inviteRegisteredUsers()}><UserPlus aria-hidden="true" />{inviteBusy ? "Inviting…" : `Invite selected (${selectedInvitees.size})`}</Button></> : <p className="text-sm text-muted-foreground">Mail recipients can join from this encrypted sent message. Share the link with an existing recipient.</p>}
                   {inviteNotice && <p role="status" className="break-words text-sm text-[hsl(var(--primary-readable))]">{inviteNotice}</p>}
                 </div>}
-                {activePanel === "settings" && <div className="space-y-4">{(["audioinput", "videoinput", "audiooutput"] as MediaDeviceKind[]).map((kindValue) => { const matching = devices.filter((device) => device.kind === kindValue); const label = kindValue === "audioinput" ? "Microphone" : kindValue === "videoinput" ? "Camera" : "Speaker"; return <label key={kindValue} className="block text-sm font-medium text-foreground">{label}<select className="mt-1 min-h-11 w-full rounded-md border border-border bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring" defaultValue="" onChange={(event) => void switchDevice(kindValue, event.target.value)}><option value="" disabled>Select {label.toLowerCase()}</option>{matching.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${label} ${index + 1}`}</option>)}</select></label>; })}<p className="text-sm text-muted-foreground">Device names appear after browser permission is granted.</p></div>}
+                {activePanel === "settings" && <div className="space-y-4">{(["audioinput", "videoinput", "audiooutput"] as MediaDeviceKind[]).map((kindValue) => { const matching = devices.filter((device) => device.kind === kindValue && device.deviceId); const label = kindValue === "audioinput" ? "Microphone" : kindValue === "videoinput" ? "Camera" : "Speaker"; return <label key={kindValue} className="block text-sm font-medium text-foreground">{label}<select className="mt-1 min-h-11 w-full rounded-md border border-border bg-background px-3 text-foreground focus-visible:outline-2 focus-visible:outline-ring" value={roomRef.current?.getActiveDevice(kindValue) ?? ""} onChange={(event) => void switchDevice(kindValue, event.target.value)}><option value="" disabled>Select {label.toLowerCase()}</option>{matching.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${label} ${index + 1}`}</option>)}</select></label>; })}<p className="text-sm text-muted-foreground">Device names appear after browser permission is granted.</p></div>}
               </aside>}
             </div>
 
@@ -1074,7 +1200,7 @@ export function VideoCallButton({
                   <PopoverTrigger asChild>
                     <Button type="button" variant="outline" className={cn(controlClass, reactionMenuOpen && "border-[hsl(var(--primary-readable))] bg-accent")} aria-expanded={reactionMenuOpen} aria-controls={`call-reactions-${kind}-${id}`}><span className="flex flex-col items-center text-xs"><Smile aria-hidden="true" /><span>React</span></span></Button>
                   </PopoverTrigger>
-                  <PopoverContent id={`call-reactions-${kind}-${id}`} side="top" align="center" className="video-conferencing w-auto max-w-[calc(100vw-1rem)] border-border bg-popover p-2 text-popover-foreground">
+                  <PopoverContent id={`call-reactions-${kind}-${id}`} side="top" align="center" className="video-conferencing !z-[120] w-auto max-w-[calc(100vw-1rem)] border-border bg-popover p-2 text-popover-foreground">
                     <div className="flex flex-wrap justify-center gap-1" role="group" aria-label="Call reactions">
                       {REACTIONS.map((emoji) => <Button key={emoji} type="button" size="icon" variant="ghost" className="min-h-11 min-w-11 text-xl" onClick={() => void sendReaction(emoji)} aria-label={`React ${emoji}`}>{emoji}</Button>)}
                     </div>
@@ -1086,10 +1212,32 @@ export function VideoCallButton({
                 <Button type="button" variant="outline" className={cn(controlClass, captionsOn && "border-[hsl(var(--primary-readable))] bg-accent")} onClick={toggleCaptions} aria-pressed={captionsOn}><span className="flex flex-col items-center text-xs"><Captions aria-hidden="true" /><span>Captions</span></span></Button>
                 {host && <Button type="button" variant="outline" className={cn(controlClass, recording && "border-red-400 bg-red-950")} onClick={() => recording ? stopRecording() : void startRecording()} aria-pressed={recording}><span className="flex flex-col items-center text-xs">{recording ? <Square aria-hidden="true" /> : <Radio aria-hidden="true" />}<span>{recording ? "Stop rec" : "Record"}</span></span></Button>}
                 <Button type="button" variant="outline" className={cn(controlClass, activePanel === "settings" && "border-[hsl(var(--primary-readable))] bg-accent")} onClick={() => setActivePanel((current) => current === "settings" ? null : "settings")} aria-pressed={activePanel === "settings"}><span className="flex flex-col items-center text-xs"><Settings aria-hidden="true" /><span>Settings</span></span></Button>
-                <Button type="button" variant="outline" className="min-h-11 border-destructive px-5 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => { leave(); setOpen(false); }}>Leave</Button>
-                {host && <Button type="button" variant="destructive" className="min-h-11 px-5" disabled={busy} onClick={() => void endForEveryone()}>End for all</Button>}
+                <Button type="button" variant="outline" className="min-h-11 border-destructive px-5 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => { leave(); setOpen(false); }} title={host ? "Leave without ending the meeting for others" : "Leave the meeting"}>{host ? "Leave (keep meeting)" : "Leave"}</Button>
+                {host && <Button type="button" variant="destructive" className="min-h-11 px-5" disabled={busy} onClick={() => void endForEveryone()} title="End the meeting for everyone">End for all</Button>}
               </div>
             </footer>
+            {timeWarningVisible && (
+              <div className="absolute inset-0 z-[120] flex items-center justify-center bg-black/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="meeting-time-title" aria-describedby="meeting-time-desc">
+                <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-2xl">
+                  <h2 id="meeting-time-title" className="text-lg font-semibold">{timeUp ? "The scheduled time is up" : "This meeting is ending soon"}</h2>
+                  <p id="meeting-time-desc" className="mt-2 text-sm text-muted-foreground">
+                    {host
+                      ? timeUp ? "Add more time to keep everyone in the call. Otherwise the meeting ends when the countdown reaches zero." : "Add more time now so nobody gets cut off."
+                      : timeUp ? "Waiting for the host to add more time. You will be removed when the countdown reaches zero." : "The host can add more time before the meeting ends."}
+                  </p>
+                  <p className="mt-4 text-center text-4xl font-semibold tabular-nums" aria-hidden="true">{timeCountdown}</p>
+                  {extendError && <p role="alert" className="mt-3 text-sm font-medium text-destructive">{extendError}</p>}
+                  {host && <div className="mt-5 grid grid-cols-3 gap-2" role="group" aria-label="Extend meeting">
+                    {EXTEND_OPTIONS.map((option, index) => <Button key={option.minutes} type="button" autoFocus={index === 0} variant="outline" className="min-h-11" disabled={extending} onClick={() => void extendMeeting(option.minutes)}>{option.label}</Button>)}
+                  </div>}
+                  <div className="mt-4 flex flex-wrap justify-end gap-2">
+                    {!timeUp && <Button type="button" variant="ghost" className="min-h-11" autoFocus={!host} onClick={() => setDismissedWarningFor(meetingEndsAt)}>{host ? "Not now" : "Got it"}</Button>}
+                    {timeUp && host && <Button type="button" variant="destructive" className="min-h-11" disabled={busy} onClick={() => void endForEveryone()}>End meeting</Button>}
+                    {timeUp && !host && <Button type="button" variant="outline" className="min-h-11" autoFocus onClick={() => { leave(); setOpen(false); }}>Leave now</Button>}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </DialogContent>

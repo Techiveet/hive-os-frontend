@@ -22,7 +22,7 @@ import { CommunicationBrandMark } from '@/components/communications/communicatio
 export default function ChatSidebar() {
   const { 
     activeTab, setActiveTab, 
-    setComposeOpen, setVideoMeetingOpen, counts
+    setComposeOpen, counts
   } = useChatStore();
   const { canManageChat, hasChatWorkspace } = useChatAccess();
   
@@ -91,13 +91,22 @@ export default function ChatSidebar() {
             <Button
               variant="default"
               size="sm"
-              aria-label="Create a video meeting"
+              aria-label="Open video conferencing to schedule a meeting"
               disabled={!hasChatWorkspace}
               className="min-h-11 w-full justify-center rounded-xl px-2 lg:justify-start"
-              onClick={() => setVideoMeetingOpen(true)}
+              asChild={hasChatWorkspace}
             >
-              <Video aria-hidden="true" data-icon="inline-start" />
-              <span className="hidden lg:inline">New video meeting</span>
+              {hasChatWorkspace ? (
+                <Link href="/dashboard/video-conferencing">
+                  <Video aria-hidden="true" data-icon="inline-start" />
+                  <span className="hidden lg:inline">Video meeting</span>
+                </Link>
+              ) : (
+                <>
+                  <Video aria-hidden="true" data-icon="inline-start" />
+                  <span className="hidden lg:inline">New video meeting</span>
+                </>
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right" className="lg:hidden">New video meeting</TooltipContent>
