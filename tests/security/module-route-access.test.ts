@@ -100,6 +100,24 @@ assert.equal(
 assert.equal(canAccessDashboardPath("/dashboard/mail", noFinance), false, "mailbox module without mail permission");
 assert.equal(canAccessDashboardPath("/dashboard/mail", tenantUser([], ["view_mail"])), false, "mail permission without mailbox module");
 
+// ── Chat is its own module, independent of the mailbox ─────────────────
+asTenant();
+assert.equal(
+  canAccessDashboardPath("/dashboard/chat", tenantUser(["chat"], ["view_chat"])),
+  true,
+  "chat module + view_chat",
+);
+assert.equal(
+  canAccessDashboardPath("/dashboard/chat", tenantUser(["mailbox"], ["view_chat"])),
+  false,
+  "mailbox alone must not unlock chat",
+);
+assert.equal(
+  canAccessDashboardPath("/dashboard/chat", tenantUser([], ["view_chat"])),
+  false,
+  "chat permission without the chat module",
+);
+
 // identity-cards and daily-reports were also unruled; their manifests now gate them.
 assert.equal(canAccessDashboardPath("/dashboard/identity-cards", tenantUser([], [])), false);
 assert.equal(canAccessDashboardPath("/dashboard/daily-reports", tenantUser([], [])), false);

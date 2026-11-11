@@ -2,11 +2,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useChatStore } from '@/store/chat-store';
+import { useChatAccess } from '@/hooks/use-chat-access';
+import { useTenantModuleAccess } from '@/hooks/use-tenant-module-access';
 import { cn } from '@/lib/utils';
 import { 
-  X, Phone, Video, 
+  X, Video, 
   FileText, Image as ImageIcon, Link as LinkIcon,
-  Users, Bell, Search,
+  Users,
   Download, ExternalLink, ChevronRight,
   Trash2, ShieldAlert, Ban, LogOut, Loader2
 } from 'lucide-react';
@@ -52,13 +54,17 @@ type SharedItems = {
 };
 
 export default function ChatInfoSidebar() {
-  const { activeConversationId, conversations, setInfoSidebarOpen, deleteConversation, setActiveConversation } = useChatStore();
+  const { activeConversationId, conversations, setMessages, updateConversation, setInfoSidebarOpen, deleteConversation, setActiveConversation, setPendingVideoCallConversationId } = useChatStore();
+  const { canAccessChat, canClearMessages, canLeaveConversation, isTenantWorkspace } = useChatAccess();
+  const { hasModule } = useTenantModuleAccess();
+  const [showMembers, setShowMembers] = useState(false);
   const [sharedItems, setSharedItems] = useState<SharedItems>({ images: [], files: [], links: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<'clear' | 'delete' | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   
   const conversation = conversations.find(c => c.id === activeConversationId);
+  const canVideo = canAccessChat && (!isTenantWorkspace || hasModule('video_conferencing'));
 
   const fetchSharedItems = useCallback(async () => {
     if (!activeConversationId) return;
@@ -87,9 +93,9 @@ export default function ChatInfoSidebar() {
     setActionBusy(true);
     try {
       await api.delete(`/chat/conversations/${activeConversationId}/messages`);
+      setMessages([]);
+      updateConversation(activeConversationId, { last_message: null, unread_count: 0 });
       toast.success('Chat cleared');
-      // Refresh messages if needed
-      window.location.reload(); 
     } catch {
       toast.error('Failed to clear chat');
     } finally {
@@ -99,16 +105,17 @@ export default function ChatInfoSidebar() {
   };
 
   const handleDeleteChat = async () => {
-    if (!activeConversationId) return;
+    if (!activeConversationId || !conversation) return;
+    const leavingGroup = conversation.type === 'group';
     setActionBusy(true);
     try {
       await api.delete(`/chat/conversations/${activeConversationId}`);
       deleteConversation(activeConversationId);
       setActiveConversation(null);
       setInfoSidebarOpen(false);
-      toast.success('Conversation deleted');
+      toast.success(leavingGroup ? 'Left group' : 'Conversation deleted');
     } catch {
-      toast.error('Failed to delete conversation');
+      toast.error(leavingGroup ? 'Failed to leave group' : 'Failed to delete conversation');
     } finally {
       setActionBusy(false);
       setPendingAction(null);
@@ -159,16 +166,18 @@ export default function ChatInfoSidebar() {
           <div className="space-y-1.5">
             <h2 className="text-2xl font-black tracking-tight text-foreground">{displayTitle}</h2>
             <p className="text-xs font-bold text-muted-foreground/60 uppercase tracking-widest">
-              {isGroup ? `${conversation.participants.length} Active Members` : 'Digital Engineering Lead'}
+              {isGroup ? `${conversation.participants.length} Members` : (otherUser?.email || 'Direct message')}
             </p>
           </div>
           
           {/* Quick Actions */}
-          <div className="grid grid-cols-4 gap-3 w-full max-w-xs pt-4">
-            <ActionButton icon={<Phone className="h-5 w-5" />} label="Call" />
-            <ActionButton icon={<Video className="h-5 w-5" />} label="Video" />
-            <ActionButton icon={<Search className="h-5 w-5" />} label="Find" />
-            <ActionButton icon={<Bell className="h-5 w-5" />} label="Mute" />
+          <div className="flex justify-center w-full pt-4">
+            <ActionButton
+              icon={<Video className="h-5 w-5" />}
+              label="Video call"
+              disabled={!canVideo}
+              onClick={() => setPendingVideoCallConversationId(conversation.id)}
+            />
           </div>
         </div>
 
@@ -176,22 +185,37 @@ export default function ChatInfoSidebar() {
         <div className="space-y-6">
            <SectionLabel label="Conversation Settings" />
            <div className="space-y-3">
-              <ToggleAction 
-                icon={<Bell className="h-4 w-4" />} 
-                title="Mute Notifications" 
-              />
               {isGroup && (
-                <ActionItem 
-                  icon={<Users className="h-4 w-4" />} 
-                  title="Group Members" 
-                  description={`${conversation.participants.length} people`}
-                  color="emerald"
-                />
+                <>
+                  <ActionItem 
+                    icon={<Users className="h-4 w-4" />} 
+                    title="Group Members" 
+                    description={`${conversation.participants.length} people`}
+                    color="emerald"
+                    onClick={() => setShowMembers((open) => !open)}
+                  />
+                  {showMembers && (
+                    <ul className="space-y-2 rounded-2xl bg-white dark:bg-muted/20 border border-border/10 p-3" aria-label="Group members">
+                      {conversation.participants.map((member) => (
+                        <li key={member.id} className="flex items-center gap-3 min-w-0">
+                          <Avatar className="h-8 w-8 rounded-xl">
+                            <AvatarImage src={member.avatar_url || undefined} />
+                            <AvatarFallback className="text-xs font-black">{member.name?.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-extrabold truncate">{member.name}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">{member.email}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
               )}
               <ActionItem 
                 icon={<ShieldAlert className="h-4 w-4" />} 
                 title="Privacy & Safety" 
-                description="Encryption active"
+                description={conversation.encryption?.enabled && conversation.encryption?.wrapped_key ? 'End-to-end encrypted' : 'Not encrypted'}
                 color="indigo"
               />
            </div>
@@ -199,10 +223,7 @@ export default function ChatInfoSidebar() {
 
         {/* Shared Repository */}
         <div className="space-y-6">
-           <div className="flex items-center justify-between">
-              <SectionLabel label="Shared Repository" />
-              <button className="text-[11px] font-black text-primary uppercase tracking-widest hover:underline">See All</button>
-           </div>
+           <SectionLabel label="Shared Repository" />
           
           <Tabs defaultValue="media" className="w-full">
             <TabsList className="w-full bg-slate-100 dark:bg-muted/30 p-1.5 rounded-2xl h-12">
@@ -256,9 +277,11 @@ export default function ChatInfoSidebar() {
         </div>
 
         {/* Danger Zone */}
+        {(canClearMessages || canLeaveConversation) && (
         <div className="pt-6 space-y-6">
            <SectionLabel label="Danger Zone" color="text-red-500" />
            <div className="space-y-3">
+              {canClearMessages && (
               <button 
                 onClick={() => setPendingAction('clear')}
                 className="w-full flex items-center justify-between px-5 py-4 rounded-2xl bg-red-50/50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 hover:bg-red-100 transition-colors group"
@@ -269,29 +292,39 @@ export default function ChatInfoSidebar() {
                 </div>
                 <ChevronRight className="h-4 w-4 text-red-300" />
               </button>
+              )}
               
+              {canLeaveConversation && (
               <button 
                 onClick={() => setPendingAction('delete')}
                 className="w-full flex items-center justify-between px-5 py-4 rounded-2xl bg-red-500 text-white shadow-xl shadow-red-500/20 hover:bg-red-600 transition-all active:scale-[0.98]"
               >
                 <div className="flex items-center gap-4">
-                   <Ban className="h-5 w-5" />
-                   <span className="font-extrabold text-[13px] uppercase tracking-wider">Delete Conversation</span>
+                   {isGroup ? <LogOut className="h-5 w-5" /> : <Ban className="h-5 w-5" />}
+                   <span className="font-extrabold text-[13px] uppercase tracking-wider">
+                     {isGroup ? 'Leave Group' : 'Delete Conversation'}
+                   </span>
                 </div>
-                <LogOut className="h-5 w-5 opacity-50" />
+                <ChevronRight className="h-4 w-4 opacity-50" />
               </button>
+              )}
            </div>
         </div>
+        )}
       </div>
       <AlertDialog open={pendingAction !== null} onOpenChange={(open) => { if (!open && !actionBusy) setPendingAction(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pendingAction === 'delete' ? 'Delete this conversation?' : 'Clear all messages?'}
+              {pendingAction === 'delete'
+                ? (isGroup ? 'Leave this group?' : 'Delete this conversation?')
+                : 'Clear all messages?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingAction === 'delete'
-                ? 'The conversation will be removed from your chat list. This cannot be undone.'
+                ? (isGroup
+                  ? 'You will leave this group and it will be removed from your chat list.'
+                  : 'The conversation will be removed from your chat list. This cannot be undone.')
                 : 'Every message in this conversation will be cleared. This cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -304,7 +337,9 @@ export default function ChatInfoSidebar() {
               onClick={() => void (pendingAction === 'delete' ? handleDeleteChat() : handleClearChat())}
             >
               {actionBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-              {pendingAction === 'delete' ? 'Delete conversation' : 'Clear messages'}
+              {pendingAction === 'delete'
+                ? (isGroup ? 'Leave group' : 'Delete conversation')
+                : 'Clear messages'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -317,10 +352,10 @@ function SectionLabel({ label, color = "text-muted-foreground/40" }: { label: st
   return <h4 className={cn("text-[11px] font-black uppercase tracking-[0.2em]", color)}>{label}</h4>;
 }
 
-function ActionButton({ icon, label }: { icon: React.ReactNode, label: string }) {
+function ActionButton({ icon, label, onClick, disabled }: { icon: React.ReactNode, label: string, onClick: () => void, disabled?: boolean }) {
   return (
     <div className="flex flex-col items-center gap-2">
-      <Button variant="outline" size="icon" className="h-14 w-14 rounded-2xl shadow-sm border-border/40 hover:border-primary hover:bg-primary/5 transition-all group">
+      <Button type="button" variant="outline" size="icon" onClick={onClick} disabled={disabled} aria-label={label} className="h-14 w-14 rounded-2xl shadow-sm border-border/40 hover:border-primary hover:bg-primary/5 transition-all group">
         <div className="group-hover:scale-110 transition-transform">{icon}</div>
       </Button>
       <span className="text-[11px] font-bold text-muted-foreground">{label}</span>
@@ -328,15 +363,15 @@ function ActionButton({ icon, label }: { icon: React.ReactNode, label: string })
   );
 }
 
-function ActionItem({ icon, title, description, color }: { icon: React.ReactNode, title: string, description: string, color: 'blue' | 'emerald' | 'indigo' }) {
+function ActionItem({ icon, title, description, color, onClick }: { icon: React.ReactNode, title: string, description: string, color: 'blue' | 'emerald' | 'indigo', onClick?: () => void }) {
   const bgStyles = {
     blue: "bg-blue-500/10 text-blue-600",
     emerald: "bg-emerald-500/10 text-emerald-600",
     indigo: "bg-indigo-500/10 text-indigo-600",
   }[color];
 
-  return (
-    <button className="w-full flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-muted/20 border border-border/10 hover:border-primary/20 transition-all group">
+  const content = (
+    <>
       <div className="flex items-center gap-4">
         <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110", bgStyles)}>
           {icon}
@@ -346,35 +381,19 @@ function ActionItem({ icon, title, description, color }: { icon: React.ReactNode
            <p className="text-[11px] font-bold text-muted-foreground/50 uppercase tracking-tight">{description}</p>
         </div>
       </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground/30" />
-    </button>
+      {onClick ? <ChevronRight className="h-4 w-4 text-muted-foreground/30" /> : null}
+    </>
   );
-}
 
-function ToggleAction({ icon, title }: { icon: React.ReactNode, title: string }) {
-  const [enabled, setEnabled] = useState(false);
-  
+  // Rows with nothing to do are plain information, not buttons.
+  if (!onClick) {
+    return <div className="w-full flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-muted/20 border border-border/10">{content}</div>;
+  }
+
   return (
-    <div className="w-full flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-muted/20 border border-border/10">
-      <div className="flex items-center gap-4">
-        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 bg-slate-100 text-slate-500")}>
-          {icon}
-        </div>
-        <p className="text-[13px] font-black text-foreground">{title}</p>
-      </div>
-      <button 
-        onClick={() => setEnabled(!enabled)}
-        className={cn(
-          "w-12 h-6 rounded-full p-1 transition-colors duration-300 flex items-center",
-          enabled ? "bg-primary" : "bg-slate-200 dark:bg-muted"
-        )}
-      >
-        <div className={cn(
-          "w-4 h-4 bg-white rounded-full transition-transform duration-300",
-          enabled ? "translate-x-6" : "translate-x-0"
-        )} />
-      </button>
-    </div>
+    <button type="button" onClick={onClick} className="w-full flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-muted/20 border border-border/10 hover:border-primary/20 transition-all group">
+      {content}
+    </button>
   );
 }
 

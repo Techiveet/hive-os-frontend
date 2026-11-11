@@ -43,7 +43,7 @@ export default function ComposeChatModal() {
     conversations,
     encryptionConfig,
   } = useChatStore();
-  const { canManageChat } = useChatAccess();
+  const { canCompose, canStartConversation, canCreateGroup } = useChatAccess();
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
@@ -60,10 +60,17 @@ export default function ComposeChatModal() {
   }, [isComposeOpen, composeData]);
 
   useEffect(() => {
-    if (!canManageChat && isComposeOpen) {
+    if (!canCompose && isComposeOpen) {
       setComposeOpen(false);
     }
-  }, [canManageChat, isComposeOpen, setComposeOpen]);
+  }, [canCompose, isComposeOpen, setComposeOpen]);
+
+  // A user who may create groups but not direct chats can only compose a group.
+  useEffect(() => {
+    if (isComposeOpen && !canStartConversation && canCreateGroup) {
+      setIsGroup(true);
+    }
+  }, [canCreateGroup, canStartConversation, isComposeOpen]);
 
   useEffect(() => {
     const searchUsers = async () => {
@@ -87,6 +94,9 @@ export default function ComposeChatModal() {
     return () => clearTimeout(debounce);
   }, [search]);
 
+  // Starting a group (or several people) and starting a direct chat are separate permissions.
+  const isAllowedKind = isGroup || selectedUsers.length > 1 ? canCreateGroup : canStartConversation;
+
   const handleStartConversation = async () => {
     if (selectedUsers.length === 0) {
       toast.error('Please select at least one user');
@@ -95,6 +105,11 @@ export default function ComposeChatModal() {
 
     if (isGroup && !groupTitle.trim()) {
       toast.error('Please enter a group title');
+      return;
+    }
+
+    if (!isAllowedKind) {
+      toast.error('You do not have permission to start this kind of chat.');
       return;
     }
 
@@ -171,7 +186,7 @@ export default function ComposeChatModal() {
     }
   };
 
-  if (!canManageChat) {
+  if (!canCompose) {
     return null;
   }
 
@@ -189,6 +204,7 @@ export default function ComposeChatModal() {
             <div className="flex bg-muted/40 p-0.5 sm:p-1 rounded-xl sm:rounded-2xl">
               <button 
                 onClick={() => setIsGroup(false)}
+                disabled={!canStartConversation}
                 className={cn(
                   "px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-[11px] font-black uppercase tracking-widest transition-all",
                   !isGroup ? "bg-white dark:bg-slate-800 shadow-sm text-primary" : "text-muted-foreground/50"
@@ -198,6 +214,7 @@ export default function ComposeChatModal() {
               </button>
               <button 
                 onClick={() => setIsGroup(true)}
+                disabled={!canCreateGroup}
                 className={cn(
                   "px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-[11px] font-black uppercase tracking-widest transition-all",
                   isGroup ? "bg-white dark:bg-slate-800 shadow-sm text-primary" : "text-muted-foreground/50"
@@ -359,7 +376,7 @@ export default function ComposeChatModal() {
           </Button>
           <Button 
             onClick={handleStartConversation} 
-            disabled={loading || selectedUsers.length === 0 || (isGroup && !groupTitle.trim())}
+            disabled={loading || selectedUsers.length === 0 || !isAllowedKind || (isGroup && !groupTitle.trim())}
             className={cn(
               "flex-[1.5] h-11 sm:h-12 lg:h-14 rounded-xl sm:rounded-2xl font-black uppercase tracking-wider transition-all shadow-xl text-xs sm:text-sm",
               selectedUsers.length > 0 ? "bg-primary shadow-primary/30" : "bg-muted"

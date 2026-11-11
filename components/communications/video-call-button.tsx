@@ -26,7 +26,9 @@ import {
   Mic,
   MicOff,
   Minimize,
+  MoreVertical,
   MonitorUp,
+  PhoneOff,
   Pin,
   PinOff,
   Radio,
@@ -59,6 +61,7 @@ import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
 
 const CALL_TOPIC = "hive-call-v1";
 const GALLERY_PAGE_SIZE = 12;
+const MENU_ITEM = "flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm text-foreground hover:bg-accent focus-visible:bg-accent disabled:opacity-50";
 const TIME_WARNING_MS = 5 * 60_000;
 const TIME_LIMIT_GRACE_MS = 2 * 60_000;
 const EXTEND_OPTIONS = [
@@ -318,6 +321,7 @@ export function VideoCallButton({
   const [chatInput, setChatInput] = useState("");
   const [reactions, setReactions] = useState<Overlay[]>([]);
   const [reactionMenuOpen, setReactionMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [caption, setCaption] = useState<Overlay | null>(null);
   const [captionsOn, setCaptionsOn] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -1043,6 +1047,7 @@ export function VideoCallButton({
   const existingIds = new Set([...registeredParticipants.map((participant) => participant.id), ...invitedIds]);
   const selectableInvitees = inviteResults.filter((user) => !existingIds.has(user.id));
   const audioTracks = media.filter((item) => item.track.kind === Track.Kind.Audio);
+  const RB = "size-11 shrink-0 rounded-full border-border bg-card p-0 text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring sm:size-12";
   const controlClass = "min-h-11 min-w-11 border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring";
   const remainingMs = connected && meetingEndsAt ? meetingEndsAt - Date.now() : null;
   const timeUp = remainingMs !== null && remainingMs <= 0;
@@ -1140,7 +1145,7 @@ export function VideoCallButton({
               <Button variant="outline" className="min-h-11 border-amber-200 bg-amber-950 text-amber-50 hover:bg-amber-900 hover:text-white" onClick={() => void roomRef.current?.startAudio().then(() => setAudioPlaybackBlocked(false)).catch(() => setError("Use your browser's sound permission to enable remote audio."))}>Enable remote audio</Button>
             </div>}
 
-            <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+            <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
               <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/30 p-2 sm:p-4" aria-label="Conference video stage">
                 <div className="absolute left-4 top-4 z-20 flex rounded-xl border border-border bg-card/95 p-1 shadow-sm backdrop-blur">
                   <Button type="button" size="sm" variant="ghost" className={cn("min-h-11", layout === "gallery" && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground")} onClick={() => setLayout("gallery")} aria-pressed={layout === "gallery"}><Grid2X2 aria-hidden="true" />Gallery</Button>
@@ -1148,7 +1153,7 @@ export function VideoCallButton({
                 </div>
                 {tiles.length === 0 ? <div className="flex size-full items-center justify-center text-muted-foreground">Waiting for participant media…</div> : layout === "gallery" ? (
                   <div className="flex size-full min-h-0 flex-col pt-14">
-                    <div className="grid min-h-0 flex-1 content-center gap-2 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    <div className={cn("grid min-h-0 flex-1 content-center gap-2 overflow-y-auto", visibleTiles.length <= 1 ? "grid-cols-1 sm:mx-auto sm:w-full sm:max-w-4xl" : visibleTiles.length === 2 ? "grid-cols-1 sm:grid-cols-2" : visibleTiles.length <= 4 ? "grid-cols-2" : visibleTiles.length <= 9 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-4")}>
                       {visibleTiles.map((tile) => <ParticipantTile key={tile.key} tile={tile} handRaised={hands.has(tile.identity)} pinned={pinnedTile === tile.key} onPin={() => setPinnedTile((current) => current === tile.key ? null : tile.key)} />)}
                     </div>
                     {pageCount > 1 && <nav aria-label="Gallery pages" className="mt-2 flex items-center justify-center gap-3">
@@ -1158,16 +1163,16 @@ export function VideoCallButton({
                     </nav>}
                   </div>
                 ) : featuredTile ? (
-                  <div className="flex size-full min-h-0 gap-2 pt-14">
+                  <div className="flex size-full min-h-0 flex-col gap-2 pt-14 xl:flex-row">
                     <div className="min-h-0 min-w-0 flex-1"><ParticipantTile tile={featuredTile} handRaised={hands.has(featuredTile.identity)} pinned={pinnedTile === featuredTile.key} prominent onPin={() => setPinnedTile((current) => current === featuredTile.key ? null : featuredTile.key)} /></div>
-                    <div className="hidden w-48 shrink-0 space-y-2 overflow-y-auto xl:block">{tiles.filter((tile) => tile.key !== featuredTile.key).map((tile) => <ParticipantTile key={tile.key} tile={tile} handRaised={hands.has(tile.identity)} pinned={pinnedTile === tile.key} onPin={() => setPinnedTile(tile.key)} />)}</div>
+                    <div className="flex h-24 shrink-0 gap-2 overflow-x-auto xl:block xl:h-auto xl:w-48 xl:space-y-2 xl:overflow-x-hidden xl:overflow-y-auto [&>article]:h-full [&>article]:w-auto [&>article]:shrink-0 xl:[&>article]:h-auto xl:[&>article]:w-full">{tiles.filter((tile) => tile.key !== featuredTile.key).map((tile) => <ParticipantTile key={tile.key} tile={tile} handRaised={hands.has(tile.identity)} pinned={pinnedTile === tile.key} onPin={() => setPinnedTile(tile.key)} />)}</div>
                   </div>
                 ) : null}
                 {reactions.length > 0 && <div aria-live="polite" className="pointer-events-none absolute left-1/2 top-20 z-30 flex -translate-x-1/2 flex-col items-center gap-2">{reactions.map((item) => <div key={item.id} className="rounded-2xl bg-black/80 px-5 py-2 text-center shadow-xl"><div className="text-3xl" aria-hidden="true">{item.text}</div><p className="text-xs text-white">{item.sender}</p></div>)}</div>}
                 {caption && <div key={caption.id} aria-live="polite" className="absolute bottom-5 left-1/2 z-30 max-w-[min(90%,44rem)] -translate-x-1/2 rounded-xl bg-black/90 px-5 py-3 text-center text-white shadow-xl"><span className="font-semibold text-white">{caption.sender}: </span>{caption.text}</div>}
               </main>
 
-              {activePanel && <aside className="max-h-[42dvh] w-full shrink-0 overflow-y-auto border-t border-border bg-card p-4 lg:max-h-none lg:w-80 lg:border-l lg:border-t-0" aria-label={`${activePanel} panel`}>
+              {activePanel && <aside className="absolute inset-x-0 bottom-0 z-40 max-h-[70dvh] overflow-y-auto rounded-t-2xl border-t border-border bg-card p-4 shadow-2xl lg:static lg:z-auto lg:max-h-none lg:w-80 lg:shrink-0 lg:rounded-none lg:border-l lg:border-t-0 lg:shadow-none" aria-label={`${activePanel} panel`}>
                 <div className="mb-4 flex items-center justify-between"><h3 className="text-base font-semibold text-foreground">{activePanel === "people" ? "Participants" : activePanel === "chat" ? "In-call chat" : activePanel === "invite" ? "Invite people" : "Device settings"}</h3><Button type="button" size="icon" variant="ghost" className="min-h-11 min-w-11" onClick={() => setActivePanel(null)} aria-label="Close side panel"><X aria-hidden="true" /></Button></div>
                 {activePanel === "people" && <div className="space-y-3">
                   {host && <Button type="button" variant="outline" className={cn("w-full", controlClass)} onClick={() => void muteAll()}><MicOff aria-hidden="true" />Mute everyone</Button>}
@@ -1191,14 +1196,14 @@ export function VideoCallButton({
 
             {audioTracks.map((item) => <div key={item.key} className="sr-only"><MediaTrack media={item} /></div>)}
             <footer className="border-t border-border bg-card px-2 py-2 sm:px-4">
-              <div className="flex items-center justify-start gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1 lg:justify-center">
-                <Button type="button" variant="outline" className={controlClass} disabled={busy} onClick={() => void toggle("mic")}><span className="flex flex-col items-center text-xs">{mic ? <Mic aria-hidden="true" /> : <MicOff aria-hidden="true" />}<span>{mic ? "Mute" : "Unmute"}</span></span></Button>
-                <Button type="button" variant="outline" className={controlClass} disabled={busy} onClick={() => void toggle("camera")}><span className="flex flex-col items-center text-xs">{camera ? <Video aria-hidden="true" /> : <VideoOff aria-hidden="true" />}<span>{camera ? "Stop video" : "Start video"}</span></span></Button>
-                <Button type="button" variant="outline" className={controlClass} disabled={busy} onClick={() => void toggle("screen")}><span className="flex flex-col items-center text-xs"><MonitorUp aria-hidden="true" /><span>{screen ? "Stop share" : "Share"}</span></span></Button>
-                <Button type="button" variant="outline" className={cn(controlClass, localHand && "border-amber-300 bg-amber-950")} onClick={() => void toggleHand()} aria-pressed={localHand}><span className="flex flex-col items-center text-xs"><Hand aria-hidden="true" /><span>{localHand ? "Lower hand" : "Raise hand"}</span></span></Button>
+              <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+                <Button type="button" variant="outline" className={cn(RB, !mic && "border-destructive bg-destructive text-white hover:bg-destructive/90 hover:text-white")} disabled={busy} onClick={() => void toggle("mic")} aria-label={mic ? "Mute microphone" : "Unmute microphone"} title={mic ? "Mute" : "Unmute"}>{mic ? <Mic aria-hidden="true" className="size-5" /> : <MicOff aria-hidden="true" className="size-5" />}</Button>
+                <Button type="button" variant="outline" className={cn(RB, !camera && "border-destructive bg-destructive text-white hover:bg-destructive/90 hover:text-white")} disabled={busy} onClick={() => void toggle("camera")} aria-label={camera ? "Turn camera off" : "Turn camera on"} title={camera ? "Stop video" : "Start video"}>{camera ? <Video aria-hidden="true" className="size-5" /> : <VideoOff aria-hidden="true" className="size-5" />}</Button>
+                <Button type="button" variant="outline" className={cn(RB, "max-md:hidden", captionsOn && "border-[hsl(var(--primary-readable))] bg-accent")} onClick={toggleCaptions} aria-pressed={captionsOn} aria-label="Captions" title="Captions"><Captions aria-hidden="true" className="size-5" /></Button>
+                <div className="max-sm:hidden">
                 <Popover open={reactionMenuOpen} onOpenChange={setReactionMenuOpen}>
                   <PopoverTrigger asChild>
-                    <Button type="button" variant="outline" className={cn(controlClass, reactionMenuOpen && "border-[hsl(var(--primary-readable))] bg-accent")} aria-expanded={reactionMenuOpen} aria-controls={`call-reactions-${kind}-${id}`}><span className="flex flex-col items-center text-xs"><Smile aria-hidden="true" /><span>React</span></span></Button>
+                    <Button type="button" variant="outline" className={cn(RB, reactionMenuOpen && "bg-accent")} aria-label="React" aria-expanded={reactionMenuOpen} aria-controls={`call-reactions-${kind}-${id}`}><Smile aria-hidden="true" className="size-5" /></Button>
                   </PopoverTrigger>
                   <PopoverContent id={`call-reactions-${kind}-${id}`} side="top" align="center" className="video-conferencing !z-[120] w-auto max-w-[calc(100vw-1rem)] border-border bg-popover p-2 text-popover-foreground">
                     <div className="flex flex-wrap justify-center gap-1" role="group" aria-label="Call reactions">
@@ -1206,14 +1211,26 @@ export function VideoCallButton({
                     </div>
                   </PopoverContent>
                 </Popover>
-                <Button type="button" variant="outline" className={cn(controlClass, activePanel === "people" && "border-[hsl(var(--primary-readable))] bg-accent")} onClick={() => setActivePanel((current) => current === "people" ? null : "people")} aria-pressed={activePanel === "people"}><span className="flex flex-col items-center text-xs"><Users aria-hidden="true" /><span>People ({people.length})</span></span></Button>
-                <Button type="button" variant="outline" className={cn(controlClass, activePanel === "chat" && "border-[hsl(var(--primary-readable))] bg-accent")} onClick={() => setActivePanel((current) => current === "chat" ? null : "chat")} aria-pressed={activePanel === "chat"}><span className="flex flex-col items-center text-xs"><MessageSquare aria-hidden="true" /><span>Chat</span></span></Button>
-                <Button type="button" variant="outline" className={cn(controlClass, activePanel === "invite" && "border-[hsl(var(--primary-readable))] bg-accent")} onClick={() => setActivePanel((current) => current === "invite" ? null : "invite")} aria-pressed={activePanel === "invite"}><span className="flex flex-col items-center text-xs"><UserPlus aria-hidden="true" /><span>Invite</span></span></Button>
-                <Button type="button" variant="outline" className={cn(controlClass, captionsOn && "border-[hsl(var(--primary-readable))] bg-accent")} onClick={toggleCaptions} aria-pressed={captionsOn}><span className="flex flex-col items-center text-xs"><Captions aria-hidden="true" /><span>Captions</span></span></Button>
-                {host && <Button type="button" variant="outline" className={cn(controlClass, recording && "border-red-400 bg-red-950")} onClick={() => recording ? stopRecording() : void startRecording()} aria-pressed={recording}><span className="flex flex-col items-center text-xs">{recording ? <Square aria-hidden="true" /> : <Radio aria-hidden="true" />}<span>{recording ? "Stop rec" : "Record"}</span></span></Button>}
-                <Button type="button" variant="outline" className={cn(controlClass, activePanel === "settings" && "border-[hsl(var(--primary-readable))] bg-accent")} onClick={() => setActivePanel((current) => current === "settings" ? null : "settings")} aria-pressed={activePanel === "settings"}><span className="flex flex-col items-center text-xs"><Settings aria-hidden="true" /><span>Settings</span></span></Button>
-                <Button type="button" variant="outline" className="min-h-11 border-destructive px-5 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => { leave(); setOpen(false); }} title={host ? "Leave without ending the meeting for others" : "Leave the meeting"}>{host ? "Leave (keep meeting)" : "Leave"}</Button>
-                {host && <Button type="button" variant="destructive" className="min-h-11 px-5" disabled={busy} onClick={() => void endForEveryone()} title="End the meeting for everyone">End for all</Button>}
+                </div>
+                <Button type="button" variant="outline" className={cn(RB, "max-sm:hidden", screen && "border-[hsl(var(--primary-readable))] bg-accent")} disabled={busy} onClick={() => void toggle("screen")} aria-pressed={screen} aria-label={screen ? "Stop sharing screen" : "Share screen"} title={screen ? "Stop share" : "Present now"}><MonitorUp aria-hidden="true" className="size-5" /></Button>
+                <Button type="button" variant="outline" className={cn(RB, "max-sm:hidden", localHand && "border-amber-400 bg-amber-950 text-amber-100")} onClick={() => void toggleHand()} aria-pressed={localHand} aria-label={localHand ? "Lower hand" : "Raise hand"} title={localHand ? "Lower hand" : "Raise hand"}><Hand aria-hidden="true" className="size-5" /></Button>
+                <Button type="button" variant="outline" className={cn(RB, "relative", activePanel === "people" && "border-[hsl(var(--primary-readable))] bg-accent")} onClick={() => setActivePanel((current) => current === "people" ? null : "people")} aria-pressed={activePanel === "people"} aria-label={`People (${people.length})`} title="People"><Users aria-hidden="true" className="size-5" /><span aria-hidden="true" className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-5 text-primary-foreground">{people.length}</span></Button>
+                <Button type="button" variant="outline" className={cn(RB, activePanel === "chat" && "border-[hsl(var(--primary-readable))] bg-accent")} onClick={() => setActivePanel((current) => current === "chat" ? null : "chat")} aria-pressed={activePanel === "chat"} aria-label="In-call chat" title="Chat"><MessageSquare aria-hidden="true" className="size-5" /></Button>
+                <Popover open={moreOpen} onOpenChange={setMoreOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" className={cn(RB, moreOpen && "bg-accent")} aria-label="More options" aria-expanded={moreOpen} title="More options"><MoreVertical aria-hidden="true" className="size-5" /></Button>
+                  </PopoverTrigger>
+                  <PopoverContent side="top" align="center" className="video-conferencing !z-[120] w-64 max-w-[calc(100vw-1rem)] border-border bg-popover p-1 text-popover-foreground">
+                    <button type="button" className={cn(MENU_ITEM, "sm:hidden")} disabled={busy} onClick={() => { setMoreOpen(false); void toggle("screen"); }}><MonitorUp aria-hidden="true" className="size-5" />{screen ? "Stop share" : "Share screen"}</button>
+                    <button type="button" className={cn(MENU_ITEM, "sm:hidden")} onClick={() => { setMoreOpen(false); void toggleHand(); }}><Hand aria-hidden="true" className="size-5" />{localHand ? "Lower hand" : "Raise hand"}</button>
+                    <button type="button" className={cn(MENU_ITEM, "md:hidden")} onClick={() => { setMoreOpen(false); toggleCaptions(); }}><Captions aria-hidden="true" className="size-5" />{captionsOn ? "Turn off captions" : "Turn on captions"}</button>
+                    <button type="button" className={MENU_ITEM} onClick={() => { setMoreOpen(false); setActivePanel("invite"); }}><UserPlus aria-hidden="true" className="size-5" />Invite people</button>
+                    {host && <button type="button" className={MENU_ITEM} onClick={() => { setMoreOpen(false); if (recording) { stopRecording(); } else { void startRecording(); } }}>{recording ? <Square aria-hidden="true" className="size-5" /> : <Radio aria-hidden="true" className="size-5" />}{recording ? "Stop recording" : "Record meeting"}</button>}
+                    <button type="button" className={MENU_ITEM} onClick={() => { setMoreOpen(false); setActivePanel("settings"); }}><Settings aria-hidden="true" className="size-5" />Device settings</button>
+                    {host && <button type="button" className={cn(MENU_ITEM, "text-destructive hover:bg-destructive/10")} disabled={busy} onClick={() => { setMoreOpen(false); void endForEveryone(); }}><X aria-hidden="true" className="size-5" />End for all</button>}
+                  </PopoverContent>
+                </Popover>
+                <Button type="button" variant="destructive" className="h-11 rounded-full px-5 sm:h-12 sm:px-6" onClick={() => { leave(); setOpen(false); }} aria-label={host ? "Leave (meeting keeps running)" : "Leave the meeting"} title={host ? "Leave without ending the meeting for others" : "Leave the meeting"}><PhoneOff aria-hidden="true" className="size-5" /></Button>
               </div>
             </footer>
             {timeWarningVisible && (

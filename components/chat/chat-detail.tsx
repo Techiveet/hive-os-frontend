@@ -12,6 +12,7 @@ import {
   CheckCheck,
   Download,
   FileText,
+  Info,
   Loader2,
   Lock,
   MessageSquare,
@@ -50,6 +51,7 @@ import { cn } from '@/lib/utils';
 import { getConversationPresenceChannelName, initEcho } from '@/lib/echo';
 import { getAccessToken, getAuthHeaders } from '@/lib/runtime-context';
 import { getErrorMessage } from '@/lib/errors';
+import { ChatAttachmentPreviewDialog } from '@/components/chat/chat-attachment-preview';
 import {
   ChatAttachmentMetadata,
   ChatConversation,
@@ -198,11 +200,13 @@ const AttachmentCard = ({
   isOwn,
   actionLabel,
   onAction,
+  onOpen,
 }: {
   attachment: ChatAttachmentMetadata;
   isOwn: boolean;
   actionLabel: string;
   onAction: (attachment: ChatAttachmentMetadata) => void;
+  onOpen?: () => void;
 }) => {
   const label = getChatAttachmentLabel(attachment) || 'Attachment';
   const isImage = attachment.mime_type?.startsWith('image/');
@@ -218,15 +222,29 @@ const AttachmentCard = ({
       )}
     >
       {isImage && previewUrl ? (
-        <SecureAttachmentImage
-          src={previewUrl}
-          alt={label}
-          className="max-h-64 w-full object-cover"
-        />
+        <button
+          type="button"
+          disabled={!onOpen}
+          onClick={onOpen}
+          aria-label={`Open ${label}`}
+          className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+        >
+          <SecureAttachmentImage
+            src={previewUrl}
+            alt={label}
+            className="max-h-64 w-full object-cover"
+          />
+        </button>
       ) : null}
 
       <div className="flex items-center justify-between gap-3 px-3 py-2">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+        <button
+          type="button"
+          disabled={!onOpen}
+          onClick={onOpen}
+          aria-label={`Open ${label}`}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+        >
           {!isImage && (
             <div className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl",
@@ -242,7 +260,7 @@ const AttachmentCard = ({
               {attachment.human_size || attachment.mime_type || 'Attachment'}
             </p>
           </div>
-        </div>
+        </button>
         <Button
           type="button"
           variant="ghost"
@@ -330,8 +348,10 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
     encryptionConfig,
     pendingVideoCallConversationId,
     setPendingVideoCallConversationId,
+    isInfoSidebarOpen,
+    setInfoSidebarOpen,
   } = useChatStore();
-  const { canAccessChat, canManageChat, canBrowseAttachments, canSaveAttachments } = useChatAccess();
+  const { canAccessChat, canSendMessages: canSendByRole, canAttachFiles, canBrowseAttachments, canSaveAttachments } = useChatAccess();
   const shouldReduceMotion = useReducedMotion();
 
   const [messageInput, setMessageInput] = useState('');
@@ -341,6 +361,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
   const [isFileManagerOpen, setIsFileManagerOpen] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [pendingAttachment, setPendingAttachment] = useState<ChatAttachmentMetadata | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<{ messageId: number; attachment: ChatAttachmentMetadata } | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -354,6 +375,9 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
   const isTypingRef = useRef(false);
 
   const conversation = conversations.find((item) => String(item.id) === String(activeConversationId));
+  // A private chat the other person has deleted/left is a dead end: nobody would receive what is sent.
+  const peerLeft = conversation?.type === 'private' && (conversation.participants?.length ?? 0) < 2;
+  const canSendMessages = canSendByRole && !peerLeft;
 
   const conversationMessages = useMemo(() => {
     return messages.filter((message) => String(message.conversation_id) === String(activeConversationId));
@@ -502,7 +526,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
       return;
     }
 
-    if (!canManageChat) {
+    if (!canSendMessages) {
       if (isTypingRef.current) {
         conversationChannelRef.current.whisper('typing', {
           conversation_id: activeConversationId ?? undefined,
@@ -553,7 +577,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
       });
       isTypingRef.current = false;
     }, 2500);
-  }, [activeConversationId, canManageChat, currentUser, messageInput]);
+  }, [activeConversationId, canSendMessages, currentUser, messageInput]);
 
   const stopTypingIndicator = () => {
     if (typingTimeoutRef.current) {
@@ -575,7 +599,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
   };
 
   const handleSendMessage = async () => {
-    if (!activeConversationId || sending || !canManageChat) {
+    if (!activeConversationId || sending || !canSendMessages) {
       return;
     }
 
@@ -673,7 +697,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
   };
 
   const handleFileSelect = (file: ChatFileSelection) => {
-    if (!canBrowseAttachments || !canManageChat) {
+    if (!canBrowseAttachments || !canAttachFiles || !canSendMessages) {
       return;
     }
 
@@ -724,7 +748,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
     : otherParticipant?.avatar_url;
 
   const typingIndicatorUsers = typingUsers[String(activeConversationId)] || [];
-  const canSendMessage = canManageChat && (!!messageInput.trim() || !!pendingAttachment) && !sending;
+  const canSendMessage = canSendMessages && (!!messageInput.trim() || !!pendingAttachment) && !sending;
   const isConversationEncrypted = Boolean(conversation?.encryption?.enabled && conversation?.encryption?.wrapped_key);
   const isConversationSecureMode = Boolean(encryptionConfig.enabled);
 
@@ -856,19 +880,32 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
               </div>
             </div>
 
-            <VideoCallButton
-              key={conversation.id}
-              kind="chat"
-              id={conversation.id}
-              title={displayTitle}
-              isHost={String(conversation.created_by) === String(currentUser?.id)}
-              registeredParticipants={conversation.participants}
-              resolveEncryptionMaterial={() => getChatCallEncryptionMaterial(conversation)}
-              disabled={!canAccessChat}
-              autoOpen={pendingVideoCallConversationId === conversation.id}
-              onConversationUpdated={(updatedConversation) => updateConversation(conversation.id, updatedConversation)}
-              onAutoOpenHandled={() => setPendingVideoCallConversationId(null)}
-            />
+            <div className="flex items-center gap-1">
+              <VideoCallButton
+                key={conversation.id}
+                kind="chat"
+                id={conversation.id}
+                title={displayTitle}
+                isHost={String(conversation.created_by) === String(currentUser?.id)}
+                registeredParticipants={conversation.participants}
+                resolveEncryptionMaterial={() => getChatCallEncryptionMaterial(conversation)}
+                disabled={!canAccessChat}
+                autoOpen={pendingVideoCallConversationId === conversation.id}
+                onConversationUpdated={(updatedConversation) => updateConversation(conversation.id, updatedConversation)}
+                onAutoOpenHandled={() => setPendingVideoCallConversationId(null)}
+              />
+              <Button
+                type="button"
+                variant={isInfoSidebarOpen ? "secondary" : "ghost"}
+                size="icon"
+                aria-label={isInfoSidebarOpen ? "Hide conversation details" : "Show conversation details"}
+                aria-pressed={isInfoSidebarOpen}
+                onClick={() => setInfoSidebarOpen(!isInfoSidebarOpen)}
+                className="h-9 w-9 rounded-full"
+              >
+                <Info className="h-4 w-4" />
+              </Button>
+            </div>
           </header>
 
           <div className="relative flex min-h-0 flex-1 flex-col">
@@ -914,7 +951,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
                         variant="ghost"
                         size="icon"
                         onClick={() => setReplyingTo(message)}
-                        disabled={!canManageChat}
+                        disabled={!canSendMessages}
                         aria-label={`Reply to ${message.sender?.name || 'message'}`}
                         className="size-7 shrink-0 rounded-full text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
                       >
@@ -954,6 +991,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
                               onAction={() => {
                                 void handleAttachmentAction(message, attachment);
                               }}
+                              onOpen={attachment.url ? () => setPreviewTarget({ messageId: message.id, attachment }) : undefined}
                             />
                           )}
 
@@ -1054,7 +1092,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
                 variant="ghost"
                 size="sm"
                 aria-label="Attach a file"
-                disabled={!canBrowseAttachments || !canManageChat}
+                disabled={!canBrowseAttachments || !canAttachFiles || !canSendMessages}
                 className="shrink-0 rounded-xl text-muted-foreground"
               >
                 <Paperclip aria-hidden="true" data-icon="inline-start" />
@@ -1066,19 +1104,19 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
                 type="text"
                 value={messageInput}
                 onChange={(event) => setMessageInput(event.target.value)}
-                disabled={!canManageChat}
+                disabled={!canSendMessages}
                 onKeyDown={(event) => {
-                  if (canManageChat && event.key === 'Enter' && !event.shiftKey && (messageInput.trim() || pendingAttachment)) {
+                  if (canSendMessages && event.key === 'Enter' && !event.shiftKey && (messageInput.trim() || pendingAttachment)) {
                     event.preventDefault();
                     void handleSendMessage();
                   }
                 }}
                 placeholder={
-                  canManageChat
+                  canSendMessages
                     ? pendingAttachment
                       ? 'Add a caption or message...'
                       : (replyingTo ? 'Type your reply...' : 'Type a message...')
-                    : 'Chat is read-only for your role'
+                    : (peerLeft ? 'The other person left this conversation' : 'Chat is read-only for your role')
                 }
               className="flex-1 min-h-[36px] max-h-[100px] px-3 py-2 bg-transparent border-none focus:ring-0 text-sm"
               />
@@ -1090,7 +1128,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
                     variant="ghost"
                     size="icon"
                     aria-label="Choose an emoji"
-                    disabled={!canManageChat}
+                    disabled={!canSendMessages}
                     className="shrink-0 rounded-full text-muted-foreground"
                   >
                     <Smile className="h-4 w-4 text-amber-500" />
@@ -1116,7 +1154,7 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
                 aria-label={sending ? "Sending message" : "Send message"}
                 className={cn(
                   "shrink-0 rounded-xl",
-                  canManageChat && (messageInput.trim() || pendingAttachment)
+                  canSendMessages && (messageInput.trim() || pendingAttachment)
                     ? "bg-primary text-primary-foreground hover:bg-primary/90"
                     : "bg-muted text-muted-foreground"
                 )}
@@ -1159,6 +1197,14 @@ export default function ChatDetail({ onBack }: ChatDetailProps) {
             </div>
           </DialogContent>
         </Dialog>
+
+        <ChatAttachmentPreviewDialog
+          conversationId={activeConversationId ?? null}
+          messageId={previewTarget?.messageId ?? null}
+          attachment={previewTarget?.attachment ?? null}
+          canSave={canSaveAttachments}
+          onClose={() => setPreviewTarget(null)}
+        />
       </>
     </TooltipProvider>
   );

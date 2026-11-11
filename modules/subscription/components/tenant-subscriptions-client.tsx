@@ -729,8 +729,11 @@ export function TenantSubscriptionsClient() {
       .map(([slug]) => slug);
   }, [moduleAccess]);
   const serverEnabledModules = React.useMemo(() => {
-    const enabled = subscriptions?.enabled_modules ?? [];
-    return enabled.length > 0 ? enabled : accessEnabledModules;
+    if (Array.isArray(subscriptions?.enabled_modules)) {
+      return subscriptions.enabled_modules;
+    }
+
+    return accessEnabledModules;
   }, [accessEnabledModules, subscriptions?.enabled_modules]);
   const rawCatalog = React.useMemo<TenantCatalogModule[]>(() => {
     let list: TenantCatalogModule[] = EMPTY_CATALOG;

@@ -2,6 +2,16 @@ import { create } from 'zustand';
 
 export type MailFolder = 'all' | 'inbox' | 'sent' | 'drafts' | 'trash' | 'starred' | 'archive' | 'spam' | 'important';
 
+export interface MailAttachmentInfo {
+    id: number;
+    name: string;
+    mime_type?: string | null;
+    size: number;
+    human_size: string;
+    /** Download/preview URL (only present on attachments that belong to a saved message). */
+    url: string;
+}
+
 export interface MailParticipant {
     id: number;
     mail_message_id: number;
@@ -16,6 +26,7 @@ export interface MailParticipant {
         subject: string | null;
         body: string | null;
         status?: string | null;
+        attachments?: MailAttachmentInfo[];
         draft_recipients?: {
             to?: {
                 id: number | string;

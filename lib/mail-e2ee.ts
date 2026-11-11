@@ -83,10 +83,18 @@ const resolveMailMessageKey = async (participant: MailParticipant) => {
     return null;
   }
 
-  const sharedKey = await resolveWrappedCommunicationKey(participant.message.encryption.wrapped_key, identity);
-  messageKeyCache.set(cacheId, sharedKey);
+  try {
+    const sharedKey = await resolveWrappedCommunicationKey(participant.message.encryption.wrapped_key, identity);
+    messageKeyCache.set(cacheId, sharedKey);
 
-  return sharedKey;
+    return sharedKey;
+  } catch (error) {
+    // Lost/rotated local identity cannot unwrap keys wrapped for an older public key.
+    console.warn(`Unable to unwrap mail ${participant.mail_message_id} encryption key:`, error);
+    messageKeyCache.delete(cacheId);
+
+    return null;
+  }
 };
 
 export const encryptMailDraft = async ({
@@ -152,63 +160,87 @@ export const encryptMailDraft = async ({
 };
 
 export const decryptMailParticipant = async (participant: MailParticipant) => {
-  const nextParticipant: MailParticipant = {
-    ...participant,
-    message: {
-      ...participant.message,
-      sender: participant.message.sender ? { ...participant.message.sender } : participant.message.sender,
-      participants: participant.message.participants.map((recipient) => ({
-        ...recipient,
-        user: recipient.user ? { ...recipient.user } : recipient.user,
-      })),
-      encryption: participant.message.encryption
-        ? { ...participant.message.encryption }
-        : participant.message.encryption,
-    },
-  };
+  try {
+    const nextParticipant: MailParticipant = {
+      ...participant,
+      message: {
+        ...participant.message,
+        sender: participant.message.sender ? { ...participant.message.sender } : participant.message.sender,
+        participants: participant.message.participants.map((recipient) => ({
+          ...recipient,
+          user: recipient.user ? { ...recipient.user } : recipient.user,
+        })),
+        encryption: participant.message.encryption
+          ? { ...participant.message.encryption }
+          : participant.message.encryption,
+      },
+    };
 
-  const subjectIsEncrypted = isEncryptedMailValue(participant.message?.subject);
-  const bodyIsEncrypted = isEncryptedMailValue(participant.message?.body);
+    const subjectIsEncrypted = isEncryptedMailValue(participant.message?.subject);
+    const bodyIsEncrypted = isEncryptedMailValue(participant.message?.body);
 
-  if (!subjectIsEncrypted && !bodyIsEncrypted) {
-    return nextParticipant;
-  }
+    if (!subjectIsEncrypted && !bodyIsEncrypted) {
+      return nextParticipant;
+    }
 
-  const sharedKey = await resolveMailMessageKey(participant);
+    const sharedKey = await resolveMailMessageKey(participant);
 
-  if (!sharedKey) {
+    if (!sharedKey) {
+      return {
+        ...nextParticipant,
+        message: {
+          ...nextParticipant.message,
+          subject: subjectIsEncrypted ? ENCRYPTED_MAIL_SUBJECT_FALLBACK : nextParticipant.message.subject,
+          body: bodyIsEncrypted ? ENCRYPTED_MAIL_BODY_FALLBACK : nextParticipant.message.body,
+        },
+      };
+    }
+
     return {
       ...nextParticipant,
       message: {
         ...nextParticipant.message,
-        subject: subjectIsEncrypted ? ENCRYPTED_MAIL_SUBJECT_FALLBACK : nextParticipant.message.subject,
-        body: bodyIsEncrypted ? ENCRYPTED_MAIL_BODY_FALLBACK : nextParticipant.message.body,
+        subject: subjectIsEncrypted
+          ? await decryptCommunicationValue(
+              participant.message.subject,
+              sharedKey,
+              MAIL_SUBJECT_AAD,
+              ENCRYPTED_MAIL_SUBJECT_FALLBACK
+            )
+          : nextParticipant.message.subject,
+        body: bodyIsEncrypted
+          ? await decryptCommunicationValue(
+              participant.message.body,
+              sharedKey,
+              MAIL_BODY_AAD,
+              ENCRYPTED_MAIL_BODY_FALLBACK
+            )
+          : nextParticipant.message.body,
+      },
+    };
+  } catch (error) {
+    console.warn(`Unable to decrypt mail ${participant.mail_message_id}:`, error);
+
+    const subjectIsEncrypted = isEncryptedMailValue(participant.message?.subject);
+    const bodyIsEncrypted = isEncryptedMailValue(participant.message?.body);
+
+    return {
+      ...participant,
+      message: {
+        ...participant.message,
+        sender: participant.message.sender ? { ...participant.message.sender } : participant.message.sender,
+        participants: participant.message.participants.map((recipient) => ({
+          ...recipient,
+          user: recipient.user ? { ...recipient.user } : recipient.user,
+        })),
+        encryption: participant.message.encryption
+          ? { ...participant.message.encryption }
+          : participant.message.encryption,
+        subject: subjectIsEncrypted ? ENCRYPTED_MAIL_SUBJECT_FALLBACK : participant.message.subject,
+        body: bodyIsEncrypted ? ENCRYPTED_MAIL_BODY_FALLBACK : participant.message.body,
       },
     };
   }
-
-  return {
-    ...nextParticipant,
-    message: {
-      ...nextParticipant.message,
-      subject: subjectIsEncrypted
-        ? await decryptCommunicationValue(
-            participant.message.subject,
-            sharedKey,
-            MAIL_SUBJECT_AAD,
-            ENCRYPTED_MAIL_SUBJECT_FALLBACK
-          )
-        : nextParticipant.message.subject,
-      body: bodyIsEncrypted
-        ? await decryptCommunicationValue(
-            participant.message.body,
-            sharedKey,
-            MAIL_BODY_AAD,
-            ENCRYPTED_MAIL_BODY_FALLBACK
-          )
-        : nextParticipant.message.body,
-    },
-  };
 };
 
 export const decryptMailParticipants = async (participants: MailParticipant[]) => {

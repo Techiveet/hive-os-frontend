@@ -8,6 +8,7 @@ import { useChatStore } from '@/store/chat-store';
 import ChatSidebar from './chat-sidebar';
 import ChatList from './chat-list';
 import ChatDetail from './chat-detail';
+import ChatInfoSidebar from './chat-info-sidebar';
 import ComposeChatModal from './compose-chat-modal';
 import { ChatErrorBoundary } from './chat-error-boundary';
 
@@ -16,6 +17,8 @@ export default function ChatLayout() {
   const conversations = useChatStore((state) => state.conversations);
   const setActiveConversation = useChatStore((state) => state.setActiveConversation);
   const setPendingVideoCallConversationId = useChatStore((state) => state.setPendingVideoCallConversationId);
+  const isInfoSidebarOpen = useChatStore((state) => state.isInfoSidebarOpen);
+  const setInfoSidebarOpen = useChatStore((state) => state.setInfoSidebarOpen);
   const isFullscreen = useChatStore((state) => state.isFullscreen);
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -91,6 +94,12 @@ export default function ChatLayout() {
     };
   }, [conversations, mounted, setActiveConversation, setPendingVideoCallConversationId]);
 
+  useEffect(() => {
+    if (!activeConversationId && isInfoSidebarOpen) {
+      setInfoSidebarOpen(false);
+    }
+  }, [activeConversationId, isInfoSidebarOpen, setInfoSidebarOpen]);
+
   if (!mounted) {
     return null;
   }
@@ -98,6 +107,7 @@ export default function ChatLayout() {
   const showSidebar = !isMobile || (isMobile && !activeConversationId);
   const showList = !isMobile || (isMobile && !activeConversationId);
   const showDetail = !isMobile || (isMobile && Boolean(activeConversationId));
+  const showInfoSidebar = Boolean(activeConversationId) && isInfoSidebarOpen && (!isMobile || showDetail);
 
   return (
     <div
@@ -121,10 +131,34 @@ export default function ChatLayout() {
       )}
 
       {showDetail && (
-        <main className="h-full min-w-0 flex-1">
-          <ChatErrorBoundary label="conversation" resetKey={activeConversationId}>
-            <ChatDetail />
-          </ChatErrorBoundary>
+        <main className="relative h-full min-w-0 flex-1 overflow-hidden">
+          <div className="h-full w-full min-w-0">
+            <ChatErrorBoundary label="conversation" resetKey={activeConversationId}>
+              <ChatDetail />
+            </ChatErrorBoundary>
+          </div>
+
+          {showInfoSidebar ? (
+            <div className="pointer-events-none absolute inset-0 z-40">
+              <button
+                type="button"
+                aria-label="Close conversation details"
+                className="pointer-events-auto absolute inset-0 bg-black/35"
+                onClick={() => setInfoSidebarOpen(false)}
+              />
+              <aside
+                aria-label="Conversation details"
+                className={cn(
+                  "pointer-events-auto absolute inset-y-0 right-0 flex h-full flex-col border-l border-border/60 bg-background shadow-2xl",
+                  isMobile ? "w-full" : "w-80 xl:w-96"
+                )}
+              >
+                <ChatErrorBoundary label="conversation details" resetKey={activeConversationId}>
+                  <ChatInfoSidebar />
+                </ChatErrorBoundary>
+              </aside>
+            </div>
+          ) : null}
         </main>
       )}
 

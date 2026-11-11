@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useChatAccess } from '@/hooks/use-chat-access';
 import { decryptChatConversation, decryptChatConversations, decryptChatMessages } from '@/lib/chat-e2ee';
 import { getChatMessagePreview, getStoredChatUser } from '@/lib/chat-utils';
@@ -24,28 +24,50 @@ export default function ChatList({ onConversationSelect }: ChatListProps) {
     searchQuery, setSearchQuery, setMessages,
     activeTab, onlineUsers, encryptionConfig
   } = useChatStore();
-  const { canManageChat } = useChatAccess();
+  const { canCompose } = useChatAccess();
 
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: number; name?: string } | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const nextPageRef = useRef(2);
+  // Bumped on every fresh load so a late "load more" response from an old tab/list is ignored.
+  const listVersionRef = useRef(0);
 
   useEffect(() => {
     setCurrentUser(getStoredChatUser());
   }, []);
 
+  const conversationsUrl = useCallback(
+    (page: number) => {
+      const base = activeTab === 'groups' ? '/chat/conversations?type=group' : '/chat/conversations';
+      return page > 1 ? `${base}${base.includes('?') ? '&' : '?'}page=${page}` : base;
+    },
+    [activeTab]
+  );
+
   const fetchConversations = useCallback(async () => {
+    const version = ++listVersionRef.current;
     setLoading(true);
+    setLoadingMore(false);
     try {
-      const url = activeTab === 'groups' ? '/chat/conversations?type=group' : '/chat/conversations';
-      const { data } = await api.get(url);
+      const { data } = await api.get(conversationsUrl(1));
       const decryptedConversations = await decryptChatConversations(data.data || data);
+      if (version !== listVersionRef.current) return;
       setConversations(decryptedConversations);
+      nextPageRef.current = 2;
+      setHasMore(
+        typeof data?.current_page === 'number' &&
+        typeof data?.last_page === 'number' &&
+        data.current_page < data.last_page
+      );
     } catch (err) {
       console.error("Failed to fetch conversations:", err);
     } finally {
-      setLoading(false);
+      if (version === listVersionRef.current) setLoading(false);
     }
   }, [
+    conversationsUrl,
     activeTab,
     setConversations,
     encryptionConfig.enabled,
@@ -56,6 +78,35 @@ export default function ChatList({ onConversationSelect }: ChatListProps) {
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
+
+  const loadMoreConversations = async () => {
+    if (loadingMore || loading || !hasMore) return;
+    const version = listVersionRef.current;
+    const page = nextPageRef.current;
+    setLoadingMore(true);
+    try {
+      const { data } = await api.get(conversationsUrl(page));
+      const decrypted = await decryptChatConversations(data.data || data);
+      if (version !== listVersionRef.current) return;
+
+      // Merge without duplicates; keep the copy already in the store (it may have newer live updates).
+      const current = useChatStore.getState().conversations;
+      const knownIds = new Set(current.map((conversation) => String(conversation.id)));
+      const additions = decrypted.filter((conversation) => !knownIds.has(String(conversation.id)));
+      useChatStore.setState({ conversations: [...current, ...additions] });
+
+      nextPageRef.current = page + 1;
+      setHasMore(
+        typeof data?.current_page === 'number' &&
+        typeof data?.last_page === 'number' &&
+        data.current_page < data.last_page
+      );
+    } catch (err) {
+      console.error("Failed to load more conversations:", err);
+    } finally {
+      if (version === listVersionRef.current) setLoadingMore(false);
+    }
+  };
 
   const handleSelect = async (id: number) => {
     setActiveConversation(id);
@@ -138,7 +189,7 @@ export default function ChatList({ onConversationSelect }: ChatListProps) {
             <Button 
               variant="outline" 
               size="sm" 
-              disabled={!canManageChat}
+              disabled={!canCompose}
               className="mt-3 rounded-lg"
               onClick={() => useChatStore.getState().setComposeOpen(true)}
             >
@@ -228,6 +279,28 @@ export default function ChatList({ onConversationSelect }: ChatListProps) {
               );
             })}
           </ul>
+        )}
+
+        {!loading && hasMore && (
+          <div className="p-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full rounded-lg"
+              disabled={loadingMore}
+              onClick={loadMoreConversations}
+            >
+              {loadingMore ? (
+                <>
+                  <Loader2 aria-hidden="true" className="mr-2 size-4 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                'Load more conversations'
+              )}
+            </Button>
+          </div>
         )}
       </div>
     </div>

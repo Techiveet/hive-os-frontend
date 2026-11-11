@@ -71,6 +71,43 @@ export const CHAT_ROUTE_PERMISSIONS = [
   "view_chat_groups",
   "view_chat_presence",
   "view_chat_shared_items",
+  "download_chat_attachments",
+  "send_chat_messages",
+  "create_chat_conversations",
+  "create_chat_groups",
+] as const;
+// The lists below mirror Modules/Chat/app/Support/ChatPermissions.php - change both together.
+export const CHAT_SEND_PERMISSIONS = [
+  "manage_chat",
+  "send_chat_messages",
+  "reply_chat_messages",
+] as const;
+export const CHAT_START_CONVERSATION_PERMISSIONS = [
+  "manage_chat",
+  "create_chat_conversations",
+] as const;
+export const CHAT_CREATE_GROUP_PERMISSIONS = [
+  "manage_chat",
+  "create_chat_groups",
+  "manage_chat_groups",
+] as const;
+export const CHAT_LEAVE_PERMISSIONS = [
+  "manage_chat",
+  "delete_chat_conversations",
+] as const;
+export const CHAT_CLEAR_PERMISSIONS = [
+  "manage_chat",
+  "clear_chat_conversations",
+  "delete_chat_messages",
+  "manage_chat_messages",
+] as const;
+export const CHAT_ATTACH_PERMISSIONS = [
+  "manage_chat",
+  "attach_chat_files",
+  "browse_chat_attachments",
+] as const;
+export const CHAT_HOST_PERMISSIONS = [
+  "manage_chat",
   "send_chat_messages",
   "create_chat_conversations",
   "create_chat_groups",
@@ -628,7 +665,7 @@ export function canAccessDashboardRoute(
   if (matchesPrefix(path, "/dashboard/chat")) {
     return (
       access.hasAnyPermission([...CHAT_ROUTE_PERMISSIONS]) &&
-      hasSubscribedModule(access, "mailbox")
+      hasSubscribedModule(access, "chat")
     );
   }
 

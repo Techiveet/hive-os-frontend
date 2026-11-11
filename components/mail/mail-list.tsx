@@ -12,6 +12,15 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { decryptMailParticipants } from '@/lib/mail-e2ee';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 type MailFolderCountKey = Exclude<MailFolder, 'all'>;
 
@@ -39,6 +48,8 @@ export default function MailList() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [pendingBulkAction, setPendingBulkAction] = useState<string | null>(null);
+  const [bulkActionBusy, setBulkActionBusy] = useState(false);
 
   // Reset page to 1 when changing folders
   useEffect(() => {
@@ -78,6 +89,7 @@ export default function MailList() {
         bcc: mail.message?.draft_recipients?.bcc || [],
         subject: mail.message?.subject || '',
         body: mail.message?.body || '',
+        attachments: mail.message?.attachments || [],
       });
       return;
     }
@@ -96,13 +108,24 @@ export default function MailList() {
     }
   };
 
-  const handleBulkAction = async (action: string) => {
+  const handleBulkAction = (action: string) => {
+    if (checkedMailIds.length === 0) return;
+    // For read/unread/star actions, execute immediately (non-destructive)
+    if (['read', 'unread', 'star'].includes(action)) {
+      executeBulkAction(action);
+    } else {
+      // For destructive actions, show confirmation
+      setPendingBulkAction(action);
+    }
+  };
+
+  const executeBulkAction = async (action: string) => {
     if (checkedMailIds.length === 0) return;
     const ids = [...checkedMailIds];
-    
+
     try {
       await api.post('/mail/bulk', { ids, action });
-      
+
       const selectedMails = mails.filter((mail) => ids.includes(mail.mail_message_id));
       const countUpdate: Partial<MailCounts> & Partial<Record<MailFolderCountKey, number>> = {};
       const amount = ids.length;
@@ -151,7 +174,7 @@ export default function MailList() {
          bulkUpdateMails(ids, { is_read: false });
          if (activeFolder === 'inbox') countUpdate.inbox_unread = amount - unreadAmount;
       }
-      
+
       adjustCounts(countUpdate);
       clearChecked();
       toast.success('Action applied to selected messages');
@@ -385,6 +408,71 @@ export default function MailList() {
           </Button>
         </div>
       </div>
+
+      <AlertDialog open={pendingBulkAction !== null} onOpenChange={(open) => { if (!open && !bulkActionBusy) setPendingBulkAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingBulkAction === 'delete'
+                ? (activeFolder === 'trash' ? `Delete ${checkedMailIds.length} messages forever?` : `Move ${checkedMailIds.length} messages to trash?`)
+                : pendingBulkAction === 'archive'
+                  ? `Archive ${checkedMailIds.length} messages?`
+                  : pendingBulkAction === 'spam'
+                    ? `Move ${checkedMailIds.length} messages to spam?`
+                    : pendingBulkAction === 'inbox'
+                      ? `Move ${checkedMailIds.length} messages to inbox?`
+                      : pendingBulkAction === 'important'
+                        ? `Mark ${checkedMailIds.length} messages as important?`
+                        : `Apply action to ${checkedMailIds.length} messages?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingBulkAction === 'delete'
+                ? (activeFolder === 'trash'
+                  ? 'This will permanently delete the selected messages. This action cannot be undone.'
+                  : 'The selected messages will be moved to your trash folder.')
+                : pendingBulkAction === 'archive'
+                  ? 'The selected messages will be moved to your archive folder.'
+                  : pendingBulkAction === 'spam'
+                    ? 'The selected messages will be marked as spam and moved to your spam folder.'
+                    : pendingBulkAction === 'inbox'
+                      ? 'The selected messages will be moved back to your inbox.'
+                      : pendingBulkAction === 'important'
+                        ? 'The selected messages will be marked as important.'
+                        : 'This action will be applied to all selected messages.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkActionBusy}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant={pendingBulkAction === 'delete' ? 'destructive' : 'default'}
+              disabled={bulkActionBusy}
+              onClick={() => {
+                if (pendingBulkAction) {
+                  setBulkActionBusy(true);
+                  executeBulkAction(pendingBulkAction).finally(() => {
+                    setBulkActionBusy(false);
+                    setPendingBulkAction(null);
+                  });
+                }
+              }}
+            >
+              {bulkActionBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+              {pendingBulkAction === 'delete'
+                ? (activeFolder === 'trash' ? 'Delete forever' : 'Move to trash')
+                : pendingBulkAction === 'archive'
+                  ? 'Archive'
+                  : pendingBulkAction === 'spam'
+                    ? 'Report spam'
+                    : pendingBulkAction === 'inbox'
+                      ? 'Move to inbox'
+                      : pendingBulkAction === 'important'
+                        ? 'Mark important'
+                        : 'Apply'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -68,18 +68,29 @@ const resolveConversationKey = async (conversation: ChatConversation) => {
     return null;
   }
 
-  const conversationKey = await resolveWrappedCommunicationKey(conversation.encryption.wrapped_key, identity);
-  conversationKeyCache.set(cacheId, conversationKey);
+  try {
+    const conversationKey = await resolveWrappedCommunicationKey(conversation.encryption.wrapped_key, identity);
+    conversationKeyCache.set(cacheId, conversationKey);
 
-  return conversationKey;
+    return conversationKey;
+  } catch (error) {
+    // Lost/rotated local identity cannot unwrap keys wrapped for an older public key.
+    console.warn(`Unable to unwrap conversation ${conversation.id} encryption key:`, error);
+    conversationKeyCache.delete(cacheId);
+
+    return null;
+  }
 };
 
-export const bootstrapConversationEncryption = async (conversation: ChatConversation) => {
+export const bootstrapConversationEncryption = async (
+  conversation: ChatConversation,
+  options?: { force?: boolean },
+) => {
   if (!conversation.encryption?.enabled) {
     return conversation;
   }
 
-  if (conversation.encryption?.wrapped_key) {
+  if (conversation.encryption?.wrapped_key && !options?.force) {
     return conversation;
   }
 
@@ -123,8 +134,14 @@ export const encryptChatMessageBody = async (
   conversation: ChatConversation,
   body: string,
 ) => {
-  const updatedConversation = await bootstrapConversationEncryption(conversation);
-  const conversationKey = await resolveConversationKey(updatedConversation);
+  let updatedConversation = await bootstrapConversationEncryption(conversation);
+  let conversationKey = await resolveConversationKey(updatedConversation);
+
+  // Identity rotation leaves an unwrapable wrapped_key; force a fresh shared key for new messages.
+  if (!conversationKey && updatedConversation.encryption?.wrapped_key) {
+    updatedConversation = await bootstrapConversationEncryption(updatedConversation, { force: true });
+    conversationKey = await resolveConversationKey(updatedConversation);
+  }
 
   if (!conversationKey) {
     throw new Error('Conversation encryption key is unavailable.');
@@ -156,19 +173,37 @@ export const decryptChatMessageBody = async (
 };
 
 export const decryptChatConversation = async (conversation: ChatConversation) => {
-  const nextConversation: ChatConversation = {
-    ...conversation,
-    participants: conversation.participants.map((participant) => ({ ...participant })),
-    encryption: conversation.encryption ? { ...conversation.encryption } : conversation.encryption,
-    last_message: conversation.last_message
-      ? {
-          ...conversation.last_message,
-          body: await decryptChatMessageBody(conversation, conversation.last_message.body),
-        }
-      : conversation.last_message,
-  };
+  try {
+    const nextConversation: ChatConversation = {
+      ...conversation,
+      participants: conversation.participants.map((participant) => ({ ...participant })),
+      encryption: conversation.encryption ? { ...conversation.encryption } : conversation.encryption,
+      last_message: conversation.last_message
+        ? {
+            ...conversation.last_message,
+            body: await decryptChatMessageBody(conversation, conversation.last_message.body),
+          }
+        : conversation.last_message,
+    };
 
-  return nextConversation;
+    return nextConversation;
+  } catch (error) {
+    console.warn(`Unable to decrypt conversation ${conversation.id}:`, error);
+
+    return {
+      ...conversation,
+      participants: conversation.participants.map((participant) => ({ ...participant })),
+      encryption: conversation.encryption ? { ...conversation.encryption } : conversation.encryption,
+      last_message: conversation.last_message
+        ? {
+            ...conversation.last_message,
+            body: isEncryptedCommunicationValue(conversation.last_message.body)
+              ? ENCRYPTED_MESSAGE_FALLBACK
+              : conversation.last_message.body,
+          }
+        : conversation.last_message,
+    };
+  }
 };
 
 export const decryptChatConversations = async (conversations: ChatConversation[]) => {
@@ -195,8 +230,13 @@ export const decryptChatMessages = async (
 };
 
 export const getChatCallEncryptionMaterial = async (conversation: ChatConversation) => {
-  const updatedConversation = await bootstrapConversationEncryption(conversation);
-  const conversationKey = await resolveConversationKey(updatedConversation);
+  let updatedConversation = await bootstrapConversationEncryption(conversation);
+  let conversationKey = await resolveConversationKey(updatedConversation);
+
+  if (!conversationKey && updatedConversation.encryption?.wrapped_key) {
+    updatedConversation = await bootstrapConversationEncryption(updatedConversation, { force: true });
+    conversationKey = await resolveConversationKey(updatedConversation);
+  }
 
   if (!conversationKey) {
     throw new Error('End-to-end encryption must be enabled before starting a video call.');

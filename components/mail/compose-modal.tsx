@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getErrorMessage } from '@/lib/errors';
 import { toast } from 'sonner';
-import { Loader2, Lock, X } from 'lucide-react';
+import { FolderOpen, Loader2, Lock, Paperclip, X } from 'lucide-react';
 import { UserMultiSelect, User } from './user-multi-select';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor, RichTextEditorRef } from '@/components/ui/rich-text-editor';
@@ -17,6 +17,21 @@ import { useRef } from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 import { encryptMailDraft } from '@/lib/mail-e2ee';
 import api from '@/lib/api';
+import { usePermissions } from '@/hooks/use-permissions';
+import { AttachmentIcon, getPreviewKind } from '@/components/mail/mail-attachments';
+import type { MailAttachmentInfo } from '@/store/mail-store';
+
+// Keep these in step with MailAttachmentPolicy on the server.
+const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+type HiveFileSelection = {
+  id?: number | string;
+  media_details?: { url?: string; mime_type?: string; name?: string; size?: number };
+  url?: string;
+  path?: string;
+  mime_type?: string;
+};
 
 export default function ComposeModal() {
   const { isComposeOpen, setComposeOpen, composeData, encryptionConfig } = useMailStore();
@@ -31,7 +46,15 @@ export default function ComposeModal() {
   const [showBccHeader, setShowBccHeader] = useState(false);
   
   const [isFileManagerOpen, setIsFileManagerOpen] = useState(false);
+  // The same File Manager dialog serves two jobs: embedding media in the body, or attaching a file.
+  const [pickerMode, setPickerMode] = useState<'inline' | 'attachment'>('inline');
   const editorRef = useRef<RichTextEditorRef>(null);
+
+  const { hasAnyPermission } = usePermissions();
+  const canAttachFiles = hasAnyPermission(['manage_mail', 'attach_mail_files']);
+  const [attachments, setAttachments] = useState<MailAttachmentInfo[]>([]);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   const resetComposer = () => {
     setDraftId(null);
@@ -42,6 +65,7 @@ export default function ComposeModal() {
     setBody('');
     setShowCcHeader(false);
     setShowBccHeader(false);
+    setAttachments([]);
   };
 
   React.useEffect(() => {
@@ -54,6 +78,7 @@ export default function ComposeModal() {
       setBody(composeData.body || '');
       setShowCcHeader(!!(composeData.cc?.length));
       setShowBccHeader(!!(composeData.bcc?.length));
+      setAttachments(Array.isArray(composeData.attachments) ? composeData.attachments : []);
       return;
     }
 
@@ -67,9 +92,87 @@ export default function ComposeModal() {
     ? secureRecipients.filter((user) => !user.chat_public_key)
     : [];
 
+  const handleAttachmentsChosen = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+
+    let currentCount = attachments.length;
+
+    for (const file of files) {
+      if (currentCount >= MAX_ATTACHMENTS) {
+        toast.error(`You can attach up to ${MAX_ATTACHMENTS} files to one email`);
+        break;
+      }
+
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        toast.error(`${file.name} is larger than ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB`);
+        continue;
+      }
+
+      setUploadingCount((count) => count + 1);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const { data } = await api.post('/mail/attachments', formData);
+        setAttachments((previous) => [...previous, data.data as MailAttachmentInfo]);
+        currentCount += 1;
+      } catch (error: unknown) {
+        toast.error(getErrorMessage(error, `Failed to attach ${file.name}`));
+      } finally {
+        setUploadingCount((count) => count - 1);
+      }
+    }
+  };
+
+  const handleHiveFileChosen = async (file: HiveFileSelection) => {
+    setIsFileManagerOpen(false);
+
+    const fileEntryId = file?.id ? Number(file.id) : NaN;
+    if (!Number.isFinite(fileEntryId) || fileEntryId <= 0) {
+      toast.error('Could not read the selected file.');
+      return;
+    }
+
+    const name = file?.media_details?.name || 'file';
+
+    if (attachments.length + uploadingCount >= MAX_ATTACHMENTS) {
+      toast.error(`You can attach up to ${MAX_ATTACHMENTS} files to one email`);
+      return;
+    }
+
+    if (typeof file?.media_details?.size === 'number' && file.media_details.size > MAX_ATTACHMENT_BYTES) {
+      toast.error(`${name} is larger than ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB`);
+      return;
+    }
+
+    setUploadingCount((count) => count + 1);
+    try {
+      const { data } = await api.post('/mail/attachments/from-file', { file_entry_id: fileEntryId });
+      setAttachments((previous) => [...previous, data.data as MailAttachmentInfo]);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, `Failed to attach ${name}`));
+    } finally {
+      setUploadingCount((count) => count - 1);
+    }
+  };
+
+  const handleRemoveAttachment = async (attachment: MailAttachmentInfo) => {
+    try {
+      await api.delete(`/mail/attachments/${attachment.id}`);
+      setAttachments((previous) => previous.filter((item) => item.id !== attachment.id));
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to remove the attachment'));
+    }
+  };
+
   const handleSend = async () => {
     if (!to.length || !body) {
       toast.error('Recipient and body are required');
+      return;
+    }
+
+    if (uploadingCount > 0) {
+      toast.error('Please wait for the attachments to finish uploading');
       return;
     }
 
@@ -89,9 +192,16 @@ export default function ComposeModal() {
         body: encryptedDraft.body,
         draft_id: draftId,
         participant_keys: encryptedDraft.participant_keys,
+        attachment_ids: attachments.map((attachment) => attachment.id),
       });
       
-      toast.success(encryptedDraft.encrypted ? 'Encrypted email sent successfully' : 'Email sent successfully');
+      toast.success(
+        encryptedDraft.encrypted
+          ? (attachments.length > 0
+            ? 'Email sent. The message is encrypted; attached files are not.'
+            : 'Encrypted email sent successfully')
+          : 'Email sent successfully'
+      );
       setComposeOpen(false);
       resetComposer();
     } catch (e: unknown) {
@@ -107,6 +217,11 @@ export default function ComposeModal() {
       return;
     }
 
+    if (uploadingCount > 0) {
+      toast.error('Please wait for the attachments to finish uploading');
+      return;
+    }
+
     setLoading(true);
     try {
       const { data } = await api.post('/mail', {
@@ -117,6 +232,7 @@ export default function ComposeModal() {
         body,
         save_as_draft: true,
         draft_id: draftId,
+        attachment_ids: attachments.map((attachment) => attachment.id),
       });
 
       const savedDraftId = data?.data?.mail_message_id || data?.data?.message?.id || draftId;
@@ -131,12 +247,12 @@ export default function ComposeModal() {
     }
   };
 
-  const handleFileSelect = (file: {
-    media_details?: { url?: string; mime_type?: string; name?: string };
-    url?: string;
-    path?: string;
-    mime_type?: string;
-  }) => {
+  const handleFileSelect = (file: HiveFileSelection) => {
+    if (pickerMode === 'attachment') {
+      void handleHiveFileChosen(file);
+      return;
+    }
+
     const rawUrl = file?.media_details?.url || file?.url || file?.path;
     if (!rawUrl) {
       toast.error("Error: Could not extract media path from selection.");
@@ -174,7 +290,8 @@ export default function ComposeModal() {
           {encryptionConfig.enabled && (
             <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
               <span className="font-semibold text-primary">Secure mail is enabled.</span>{' '}
-              The subject and message body will be encrypted in the browser before sending.
+              The subject and message body will be encrypted in the browser before sending.{' '}
+              <span className="font-semibold text-foreground">Attached files are not end-to-end encrypted.</span>
             </div>
           )}
 
@@ -248,9 +365,84 @@ export default function ComposeModal() {
               ref={editorRef}
               value={body}
               onChange={setBody}
-              onOpenMediaPicker={() => setIsFileManagerOpen(true)}
+              onOpenMediaPicker={() => {
+                setPickerMode('inline');
+                setIsFileManagerOpen(true);
+              }}
             />
           </div>
+
+          {canAttachFiles && (
+            <div className="flex flex-col gap-2">
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                className="sr-only"
+                tabIndex={-1}
+                aria-label="Choose files to attach"
+                onChange={handleAttachmentsChosen}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || attachments.length + uploadingCount >= MAX_ATTACHMENTS}
+                  onClick={() => attachmentInputRef.current?.click()}
+                >
+                  <Paperclip aria-hidden="true" className="mr-2 h-4 w-4" />
+                  Attach files
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || attachments.length + uploadingCount >= MAX_ATTACHMENTS}
+                  onClick={() => {
+                    setPickerMode('attachment');
+                    setIsFileManagerOpen(true);
+                  }}
+                >
+                  <FolderOpen aria-hidden="true" className="mr-2 h-4 w-4" />
+                  From Hive Files
+                </Button>
+                {uploadingCount > 0 && (
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+                    <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+                    Uploading
+                  </span>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  Up to {MAX_ATTACHMENTS} files, {MAX_ATTACHMENT_BYTES / 1024 / 1024} MB each. Programs and scripts (such as .exe) are not allowed.
+                </span>
+              </div>
+
+              {attachments.length > 0 && (
+                <ul className="flex flex-wrap gap-2" aria-label="Attached files">
+                  {attachments.map((attachment) => (
+                    <li
+                      key={attachment.id}
+                      className="flex max-w-full items-center gap-2 rounded-lg border border-border/70 bg-muted/30 py-1 pl-2 pr-1"
+                    >
+                      <AttachmentIcon kind={getPreviewKind(attachment)} className="h-4 w-4 shrink-0 text-primary" />
+                      <span className="max-w-[200px] truncate text-xs font-medium text-foreground">{attachment.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{attachment.human_size}</span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${attachment.name}`}
+                        disabled={loading}
+                        onClick={() => handleRemoveAttachment(attachment)}
+                        className="rounded-sm p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <X aria-hidden="true" className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="secondary" onClick={() => setComposeOpen(false)} disabled={loading}>
@@ -260,7 +452,7 @@ export default function ComposeModal() {
             {loading ? <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" data-icon="inline-start" /> : null}
             Save Draft
           </Button>
-          <Button onClick={handleSend} disabled={loading}>
+          <Button onClick={handleSend} disabled={loading || uploadingCount > 0}>
             {loading ? <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" data-icon="inline-start" /> : null}
             Send
           </Button>
@@ -272,14 +464,14 @@ export default function ComposeModal() {
       {isFileManagerOpen && (
         <Dialog open={isFileManagerOpen} onOpenChange={setIsFileManagerOpen}>
           <DialogContent className="flex h-[85vh] w-[95vw] max-w-6xl flex-col gap-0 overflow-hidden rounded-[2.5rem] border-border/50 bg-background p-0 shadow-2xl z-[100]">
-            <DialogTitle className="sr-only">Select Media for Email</DialogTitle>
+            <DialogTitle className="sr-only">{pickerMode === 'attachment' ? 'Attach a File from Hive' : 'Select Media for Email'}</DialogTitle>
             <div className="z-10 flex shrink-0 items-center gap-4 border-b border-border/50 bg-card/60 px-8 py-5 backdrop-blur-xl">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 shadow-inner">
                 <ImageIcon aria-hidden="true" className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h2 className="text-xl font-black tracking-tight text-foreground">Select Email Media</h2>
-                <p className="mt-0.5 text-xs font-medium text-muted-foreground">Pick an image or video to dynamically embed into your email.</p>
+                <h2 className="text-xl font-black tracking-tight text-foreground">{pickerMode === 'attachment' ? 'Attach from Hive Files' : 'Select Email Media'}</h2>
+                <p className="mt-0.5 text-xs font-medium text-muted-foreground">{pickerMode === 'attachment' ? 'Pick a file to attach to your email. A copy is attached; your original stays in Hive.' : 'Pick an image or video to dynamically embed into your email.'}</p>
               </div>
             </div>
             <div className="file-picker-wrapper relative flex-1 overflow-hidden bg-muted/10 p-4 sm:p-6">

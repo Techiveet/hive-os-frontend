@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import api from '@/lib/api';
+import { usePermissions } from '@/hooks/use-permissions';
 
 export interface User {
   id: number | string;
@@ -27,6 +28,9 @@ export function UserMultiSelect({ id, placeholder = "Search users...", selectedU
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Emailing the whole workspace needs manage_mail on the server, so only offer it to those users.
+  const { hasPermission } = usePermissions();
+  const canEmailEveryone = hasPermission('manage_mail');
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -51,7 +55,7 @@ export function UserMultiSelect({ id, placeholder = "Search users...", selectedU
         let usersList = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
 
         const q = query.toLowerCase().trim();
-        if (q === 'all' || "all users".startsWith(q) || "everyone".startsWith(q)) {
+        if (canEmailEveryone && (q === 'all' || "all users".startsWith(q) || "everyone".startsWith(q))) {
             usersList = [
                 { id: 'all', name: 'All Users (Everyone)', email: 'Broadcast to everyone in the company' },
                 ...usersList
@@ -68,7 +72,7 @@ export function UserMultiSelect({ id, placeholder = "Search users...", selectedU
 
     const debounceId = setTimeout(fetchUsers, 300);
     return () => clearTimeout(debounceId);
-  }, [query]);
+  }, [query, canEmailEveryone]);
 
   const handleSelect = (user: User) => {
     if (!selectedUsers.find(u => u.id === user.id)) {

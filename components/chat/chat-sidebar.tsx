@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useChatAccess } from '@/hooks/use-chat-access';
+import { useTenantModuleAccess } from '@/hooks/use-tenant-module-access';
 import { useChatStore } from '@/store/chat-store';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,10 @@ export default function ChatSidebar() {
     activeTab, setActiveTab, 
     setComposeOpen, counts
   } = useChatStore();
-  const { canManageChat, hasChatWorkspace } = useChatAccess();
+  const { canCompose, hasChatWorkspace, isTenantWorkspace } = useChatAccess();
+  const { hasModule } = useTenantModuleAccess();
+  // The button opens the Video Conferencing page, so it needs that module too.
+  const canOpenVideo = hasChatWorkspace && (!isTenantWorkspace || hasModule('video_conferencing'));
   
   const [user, setUser] = useState<{ name?: string; avatar_url?: string } | null>(null);
 
@@ -92,11 +96,11 @@ export default function ChatSidebar() {
               variant="default"
               size="sm"
               aria-label="Open video conferencing to schedule a meeting"
-              disabled={!hasChatWorkspace}
+              disabled={!canOpenVideo}
               className="min-h-11 w-full justify-center rounded-xl px-2 lg:justify-start"
-              asChild={hasChatWorkspace}
+              asChild={canOpenVideo}
             >
-              {hasChatWorkspace ? (
+              {canOpenVideo ? (
                 <Link href="/dashboard/video-conferencing">
                   <Video aria-hidden="true" data-icon="inline-start" />
                   <span className="hidden lg:inline">Video meeting</span>
@@ -118,7 +122,7 @@ export default function ChatSidebar() {
               variant="outline"
               size="sm"
               aria-label="Start a new conversation"
-              disabled={!canManageChat}
+              disabled={!canCompose}
               className="min-h-10 w-full justify-center rounded-xl border-dashed px-2 text-primary lg:justify-start"
               onClick={() => setComposeOpen(true)}
             >

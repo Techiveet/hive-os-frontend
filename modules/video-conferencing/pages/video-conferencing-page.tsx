@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import api from "@/lib/api";
+import { useChatAccess } from "@/hooks/use-chat-access";
+import { ensureChatEncryptionIdentity } from "@/lib/chat-e2ee";
 import { getErrorMessage } from "@/lib/errors";
 import { useChatStore } from "@/store/chat-store";
 import { MeetingCard } from "../components/meeting-card";
@@ -50,6 +52,7 @@ export function VideoConferencingPage() {
   const [now, setNow] = useState(() => Date.now());
   const [tab, setTab] = useState("upcoming");
 
+  const { canCreateGroup } = useChatAccess();
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerMode, setComposerMode] = useState<ComposerMode>("scheduled");
   const [editing, setEditing] = useState<VideoMeeting | null>(null);
@@ -80,6 +83,27 @@ export function VideoConferencingPage() {
   useEffect(() => {
     void loadMeetings({ spinner: true });
   }, [loadMeetings]);
+
+  // Invitees need a registered encryption key before a host can add them to an
+  // encrypted meeting. Chat does this on load; a Video-only user never opens
+  // Chat, so register here (best effort - the meeting list works without it).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data } = await api.get("/chat/config");
+        const encryption = data?.encryption;
+        if (cancelled || !encryption?.enabled) return;
+        useChatStore.getState().setEncryptionConfig(encryption);
+        await ensureChatEncryptionIdentity(encryption);
+      } catch {
+        // Key registration is retried on the next visit or when joining a call.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Deep-link from Chat: /dashboard/video-conferencing?compose=instant|scheduled
   useEffect(() => {
@@ -184,11 +208,11 @@ export function VideoConferencingPage() {
                 Open Chat
               </Link>
             </Button>
-            <Button type="button" variant="outline" className="min-h-11 gap-2" onClick={() => openComposer("scheduled")}>
+            <Button type="button" variant="outline" className="min-h-11 gap-2" disabled={!canCreateGroup} onClick={() => openComposer("scheduled")}>
               <CalendarClock className="h-4 w-4" aria-hidden="true" />
               Schedule
             </Button>
-            <Button type="button" className="min-h-11 gap-2" onClick={() => openComposer("instant")}>
+            <Button type="button" className="min-h-11 gap-2" disabled={!canCreateGroup} onClick={() => openComposer("instant")}>
               <Video className="h-4 w-4" aria-hidden="true" />
               New meeting
             </Button>
@@ -255,7 +279,7 @@ export function VideoConferencingPage() {
                 <p className="mt-1 max-w-md text-sm text-muted-foreground">
                   Create an instant encrypted room or schedule time with your team.
                 </p>
-                <Button type="button" className="mt-5 min-h-11" onClick={() => openComposer("scheduled")}>
+                <Button type="button" className="mt-5 min-h-11" disabled={!canCreateGroup} onClick={() => openComposer("scheduled")}>
                   Schedule a meeting
                 </Button>
               </CardContent>

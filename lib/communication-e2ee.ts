@@ -301,10 +301,12 @@ export const resolveWrappedCommunicationKey = async (
   identity: CommunicationStoredIdentity,
 ) => {
   const privateKey = await importPrivateKey(identity.privateKey);
+  const wrappedBytes = fromBase64(wrappedKey);
   const rawSharedKey = await crypto.subtle.decrypt(
     { name: 'RSA-OAEP' },
     privateKey,
-    fromBase64(wrappedKey).buffer
+    // Pass a tightly sized view — `.buffer` alone can include unrelated bytes.
+    wrappedBytes.buffer.slice(wrappedBytes.byteOffset, wrappedBytes.byteOffset + wrappedBytes.byteLength)
   );
 
   return importSharedKey(rawSharedKey);

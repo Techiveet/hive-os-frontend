@@ -16,7 +16,7 @@ export default function ChatPage() {
   const router = useRouter();
   const { t } = useTranslation();
   const { hasAnyPermission } = usePermissions();
-  const { isLoaded, canAccessChat, hasMailboxModule, isTenantWorkspace } = useChatAccess();
+  const { isLoaded, canAccessChat, hasChatModule, isTenantWorkspace } = useChatAccess();
   const canOpenSubscriptions = hasAnyPermission(["view_module_subscriptions", "manage_module_subscriptions"]);
   const unreadCount = useChatStore((state) => state.counts.unread);
   const onlineCount = useChatStore((state) => state.onlineUsers.length);
@@ -41,7 +41,7 @@ export default function ChatPage() {
     );
   }
 
-  if (isTenantWorkspace && !hasMailboxModule) {
+  if (isTenantWorkspace && !hasChatModule) {
     return (
       <div className="space-y-2">
         <div className="mb-2 flex w-full justify-end">
@@ -58,10 +58,10 @@ export default function ChatPage() {
             <LockKeyhole className="h-9 w-9 text-primary" />
           </div>
           <h2 className="mt-6 text-3xl font-black tracking-tight text-foreground">
-            {t("chat.subscription_required", "Secure Comms Module Required")}
+            {t("chat.subscription_required", "Chat Module Required")}
           </h2>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            {t("chat.subscription_desc", "Tenant chat follows the mailbox module. Activate the secure comms module for this tenant and the real-time chat workspace will unlock automatically.")}
+            {t("chat.subscription_desc", "Real-time chat is a separate module. Activate the Chat module for this tenant and the chat workspace will unlock automatically.")}
           </p>
           {canOpenSubscriptions ? (
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
