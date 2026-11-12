@@ -75,7 +75,7 @@ export const coreModule: FrontendModuleDefinition = {
       permissions: [...API_DOCS_ROUTE_PERMISSIONS],
       subscriptionSlug: "api_docs",
       tourId: "tour-nav-api-docs",
-      placement: "secondary",
+      placement: "account",
     },
     {
       moduleId: "core",
@@ -84,7 +84,7 @@ export const coreModule: FrontendModuleDefinition = {
       href: "/dashboard/user-manual",
       icon: BookOpen,
       tourId: "tour-nav-user-manual",
-      placement: "secondary",
+      placement: "account",
     },
   ],
 };

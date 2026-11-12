@@ -1,7 +1,7 @@
 //compnents/dashboard/topbar.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -35,7 +35,14 @@ import { startMasterSystemTour } from "@/lib/master-tour";
 import { TourDropdown } from "./tour-dropdown";
 import { usePermissions } from "@/hooks/use-permissions";
 import { readStoredUser } from "@/lib/home-path";
-import { PROFILE_ROUTE_PERMISSIONS } from "@/lib/route-permissions";
+import {
+  PROFILE_ROUTE_PERMISSIONS,
+  canAccessDashboardRoute,
+  type RoutePermissionAccess,
+} from "@/lib/route-permissions";
+import { canAccessModuleRoute } from "@/lib/module-route-access";
+import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
+import { DASHBOARD_ACCOUNT } from "@/modules/index";
 import { useAvatarUrl } from "@/hooks/use-avatar-url";
 
 const getApiUrl = () => {
@@ -96,8 +103,17 @@ export function DashboardTopbar() {
 
   const { startTour } = useTour();
   const { t } = useTranslation();
-  const { hasAnyPermission } = usePermissions();
+  const { hasPermission, hasAnyPermission } = usePermissions();
+  const { hasModule } = useTenantModuleAccess();
   const canViewProfile = hasAnyPermission([...PROFILE_ROUTE_PERMISSIONS]);
+  // API Docs / User Manual live here instead of the sidebar; show each only
+  // when the route guard would let the user open it.
+  const accountNavItems = useMemo(() => {
+    const access: RoutePermissionAccess = { hasPermission, hasAnyPermission, hasModule };
+    return DASHBOARD_ACCOUNT.filter((item) =>
+      canAccessDashboardRoute(item.href, access, (path) => canAccessModuleRoute(path, access)),
+    );
+  }, [hasPermission, hasAnyPermission, hasModule]);
   const scopeKey = getWorkspaceScopeKey();
   const [tokenFingerprint, setTokenFingerprint] = useState<string>(() => {
     if (typeof window === "undefined") return "none";
@@ -323,9 +339,23 @@ export function DashboardTopbar() {
                         <Bell className="mr-2 h-4 w-4 text-sky-500" />
                         {t("topbar.notification_channels", "Notification Channels")}
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
                     </>
                   )}
+                  {accountNavItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <DropdownMenuItem
+                        key={item.href}
+                        id={item.tourId}
+                        onClick={() => router.push(item.href)}
+                        className="cursor-pointer font-medium rounded-xl mb-1"
+                      >
+                        <Icon className="mr-2 h-4 w-4 text-muted-foreground" />
+                        {t(item.translationKey, item.fallbackLabel)}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                  {(canViewProfile || accountNavItems.length > 0) && <DropdownMenuSeparator />}
                   <DropdownMenuItem
                     onClick={handleLogout}
                     className="text-destructive font-bold cursor-pointer rounded-xl focus:text-destructive focus:bg-destructive/10 mt-1"

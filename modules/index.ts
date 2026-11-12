@@ -53,4 +53,5 @@ const SYSTEM_MODULE_IDS = new Set<ModuleId>(["core", "identity", "subscription",
 export const DASHBOARD_MODULE_IDS = new Set<ModuleId>(FEATURE_MODULES.filter((module) => !SYSTEM_MODULE_IDS.has(module.id)).map((module) => module.id));
 export const DASHBOARD_NAV: ModuleNavItem[] = FEATURE_MODULES.flatMap((module) => module.navItems.filter((item) => item.placement === "primary"));
 export const DASHBOARD_SECONDARY: ModuleNavItem[] = FEATURE_MODULES.flatMap((module) => module.navItems.filter((item) => item.placement === "secondary"));
+export const DASHBOARD_ACCOUNT: ModuleNavItem[] = FEATURE_MODULES.flatMap((module) => module.navItems.filter((item) => item.placement === "account"));
 export function getModuleById(id: FrontendModuleDefinition["id"]): FrontendModuleDefinition | undefined { return FEATURE_MODULES.find((module) => module.id === id); }

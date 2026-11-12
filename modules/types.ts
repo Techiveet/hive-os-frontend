@@ -8,7 +8,8 @@ export type ModuleId =
   | "logistics" | "sales" | "crm" | "fleet" | "service" | "internal-audit"
   | "strategy" | "vantage" | "agriculture" | "lms" | "b2b-marketplace"
   | "landing-templates" | "video-conferencing" | "support_bot" | "daily-reports" | "property" | "parking";
-export type DashboardNavPlacement = "primary" | "secondary";
+/** "account" items render in the topbar profile dropdown instead of the sidebar. */
+export type DashboardNavPlacement = "primary" | "secondary" | "account";
 
 export interface ModuleNavItem {
   moduleId: ModuleId;
