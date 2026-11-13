@@ -124,7 +124,7 @@ jobs:
       # Caches the browser download only. --with-deps still runs, because the
       # apt packages it installs live outside this path.
       - name: Cache the Playwright browser download
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('hive-os-frontend/package-lock.json') }}
