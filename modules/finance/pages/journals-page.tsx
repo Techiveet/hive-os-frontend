@@ -26,6 +26,7 @@ import {
   Money,
   useDebouncedValue,
 } from "@/modules/finance/pages/components/finance-shell";
+import { notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
 
 export default function FinanceJournalsPage() {
   const [searchInput, setSearchInput] = useState("");
@@ -48,10 +49,10 @@ export default function FinanceJournalsPage() {
   const accounts = useQuery({ queryKey: ["finance", "account-options"], queryFn: () => financeApi.accounts({ active: true, per_page: 200 }) });
   const create = useMutation({
     mutationFn: financeApi.createJournal,
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       await client.invalidateQueries({ queryKey: ["finance"] });
       setOpen(false);
-      toast.success("Journal created.");
+      notifyMutationOutcome(data, { savedMessage: "Journal created.", queryClient: client });
     },
     onError: (error) => toast.error(getErrorMessage(error, "Journal could not be created.")),
   });
@@ -78,9 +79,9 @@ export default function FinanceJournalsPage() {
   const action = useMutation({
     mutationFn: ({ journal, action }: { journal: FinanceJournal; action: "post" | "reverse" }) => financeApi.journalAction(journal.id, action),
     onMutate: ({ journal }) => setBusyId(journal.id),
-    onSuccess: async (_, variables) => {
+    onSuccess: async (data, variables) => {
       await client.invalidateQueries({ queryKey: ["finance"] });
-      toast.success(variables.action === "post" ? "Journal posted." : "Reversal journal posted.");
+      notifyMutationOutcome(data, { savedMessage: variables.action === "post" ? "Journal posted." : "Reversal journal posted.", queryClient: client });
       setBusyId(null);
     },
     onError: (error) => {

@@ -101,9 +101,10 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const fetchSessionUser = useCallback(async (token: string): Promise<SessionUser | "auth_failed"> => {
     const endpoint = isTenantSession() ? "/tenant/user" : "/user";
     const response = await fetch(`${getBackendApiRoot()}${endpoint}`, {
+      credentials: "include",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${token}`,
+        ...(token && !token.startsWith("cookie-session:") ? { Authorization: `Bearer ${token}` } : {}),
         ...getTenantHeaders(),
       },
     });

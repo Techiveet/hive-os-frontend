@@ -226,7 +226,7 @@ export function ErpWorkbenchPreview() {
                     <QrCode className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="font-space font-bold text-foreground">Telebirr & CBE Payment QR</p>
+                    <p className="font-space font-bold text-foreground">Telebirr &amp; CBE Payment QR</p>
                     <p className="font-mono text-[10px] text-muted-foreground">Instant B2B invoice settlement enabled</p>
                   </div>
                 </div>
@@ -273,7 +273,7 @@ export function ErpWorkbenchPreview() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-4">
                 <div>
                   <h4 className="font-space text-base font-bold text-foreground">Multi-Warehouse Stock Ledger</h4>
-                  <p className="font-mono text-xs text-muted-foreground">Real-time inventory levels, batch tracking, & reorder points</p>
+                  <p className="font-mono text-xs text-muted-foreground">Real-time inventory levels, batch tracking, &amp; reorder points</p>
                 </div>
 
                 {/* Warehouse Selector */}
@@ -350,8 +350,8 @@ export function ErpWorkbenchPreview() {
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-4">
                 <div>
-                  <h4 className="font-space text-base font-bold text-foreground">Live Fleet Telemetry & Dispatches</h4>
-                  <p className="font-mono text-xs text-muted-foreground">GPS vehicle tracking, driver performance, & automated fuel logs</p>
+                  <h4 className="font-space text-base font-bold text-foreground">Live Fleet Telemetry &amp; Dispatches</h4>
+                  <p className="font-mono text-xs text-muted-foreground">GPS vehicle tracking, driver performance, &amp; automated fuel logs</p>
                 </div>
                 <span className="flex items-center gap-2 font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300">
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
@@ -409,7 +409,7 @@ export function ErpWorkbenchPreview() {
             >
               <div className="flex items-center justify-between border-b border-border/60 pb-4">
                 <div>
-                  <h4 className="font-space text-base font-bold text-foreground">Procurement & RFQ Comparison Matrix</h4>
+                  <h4 className="font-space text-base font-bold text-foreground">Procurement &amp; RFQ Comparison Matrix</h4>
                   <p className="font-mono text-xs text-muted-foreground">Automated supplier tender evaluations and three-way PO matching</p>
                 </div>
                 <span className="rounded-full bg-primary/10 px-3 py-1 font-mono text-xs font-bold text-primary">
@@ -461,7 +461,7 @@ export function ErpWorkbenchPreview() {
             >
               <div className="flex items-center justify-between border-b border-border/60 pb-4">
                 <div>
-                  <h4 className="font-space text-base font-bold text-foreground">Real-Time General Ledger & P&L</h4>
+                  <h4 className="font-space text-base font-bold text-foreground">Real-Time General Ledger &amp; P&amp;L</h4>
                   <p className="font-mono text-xs text-muted-foreground">Consolidated financial health across all operational branches</p>
                 </div>
                 <span className="font-mono text-xs text-muted-foreground">FY 2025/2026</span>

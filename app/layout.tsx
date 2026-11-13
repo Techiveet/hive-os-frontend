@@ -144,9 +144,12 @@ export default async function RootLayout({
   const requestHost = (requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "")
     .split(",")[0]
     .trim();
-  const ga = seo.google_analytics_id?.trim();
-  const gtm = seo.google_tag_manager_id?.trim();
-  const pixel = seo.facebook_pixel_id?.trim();
+  const rawGa = seo.google_analytics_id?.trim();
+  const rawGtm = seo.google_tag_manager_id?.trim();
+  const rawPixel = seo.facebook_pixel_id?.trim();
+  const ga = rawGa && /^[A-Z0-9-]+$/i.test(rawGa) ? rawGa : undefined;
+  const gtm = rawGtm && /^GTM-[A-Z0-9]+$/i.test(rawGtm) ? rawGtm : undefined;
+  const pixel = rawPixel && /^\d{5,25}$/.test(rawPixel) ? rawPixel : undefined;
   const orgJsonLd = seo.organization_name
     ? {
         "@context": "https://schema.org",
@@ -175,7 +178,12 @@ export default async function RootLayout({
       {/* Must run before the landing intro curtain paints — see intro-gate.ts. */}
       <script dangerouslySetInnerHTML={{ __html: buildHiveIntroGate(isCentralHost(requestHost)) }} />
       {orgJsonLd && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(orgJsonLd).replace(/</g, "\\u003c"),
+          }}
+        />
       )}
       {gtm && (
         <Script id="gtm" strategy="afterInteractive">{`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${gtm}');`}</Script>

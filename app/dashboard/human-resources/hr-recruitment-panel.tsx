@@ -129,7 +129,7 @@ export function HrRecruitmentPanel() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h3 className="text-lg font-bold">Recruitment & Applicant Pipeline (ATS)</h3>
+          <h3 className="text-lg font-bold">Recruitment &amp; Applicant Pipeline (ATS)</h3>
           <p className="text-xs text-slate-500">
             Publish job openings, track candidate evaluation stages, and promote hired applicants to Employee Directory.
           </p>

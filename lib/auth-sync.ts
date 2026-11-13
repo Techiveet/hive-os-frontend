@@ -12,6 +12,7 @@ export const isImpersonatingSession = (): boolean => {
 const revokeSessionToken = async (
   token: string,
   tenantHeaders: Record<string, string>,
+  options: { stopImpersonation?: boolean } = {},
 ): Promise<boolean> => {
   const abortController = new AbortController();
   const timeoutId = window.setTimeout(() => abortController.abort(), 5000);
@@ -19,9 +20,11 @@ const revokeSessionToken = async (
   try {
     const response = await fetch(`${getBackendApiRoot()}/logout`, {
       method: "POST",
+      credentials: "include",
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${token}`,
+        ...(token && !token.startsWith("cookie-session:") ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.stopImpersonation ? { "X-Stop-Impersonation": "1" } : {}),
         ...tenantHeaders,
       },
       keepalive: true,
@@ -127,7 +130,9 @@ export const stopImpersonation = async (targetRedirectUrl = "/dashboard") => {
   if (originalToken) {
     const impersonationToken = safeLocalStorageGetItem("hive_token");
     if (impersonationToken && impersonationToken !== originalToken) {
-      await revokeSessionToken(impersonationToken, getTenantHeaders());
+      await revokeSessionToken(impersonationToken, getTenantHeaders(), {
+        stopImpersonation: true,
+      });
     }
 
     // Clear the borrowed tenant/user cache while that context is still active.
@@ -166,7 +171,9 @@ export const stopImpersonation = async (targetRedirectUrl = "/dashboard") => {
       const endpoint = originalContext && originalContext !== "central" ? "/tenant/user" : "/user";
       const headers: Record<string, string> = {
         Accept: "application/json",
-        Authorization: `Bearer ${originalToken}`,
+        ...(originalToken && !originalToken.startsWith("cookie-session:")
+          ? { Authorization: `Bearer ${originalToken}` }
+          : {}),
       };
       Object.assign(
         headers,
@@ -177,7 +184,10 @@ export const stopImpersonation = async (targetRedirectUrl = "/dashboard") => {
             })
           : {},
       );
-      const res = await fetch(`${baseUrl}${endpoint}?t=${Date.now()}`, { headers });
+      const res = await fetch(`${baseUrl}${endpoint}?t=${Date.now()}`, {
+        credentials: "include",
+        headers,
+      });
       if (res.ok) {
         const freshSuperAdmin = await res.json();
         if (freshSuperAdmin) {
@@ -326,9 +336,10 @@ const runUserSessionSync = async () => {
     const response = await fetch(
       `${getBackendApiRoot()}${endpoint}?t=${Date.now()}`,
       {
+        credentials: "include",
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${token}`,
+          ...(token && !token.startsWith("cookie-session:") ? { Authorization: `Bearer ${token}` } : {}),
           ...getTenantHeaders(),
         },
       }

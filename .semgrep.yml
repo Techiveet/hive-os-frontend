@@ -1,0 +1,34 @@
+rules:
+  - id: request-data-in-unparameterized-sql
+    languages: [php]
+    mode: taint
+    message: Request data reaches raw SQL. Bind values and allowlist identifiers.
+    severity: ERROR
+    pattern-sources:
+      - pattern: $_GET[...]
+      - pattern: $_POST[...]
+      - pattern: $REQUEST->input(...)
+      - pattern: $REQUEST->query(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB::unprepared($SQL, ...)
+              - pattern: $DB::statement($SQL, ...)
+              - pattern: $DB::raw($SQL)
+              - pattern: $QUERY->whereRaw($SQL, ...)
+              - pattern: $QUERY->havingRaw($SQL, ...)
+              - pattern: $QUERY->selectRaw($SQL, ...)
+              - pattern: $QUERY->orderByRaw($SQL, ...)
+          - focus-metavariable: $SQL
+  - id: request-data-evaluated-as-code
+    languages: [javascript, typescript]
+    mode: taint
+    message: Request or URL data reaches dynamic code evaluation.
+    severity: ERROR
+    pattern-sources:
+      - pattern: $REQUEST.body
+      - pattern: $REQUEST.query
+      - pattern: window.location.search
+    pattern-sinks:
+      - pattern: eval(...)
+      - pattern: new Function(...)

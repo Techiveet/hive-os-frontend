@@ -16,6 +16,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { financeApi } from "@/modules/finance/api";
 import type { FinanceAccount, FinanceBankReconciliation, FinanceBankReconciliationItem } from "@/modules/finance/types";
 import { BusyLabel, FinanceError, FinanceShell, FinanceStatus, FinanceTable, FinanceTableSkeleton, Money } from "@/modules/finance/pages/components/finance-shell";
+import { notifyMutationOutcome } from "@/modules/workflow/utils/mutation-outcome";
 
 function friendlyReconciliationSaveError(error: unknown, fallback: string) {
   const message = getErrorMessage(error, fallback);
@@ -117,11 +118,11 @@ export default function FinanceBankingPage() {
   const complete = useMutation({
     mutationFn: (id: number) => financeApi.completeReconciliation(id),
     onMutate: (id) => setBusyId(id),
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       await client.invalidateQueries({ queryKey: ["finance", "reconciliations"] });
       await client.invalidateQueries({ queryKey: ["finance", "reconciliations", "detail"] });
       setBusyId(null);
-      toast.success("Bank reconciliation completed.");
+      notifyMutationOutcome(data, { savedMessage: "Bank reconciliation completed.", queryClient: client });
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, "Resolve the difference before completing reconciliation."));

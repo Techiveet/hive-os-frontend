@@ -1,10 +1,19 @@
 "use client";
 
-import { VideoCallButton } from "@/components/communications/video-call-button";
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { format, isToday, isYesterday } from 'date-fns';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import EmojiPicker from 'emoji-picker-react';
+
+const VideoCallButton = dynamic(
+  () => import('@/components/communications/video-call-button').then((m) => m.VideoCallButton),
+  { ssr: false }
+);
+const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
+const FileManagerClient = dynamic(
+  () => import('@/components/dashboard/file-manager-client').then((m) => m.FileManagerClient),
+  { ssr: false }
+);
 import {
   ArrowDown,
   ArrowLeft,
@@ -30,7 +39,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { FileManagerClient } from '@/components/dashboard/file-manager-client';
 import { useChatAccess } from '@/hooks/use-chat-access';
 import { authenticatedDownload } from '@/lib/authenticated-download';
 import {

@@ -463,7 +463,7 @@ export function SubscriptionAdminClient() {
     return (
       <div className="flex min-h-[420px] flex-col items-center justify-center gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm font-semibold text-muted-foreground">Loading system module catalog & subscriptions...</p>
+        <p className="text-sm font-semibold text-muted-foreground">Loading system module catalog &amp; subscriptions...</p>
       </div>
     );
   }
@@ -566,14 +566,14 @@ export function SubscriptionAdminClient() {
               ETB {projectedMrr.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </div>
             <div className="mt-2 text-xs text-muted-foreground">
-              Monthly run-rate across base tiers & active add-ons
+              Monthly run-rate across base tiers &amp; active add-ons
             </div>
           </div>
 
           {/* Card 4: Tiers & Promos */}
           <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm transition hover:shadow-md">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tiers & Inbound</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tiers &amp; Inbound</span>
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
                 <ShieldCheck className="h-5 w-5" />
               </div>
@@ -654,7 +654,7 @@ export function SubscriptionAdminClient() {
             </TabsTrigger>
             <TabsTrigger value="billing" className="flex items-center gap-2 px-4 py-2 text-sm font-bold">
               <ShieldCheck className="h-4 w-4" />
-              Billing Controls & Coupons
+              Billing Controls &amp; Coupons
             </TabsTrigger>
           </TabsList>
 
@@ -1106,7 +1106,7 @@ function CatalogExplorer({
               ) : null}
 
               <div>
-                <h4 className="mb-2 text-sm font-bold text-foreground">Submodules & Functionalities ({inspectModule.submodules?.length ?? 0})</h4>
+                <h4 className="mb-2 text-sm font-bold text-foreground">Submodules &amp; Functionalities ({inspectModule.submodules?.length ?? 0})</h4>
                 <FeatureInventory module={inspectModule} />
               </div>
             </div>
@@ -1515,7 +1515,7 @@ function PlanMatrix({
               </label>
 
               <label className="block space-y-1">
-                <span className="font-semibold text-foreground">Mail & Cloud Storage Quota (MB)</span>
+                <span className="font-semibold text-foreground">Mail &amp; Cloud Storage Quota (MB)</span>
                 <Input
                   type="number"
                   min={100}
@@ -1563,7 +1563,7 @@ function PlanMatrix({
                   }
                   className="h-10 w-full rounded-lg border border-input bg-background px-3"
                 >
-                  <option value="active">Active (Available for Signups & Upgrades)</option>
+                  <option value="active">Active (Available for Signups &amp; Upgrades)</option>
                   <option value="inactive">Inactive</option>
                 </select>
               </label>
@@ -1750,7 +1750,7 @@ function PricingMatrix({
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h3 className="text-lg font-black tracking-tight text-foreground">Module & Feature Pricing</h3>
+            <h3 className="text-lg font-black tracking-tight text-foreground">Module &amp; Feature Pricing</h3>
             <p className="text-sm text-muted-foreground">
               Configure per-module monthly pricing used by tenant upgrade checkouts, addon unlocks, and invoice line-items.
             </p>
@@ -2280,7 +2280,7 @@ function TenantAssignment({
         <div className="space-y-3 border-t border-border/50 pt-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h4 className="text-base font-black text-foreground">Enabled Modules & Entitlements</h4>
+              <h4 className="text-base font-black text-foreground">Enabled Modules &amp; Entitlements</h4>
               <p className="text-xs text-muted-foreground">
                 {enabledModules.length} of {modules.length} modules active for this tenant workspace.
               </p>

@@ -118,14 +118,34 @@ import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
 import { fetchCurrentTenantSubscriptions } from "@/modules/subscription/api";
 import { ModuleSubscriptionCheckoutDialog } from "@/modules/subscription/components/module-subscription-checkout-dialog";
 
-// Reusable Viewer Components
-import { VideoPlayer } from "@/components/ui/video-player";
-import { AudioPlayer } from "@/components/ui/audio-player";
-import { PdfViewer } from "@/components/ui/pdf-viewer";
-import { DocumentViewer } from "@/components/ui/document-viewer";
-import { Model3DViewer } from "@/components/ui/model-3d-viewer";
-import { ImageViewer } from "@/components/ui/image-viewer";
+// Reusable Viewer Components (dynamically loaded on demand to keep initial dashboard bundle lean)
+import dynamic from "next/dynamic";
 import { useGlobalAudio } from "@/context/global-audio-context";
+
+const VideoPlayer = dynamic(
+  () => import("@/components/ui/video-player").then((m) => m.VideoPlayer),
+  { ssr: false }
+);
+const AudioPlayer = dynamic(
+  () => import("@/components/ui/audio-player").then((m) => m.AudioPlayer),
+  { ssr: false }
+);
+const PdfViewer = dynamic(
+  () => import("@/components/ui/pdf-viewer").then((m) => m.PdfViewer),
+  { ssr: false }
+);
+const DocumentViewer = dynamic(
+  () => import("@/components/ui/document-viewer").then((m) => m.DocumentViewer),
+  { ssr: false }
+);
+const Model3DViewer = dynamic(
+  () => import("@/components/ui/model-3d-viewer").then((m) => m.Model3DViewer),
+  { ssr: false }
+);
+const ImageViewer = dynamic(
+  () => import("@/components/ui/image-viewer").then((m) => m.ImageViewer),
+  { ssr: false }
+);
 
 type FileManagerItemRef = { type: "file" | "folder"; id: number };
 
@@ -143,6 +163,7 @@ type FileManagerVideoVersion = {
 };
 
 type FileManagerMediaDetails = {
+  media_id?: number;
   title?: string;
   name?: string;
   mime_type?: string;
@@ -1958,7 +1979,8 @@ export function FileManagerClient({
     let hlsUrl = "";
     if (media.hls_path) {
       const cleanPath = media.hls_path.replace(/^\/?(storage\/)?/, "");
-      hlsUrl = `${getBackendApiRoot()}/files/stream/${cleanPath.split("/")[0]}/playlist.m3u8`;
+      const mediaId = media.media_id ?? cleanPath.split("/")[0];
+      hlsUrl = `${getBackendApiRoot()}/files/stream/${mediaId}/playlist.m3u8`;
     }
 
     if (mime.startsWith("image/")) {

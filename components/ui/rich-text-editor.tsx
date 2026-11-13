@@ -18,8 +18,10 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SignaturePad } from '@/components/ui/signature-pad';
-import EmojiPicker from 'emoji-picker-react';
+import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
+
+const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 import {
   Bold,
   Italic,

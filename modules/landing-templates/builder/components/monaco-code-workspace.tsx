@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import Editor from "@monaco-editor/react";
+import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { FileCode, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TemplateCodeFile } from "../../lib/api";
+
+const Editor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
 interface MonacoCodeWorkspaceProps {
   codeFiles: TemplateCodeFile[];

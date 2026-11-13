@@ -78,11 +78,19 @@ import {
 } from "@/lib/runtime-context";
 import { type TenantLandingTemplate } from "@/modules/tenancy/landing-template";
 import { B2BApi } from "@/modules/b2b-marketplace/api";
-import { HeroGlobe } from "@/modules/b2b-marketplace/components/HeroGlobe";
-import { MarketplaceBackdrop } from "@/modules/b2b-marketplace/components/MarketplaceBackdrop";
+import dynamic from "next/dynamic";
 import { CartSheet } from "@/modules/b2b-marketplace/cart/CartSheet";
 import { useCart } from "@/modules/b2b-marketplace/cart/cart-store";
 import { AddToCartButton } from "@/modules/b2b-marketplace/cart/AddToCartButton";
+
+const HeroGlobe = dynamic(
+  () => import("@/modules/b2b-marketplace/components/HeroGlobe").then((m) => m.HeroGlobe),
+  { ssr: false }
+);
+const MarketplaceBackdrop = dynamic(
+  () => import("@/modules/b2b-marketplace/components/MarketplaceBackdrop").then((m) => m.MarketplaceBackdrop),
+  { ssr: false }
+);
 
 type B2BBrandSettings = {
   app_title?: string | null;
