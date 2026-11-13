@@ -300,6 +300,14 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" hive-os-frontend
           rm -rf hive-os-frontend/.next
 
+      # The dev container runs node:22-alpine (musl) over the bind-mounted
+      # checkout, so its entrypoint replaces host node_modules with musl-only
+      # optional dependencies (next@16.4.5+ tags @next/swc-* with libc).
+      # Reinstall host glibc dependencies before the Ubuntu runner builds Next.js.
+      - name: Restore host frontend dependencies
+        working-directory: hive-os-frontend
+        run: npm ci
+
       # NEXT_PUBLIC_* values are baked in at build time, so the build needs the
       # same configuration the dev container gets from Compose. Without it the
       # bundle ships defaults, the dashboard never reaches the API, and the
