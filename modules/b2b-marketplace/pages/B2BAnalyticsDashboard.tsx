@@ -101,7 +101,7 @@ export default function B2BAnalyticsDashboard() {
     { label: "Active Products", value: k.active_products.toLocaleString(), hint: `${k.total_products} total listings`, icon: Boxes, tone: "from-sky-500/20 to-cyan-500/10 border-sky-500/30" },
     { label: "Verified Suppliers", value: k.verified_suppliers.toLocaleString(), hint: `${k.total_suppliers} registered`, icon: Factory, tone: "from-violet-500/20 to-fuchsia-500/10 border-violet-500/30" },
     { label: "Accepted GMV", value: fmtMoney(k.gmv), hint: `${fmtMoney(k.pipeline_value)} in pipeline`, icon: CircleDollarSign, tone: "from-emerald-500/20 to-teal-500/10 border-emerald-500/30" },
-    { label: "Avg. Rating", value: `${k.avg_product_rating}★`, hint: `${k.total_categories} categories`, icon: Star, tone: "from-amber-500/20 to-orange-500/10 border-amber-500/30" },
+    { label: "Avg. Rating", value: k.avg_product_rating > 0 ? `${k.avg_product_rating}★` : "—", hint: `${k.total_categories} categories`, icon: Star, tone: "from-amber-500/20 to-orange-500/10 border-amber-500/30" },
   ];
 
   const secondaryStats = [

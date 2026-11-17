@@ -118,6 +118,7 @@ export function TenantLandingSettings() {
   const [frameReady, setFrameReady] = React.useState(false);
   const [previewMode, setPreviewMode] = React.useState<"system" | "light" | "dark">("system");
   const [jsonError, setJsonError] = React.useState<string | null>(null);
+  const [libraryRefresh, setLibraryRefresh] = React.useState(0);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["tenant-landing-page-settings", workspaceScope],
@@ -142,6 +143,7 @@ export function TenantLandingSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tenant-landing-page-settings"] });
       queryClient.invalidateQueries({ queryKey: ["tenantPublicLanding"] });
+      setLibraryRefresh((value) => value + 1);
       toast.success("Landing page template saved successfully.");
     },
     onError: (caught) => {
@@ -356,6 +358,7 @@ export function TenantLandingSettings() {
       {/* Library templates the tenant owns or can adopt, before the JSON editor. */}
       {!editorFullscreen && (
         <TenantTemplateMarketplace
+          refreshToken={libraryRefresh}
           onSelected={() => {
             void queryClient.invalidateQueries({ queryKey: ["tenant-landing-page-settings"] });
             void queryClient.invalidateQueries({ queryKey: ["tenantPublicLanding"] });

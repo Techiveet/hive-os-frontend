@@ -43,6 +43,8 @@ export type LmsCourse = {
   published_at?: string | null;
   starts_at?: string | null;
   ends_at?: string | null;
+  certificate_enabled?: boolean;
+  sequential_lessons?: boolean;
   lessons?: LmsLesson[];
   lessons_count?: number;
   enrollments_count?: number;
@@ -77,6 +79,77 @@ export type LmsEnrollment = {
   learner?: LmsUser;
   assigned_by_user?: LmsUser;
   lesson_progress?: LmsLessonProgress[];
+  /** What is still needed to finish: lessons, required quizzes and assignments. */
+  requirements?: LmsRequirements;
+  /** The certificate once earned (and not withdrawn). */
+  certificate?: { id: string; code: string; issued_at: string } | null;
+};
+
+export type LmsRequirements = {
+  lessons_total: number;
+  lessons_done: number;
+  quizzes: Array<{ id: string; title: string; passed: boolean; percent: number | null; attempted: boolean }>;
+  assignments: Array<{ id: string; title: string; met: boolean; percent: number | null; submitted: boolean }>;
+  units_total: number;
+  units_done: number;
+  progress: number;
+  met: boolean;
+  score: number | null;
+};
+
+export type LmsCertificate = {
+  id: string;
+  code: string;
+  learner_name: string;
+  course_id: string;
+  course_title: string;
+  score: number | null;
+  issued_at: string;
+  valid: boolean;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+};
+
+export type LmsCertificateCheck = {
+  code: string;
+  valid: boolean;
+  learner_name: string;
+  course_title: string;
+  score: number | null;
+  issued_at: string;
+  revoked_at: string | null;
+};
+
+export type LmsAnalytics = {
+  window_days: number;
+  totals: {
+    enrollments: number;
+    completed: number;
+    completion_rate: number;
+    active_learners_7d: number;
+    overdue: number;
+    certificates_issued: number;
+    average_score: number | null;
+  };
+  enrollments_by_day: Array<{ date: string; count: number }>;
+  completions_by_day: Array<{ date: string; count: number }>;
+  courses: Array<{
+    id: string;
+    title: string;
+    enrollments: number;
+    completed: number;
+    completion_rate: number;
+    average_progress: number;
+    average_score: number | null;
+    seats_left: number | null;
+  }>;
+  quizzes: Array<{ id: string; title: string; attempts: number; pass_rate: number | null; average_percent: number | null }>;
+};
+
+export type LmsLessonAnalytics = {
+  course: { id: string; title: string };
+  enrolled: number;
+  lessons: Array<{ id: string; title: string; required: boolean; started: number; completed: number; completion_rate: number }>;
 };
 
 export type LmsSummary = {
@@ -129,7 +202,9 @@ export type LmsPublicCourse = {
   rating_count?: number;
   image: string;
   instructor_name: string;
-  badge: string;
+  /** Only a badge somebody actually set; null otherwise. */
+  badge: string | null;
+  certificate?: boolean;
 };
 
 export type LmsPublicInstructor = {
@@ -201,14 +276,12 @@ export type LmsStudentRegistrationResponse = {
   message: string;
   data: {
     user: LmsUser;
-    course: LmsPublicCourse | null;
-    enrollment_id: string | null;
   };
 };
 
 export type LmsCoursePayload = Partial<Pick<
   LmsCourse,
-  "title" | "code" | "category" | "level" | "status" | "visibility" | "summary" | "description" | "duration_minutes" | "passing_score" | "capacity" | "starts_at" | "ends_at"
+  "title" | "code" | "category" | "level" | "status" | "visibility" | "summary" | "description" | "duration_minutes" | "passing_score" | "capacity" | "starts_at" | "ends_at" | "certificate_enabled" | "sequential_lessons"
 >> & {
   lessons?: Array<Partial<LmsLesson> & { title: string }>;
 };
@@ -250,6 +323,23 @@ export const learningApi = {
   getMyLearning: () => api.get<LmsEnrollment[]>(`${LMS_PREFIX}/my-learning`).then((res) => res.data),
   getLearners: () => api.get<LmsLearnerSummary[]>(`${LMS_PREFIX}/learners`).then((res) => res.data),
   getReports: () => api.get<LmsReports>(`${LMS_PREFIX}/reports`).then((res) => res.data),
+
+  // Certificates
+  getMyCertificates: () => api.get<{ data: LmsCertificate[] }>(`${LMS_PREFIX}/certificates/mine`).then((res) => res.data.data),
+  getCertificate: (id: string) => api.get<{ data: LmsCertificate }>(`${LMS_PREFIX}/certificates/${id}`).then((res) => res.data.data),
+  listCertificates: (params?: { search?: string; status?: "valid" | "revoked"; page?: number }) =>
+    api.get<{ data: LmsCertificate[]; meta: { current_page: number; last_page: number; total: number } }>(`${LMS_PREFIX}/certificates`, { params }).then((res) => res.data),
+  revokeCertificate: (id: string, reason: string) =>
+    api.post<{ data: LmsCertificate }>(`${LMS_PREFIX}/certificates/${id}/revoke`, { reason }).then((res) => res.data.data),
+  reinstateCertificate: (id: string) =>
+    api.post<{ data: LmsCertificate }>(`${LMS_PREFIX}/certificates/${id}/reinstate`).then((res) => res.data.data),
+  issueCertificate: (enrollmentId: string) =>
+    api.post<{ data: LmsCertificate }>(`${LMS_PREFIX}/enrollments/${enrollmentId}/certificate`).then((res) => res.data.data),
+
+  // Analytics
+  getAnalytics: (days = 30) => api.get<{ data: LmsAnalytics }>(`${LMS_PREFIX}/analytics`, { params: { days } }).then((res) => res.data.data),
+  getLessonAnalytics: (courseId: string) =>
+    api.get<{ data: LmsLessonAnalytics }>(`${LMS_PREFIX}/analytics/courses/${courseId}/lessons`).then((res) => res.data.data),
   searchUsers: (search: string) => api.get<LmsUser[]>(`${LMS_PREFIX}/users/search`, { params: { search } }).then((res) => res.data),
 };
 
@@ -297,6 +387,10 @@ export const publicLearningApi = {
   },
   getCourse: async (id: string) => {
     const json = await publicLmsFetch<{ data: LmsPublicCourseDetail }>(`courses/${encodeURIComponent(id)}`);
+    return json.data;
+  },
+  verifyCertificate: async (code: string) => {
+    const json = await publicLmsFetch<{ data: LmsCertificateCheck }>(`certificates/${encodeURIComponent(code.trim())}`);
     return json.data;
   },
   registerStudent: (payload: LmsStudentRegistrationPayload) =>

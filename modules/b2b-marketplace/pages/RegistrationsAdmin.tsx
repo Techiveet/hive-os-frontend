@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Loader2, ShoppingBag, Store, UserCheck, X } from "lucide-react";
+import { AlertTriangle, Check, Loader2, Mail, ShoppingBag, Store, UserCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,11 +14,29 @@ export default function RegistrationsAdmin() {
   const requests = q.data ?? [];
   const pending = requests.filter((r) => r.status === "pending");
 
+  const [error, setError] = React.useState<string | null>(null);
+  const done = () => { setError(null); qc.invalidateQueries({ queryKey: ["b2b", "registrations"] }); };
+  const onError = (e: unknown) => {
+    const err = e as { response?: { data?: { message?: string } }; message?: string };
+    setError(err?.response?.data?.message || err?.message || "Something went wrong");
+  };
+
   const act = useMutation({
-    mutationFn: ({ id, action }: { id: number; action: "approve" | "reject" }) =>
-      action === "approve" ? B2BDash.approveRegistration(id) : B2BDash.rejectRegistration(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["b2b", "registrations"] }),
+    mutationFn: ({ id, action, reason }: { id: number; action: "approve" | "reject"; reason?: string }) =>
+      action === "approve" ? B2BDash.approveRegistration(id) : B2BDash.rejectRegistration(id, reason),
+    onSuccess: done,
+    onError,
   });
+  const resend = useMutation({
+    mutationFn: (id: number) => B2BDash.resendRegistrationVerification(id),
+    onSuccess: done,
+    onError,
+  });
+
+  const onReject = (r: B2BRegistration) => {
+    const reason = window.prompt(`Reject ${r.name}? Optionally tell them why (included in the email).`, "");
+    if (reason !== null) act.mutate({ id: r.id, action: "reject", reason: reason.trim() || undefined });
+  };
 
   return (
     <div className="space-y-4">
@@ -29,6 +47,14 @@ export default function RegistrationsAdmin() {
           <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-0">{pending.length} pending</Badge>
         )}
       </div>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{error}</span>
+          <button type="button" aria-label="Dismiss" onClick={() => setError(null)}><X className="h-4 w-4" /></button>
+        </div>
+      )}
 
       {q.isLoading ? (
         <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
@@ -46,6 +72,12 @@ export default function RegistrationsAdmin() {
                 <p className="text-xs text-muted-foreground">
                   {r.company ? `${r.company} · ` : ""}wants a <b className="capitalize">{r.requested_role}</b> account · {new Date(r.created_at).toLocaleDateString()}
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  {[r.country, r.phone, r.website, r.tax_id ? `Tax ID ${r.tax_id}` : null].filter(Boolean).join(" · ")}
+                </p>
+                {r.status === "rejected" && r.rejection_reason && (
+                  <p className="text-xs text-destructive">Reason: {r.rejection_reason}</p>
+                )}
               </div>
               <Badge
                 variant={r.status === "approved" ? "default" : r.status === "rejected" ? "destructive" : "secondary"}
@@ -53,12 +85,26 @@ export default function RegistrationsAdmin() {
               >
                 {r.status}
               </Badge>
+              {r.status !== "approved" && (
+                <Badge variant={r.email_verified ? "outline" : "secondary"} className="gap-1">
+                  <Mail className="h-3 w-3" /> {r.email_verified ? "email verified" : "email not verified"}
+                </Badge>
+              )}
               {r.status === "pending" && (
                 <div className="flex gap-1.5">
-                  <Button size="sm" disabled={act.isPending} onClick={() => act.mutate({ id: r.id, action: "approve" })} className="gap-1">
+                  {!r.email_verified && (
+                    <Button size="sm" variant="ghost" disabled={resend.isPending} onClick={() => resend.mutate(r.id)}>
+                      Resend email
+                    </Button>
+                  )}
+                  <Button
+                    size="sm" disabled={act.isPending || !r.email_verified}
+                    title={r.email_verified ? undefined : "The applicant must confirm their email first"}
+                    onClick={() => act.mutate({ id: r.id, action: "approve" })} className="gap-1"
+                  >
                     <Check className="h-3.5 w-3.5" /> Approve
                   </Button>
-                  <Button size="sm" variant="outline" disabled={act.isPending} onClick={() => act.mutate({ id: r.id, action: "reject" })} className="gap-1">
+                  <Button size="sm" variant="outline" disabled={act.isPending} onClick={() => onReject(r)} className="gap-1">
                     <X className="h-3.5 w-3.5" /> Reject
                   </Button>
                 </div>

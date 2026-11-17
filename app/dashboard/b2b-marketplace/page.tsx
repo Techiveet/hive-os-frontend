@@ -11,6 +11,8 @@ import BuyerDashboard from "@/modules/b2b-marketplace/pages/BuyerDashboard";
 import SellerDashboard from "@/modules/b2b-marketplace/pages/SellerDashboard";
 import RegistrationsAdmin from "@/modules/b2b-marketplace/pages/RegistrationsAdmin";
 import AdminOrders from "@/modules/b2b-marketplace/pages/AdminOrders";
+import PayoutAccountsAdmin from "@/modules/b2b-marketplace/pages/PayoutAccountsAdmin";
+import { PaymentReturnBanner } from "@/modules/b2b-marketplace/components/PaymentReturnBanner";
 
 export default function B2BMarketplacePage() {
   const { hasPermission, isLoaded } = usePermissions();
@@ -22,6 +24,7 @@ export default function B2BMarketplacePage() {
         { value: "buyer", label: "Buyer Portal", perm: "manage_b2b_inquiries", node: <BuyerDashboard /> },
         { value: "seller", label: "Seller Portal", perm: "manage_b2b_products", node: <SellerDashboard /> },
         { value: "orders", label: "Orders & Payments", perm: "manage_b2b_marketplace", node: <AdminOrders /> },
+        { value: "payouts", label: "Payout Accounts", perm: "manage_b2b_marketplace", node: <PayoutAccountsAdmin /> },
         { value: "approvals", label: "Approvals", perm: "manage_b2b_marketplace", node: <RegistrationsAdmin /> },
       ].filter((t) => hasPermission(t.perm)),
     [hasPermission],
@@ -91,6 +94,8 @@ export default function B2BMarketplacePage() {
           )}
         </div>
       )}
+
+      {isBuyer && <PaymentReturnBanner />}
 
       {!isLoaded ? null : tabs.length === 0 ? (
         <div className="rounded-3xl border border-border/60 bg-card/50 p-10 text-center text-sm text-muted-foreground">

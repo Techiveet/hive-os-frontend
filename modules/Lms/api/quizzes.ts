@@ -99,6 +99,8 @@ export type LmsQuiz = {
   pass_mark: number | string;
   max_attempts?: number | null;
   shuffle_questions: boolean;
+  /** Must be passed for the course to count as complete. */
+  is_required?: boolean;
   shuffle_options?: boolean;
   /** Draw this many questions from the bank. Null means ask them all. */
   question_count?: number | null;
@@ -201,6 +203,7 @@ export type LmsQuizPayload = {
   pass_mark?: number;
   max_attempts?: number | null;
   shuffle_questions?: boolean;
+  is_required?: boolean;
   shuffle_options?: boolean;
   question_count?: number | null;
   allow_backtracking?: boolean;

@@ -121,11 +121,12 @@ export default function LmsStudentRegisterPage() {
                   <CheckCircle2 className="size-8" aria-hidden="true" />
                 </div>
                 <h2 className="mt-6 text-3xl font-bold tracking-tight" style={{ color: LMS_TOKENS.navy }}>
-                  Your learner account is ready
+                  Check your email
                 </h2>
                 <p className="mt-3 text-sm leading-7 text-[#4F547B]">
-                  Sign in with <strong style={{ color: LMS_TOKENS.navy }}>{createdEmail}</strong> and the password you just
-                  created. Your selected course is waiting in My Learning.
+                  We sent a confirmation link to <strong style={{ color: LMS_TOKENS.navy }}>{createdEmail}</strong>. Open it to
+                  activate your learner account{form.courseId !== ANY_COURSE_VALUE ? " and join your selected course" : ""}, then sign in with the
+                  password you just created. The link is valid for 3 days.
                 </p>
                 <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
                   <Button
@@ -246,7 +247,7 @@ export default function LmsStudentRegisterPage() {
                         <SelectValue placeholder={landingQuery.isLoading ? "Loading courses..." : "Choose a course"} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={ANY_COURSE_VALUE}>Auto-enroll me in the first available course</SelectItem>
+                        <SelectItem value={ANY_COURSE_VALUE}>I'll pick a course later</SelectItem>
                         {courses.map((course) => (
                           <SelectItem key={course.id} value={course.id}>
                             <CourseOption course={course} />

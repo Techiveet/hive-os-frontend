@@ -11,6 +11,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useCart } from "@/modules/b2b-marketplace/cart/cart-store";
+import { QtyInput } from "@/modules/b2b-marketplace/cart/QtyInput";
 
 export function CartSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { items, subtotal, setQty, remove } = useCart();
@@ -55,6 +56,9 @@ export function CartSheet({ open, onOpenChange }: { open: boolean; onOpenChange:
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-sm font-bold leading-snug">{it.name}</p>
                     <p className="text-xs text-muted-foreground">{it.supplier}</p>
+                    {(it.minQty ?? 1) > 1 && (
+                      <p className="text-[11px] text-muted-foreground">Min. order: {(it.minQty ?? 1).toLocaleString()}</p>
+                    )}
                     <p className="mt-1 text-sm font-black text-primary">
                       ${it.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
@@ -67,10 +71,11 @@ export function CartSheet({ open, onOpenChange }: { open: boolean; onOpenChange:
                       <button className="p-1.5 hover:text-primary" onClick={() => setQty(it.id, it.quantity - 1)}>
                         <Minus className="h-3 w-3" />
                       </button>
-                      <input
+                      <QtyInput
                         value={it.quantity}
-                        onChange={(e) => setQty(it.id, parseInt(e.target.value || "1", 10))}
-                        className="w-10 bg-transparent text-center text-sm font-bold outline-none"
+                        min={it.minQty ?? 1}
+                        onCommit={(q) => setQty(it.id, q)}
+                        className="w-14 text-sm font-bold"
                       />
                       <button className="p-1.5 hover:text-primary" onClick={() => setQty(it.id, it.quantity + 1)}>
                         <Plus className="h-3 w-3" />

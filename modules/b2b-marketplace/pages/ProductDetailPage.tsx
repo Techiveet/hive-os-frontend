@@ -7,7 +7,6 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft,
   BadgeCheck,
-  CheckCircle2,
   ChevronRight,
   Clock,
   FileText,
@@ -17,27 +16,18 @@ import {
   MapPin,
   MessageSquare,
   PackageOpen,
-  Send,
   ShieldCheck,
   Star,
   Store,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ContactSupplierDialog } from "@/modules/b2b-marketplace/components/ContactSupplierDialog";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { getAccessToken } from "@/lib/runtime-context";
 import { cn } from "@/lib/utils";
 import { B2BApi, B2BDash, type B2BProduct } from "@/modules/b2b-marketplace/api";
+import { ProductPhoto } from "@/modules/b2b-marketplace/components/product-photo";
 import { AddToCartButton } from "@/modules/b2b-marketplace/cart/AddToCartButton";
 
 function Stars({ rating }: { rating: number }) {
@@ -64,16 +54,12 @@ function RelatedCard({ product }: { product: B2BProduct }) {
       href={`/marketplace/product/${product.id}`}
       className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card/70 backdrop-blur-xl hover:border-primary/40 hover:shadow-xl transition-all"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-muted/20">
-        {product.image && (
-          <img
-            src={product.image}
-            alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-            onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
-          />
-        )}
-      </div>
+      <ProductPhoto
+        src={product.image}
+        alt={product.name}
+        className="aspect-[4/3]"
+        imgClassName="transition-transform duration-500 group-hover:scale-110"
+      />
       <div className="p-4">
         <p className="line-clamp-2 text-sm font-bold leading-snug min-h-[2.5rem]">{product.name}</p>
         <p className="mt-2 text-lg font-black text-primary">{product.price}</p>
@@ -92,8 +78,6 @@ export default function ProductDetailPage({ id }: { id?: string }) {
   });
 
   const [rfqOpen, setRfqOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [favorited, setFavorited] = useState(false);
   const [favBusy, setFavBusy] = useState(false);
   const loggedIn = typeof window !== "undefined" && !!getAccessToken();
@@ -110,15 +94,6 @@ export default function ProductDetailPage({ id }: { id?: string }) {
     } finally {
       setFavBusy(false);
     }
-  };
-
-  const submitRfq = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
-      setSubmitted(true);
-    }, 800);
   };
 
   return (
@@ -173,14 +148,7 @@ export default function ProductDetailPage({ id }: { id?: string }) {
               transition={{ duration: 0.4 }}
               className="relative aspect-square overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-muted/30 to-muted/10"
             >
-              {product.image && (
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="h-full w-full object-cover"
-                  onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
-                />
-              )}
+              <ProductPhoto src={product.image} alt={product.name} className="absolute inset-0" />
               <div className="absolute top-4 left-4 flex flex-wrap gap-2">
                 {product.badges.map((b) => (
                   <Badge key={b} className="bg-background/90 text-foreground border border-border/60 shadow">
@@ -200,11 +168,15 @@ export default function ProductDetailPage({ id }: { id?: string }) {
               <h1 className="text-2xl sm:text-3xl font-black leading-tight tracking-tight">{product.name}</h1>
 
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                <span className="inline-flex items-center gap-1.5">
-                  <Stars rating={product.rating} />
-                  <span className="font-bold">{product.rating}</span>
-                  <span className="text-muted-foreground">· {product.reviews.toLocaleString()} reviews</span>
-                </span>
+                {product.rating != null && product.reviews > 0 ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Stars rating={product.rating} />
+                    <span className="font-bold">{product.rating}</span>
+                    <span className="text-muted-foreground">· {product.reviews.toLocaleString()} reviews</span>
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">No reviews yet</span>
+                )}
                 {product.location && (
                   <span className="inline-flex items-center gap-1 text-muted-foreground">
                     <MapPin className="h-4 w-4" /> {product.location}
@@ -245,14 +217,14 @@ export default function ProductDetailPage({ id }: { id?: string }) {
 
               <div className="mt-3 flex flex-col sm:flex-row gap-3">
                 <Button
-                  onClick={() => { setSubmitted(false); setRfqOpen(true); }}
+                  onClick={() => setRfqOpen(true)}
                   className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-bold gap-2"
                 >
                   <FileText className="h-4 w-4" /> Request a Quote
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => { setSubmitted(false); setRfqOpen(true); }}
+                  onClick={() => setRfqOpen(true)}
                   className="flex-1 h-12 rounded-xl font-bold gap-2"
                 >
                   <MessageSquare className="h-4 w-4" /> Contact Supplier
@@ -317,47 +289,23 @@ export default function ProductDetailPage({ id }: { id?: string }) {
         </main>
       )}
 
-      {/* RFQ / Contact dialog (simulated submit) */}
-      <Dialog open={rfqOpen} onOpenChange={setRfqOpen}>
-        <DialogContent className="sm:max-w-md">
-          {submitted ? (
-            <div className="py-8 text-center">
-              <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" />
-              <DialogTitle className="mt-4">Request sent</DialogTitle>
-              <DialogDescription className="mt-2">
-                The supplier will respond to your inquiry shortly.
-              </DialogDescription>
-              <Button className="mt-6 rounded-xl" onClick={() => setRfqOpen(false)}>Done</Button>
-            </div>
-          ) : (
-            <form onSubmit={submitRfq}>
-              <DialogHeader>
-                <DialogTitle className="inline-flex items-center gap-2">
-                  <Globe2 className="h-5 w-5 text-primary" /> Request a Quote
-                </DialogTitle>
-                <DialogDescription>{product?.name}</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3 py-4">
-                <Input required placeholder="Your name" />
-                <Input required type="email" placeholder="Work email" />
-                <Input placeholder="Company" />
-                <Textarea
-                  required
-                  placeholder="Quantity, target price, customization, delivery terms…"
-                  defaultValue={product ? `I'm interested in "${product.name}" (MOQ ${product.moq}). Please send your best quote.` : ""}
-                  rows={4}
-                />
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={submitting} className="w-full rounded-xl gap-2">
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  {submitting ? "Sending…" : "Send Request"}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Contact / quote request: real inquiry to this supplier, sign-in required */}
+      <ContactSupplierDialog
+        open={rfqOpen}
+        onOpenChange={setRfqOpen}
+        target={
+          product
+            ? {
+                supplierId: product.supplier_id ?? null,
+                supplierName: product.supplier ?? "the supplier",
+                productId: product.id,
+                productName: product.name,
+                moq: product.moq,
+                image: product.image,
+              }
+            : null
+        }
+      />
     </div>
   );
 }

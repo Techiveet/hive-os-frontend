@@ -65,7 +65,6 @@ import {
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { useTranslation } from "@/store/use-translation";
-import { CustomLandingFrame, useCustomLandingHtml } from "./custom-landing-frame";
 import { motion, AnimatePresence, useInView, useMotionValue, animate } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -77,11 +76,14 @@ import {
   getAccessToken,
 } from "@/lib/runtime-context";
 import { type TenantLandingTemplate } from "@/modules/tenancy/landing-template";
-import { B2BApi } from "@/modules/b2b-marketplace/api";
+import { B2BApi, B2BDash } from "@/modules/b2b-marketplace/api";
+import { ProductPhoto } from "@/modules/b2b-marketplace/components/product-photo";
 import dynamic from "next/dynamic";
 import { CartSheet } from "@/modules/b2b-marketplace/cart/CartSheet";
 import { useCart } from "@/modules/b2b-marketplace/cart/cart-store";
 import { AddToCartButton } from "@/modules/b2b-marketplace/cart/AddToCartButton";
+import { ContactSupplierDialog, type ContactTarget } from "@/modules/b2b-marketplace/components/ContactSupplierDialog";
+import { SignInGate, describeApiError, useIsSignedIn } from "@/modules/b2b-marketplace/components/SignInGate";
 
 const HeroGlobe = dynamic(
   () => import("@/modules/b2b-marketplace/components/HeroGlobe").then((m) => m.HeroGlobe),
@@ -128,6 +130,7 @@ type Category = {
 
 type Product = {
   id: string;
+  supplierId?: number | null;
   name: string;
   price: string;
   moq: string;
@@ -490,13 +493,11 @@ function ProductCard({
         href={`/marketplace/product/${product.id}`}
         className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-muted/30 to-muted/10 block"
       >
-        <img
+        <ProductPhoto
           src={product.img}
           alt={product.name}
-          className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
+          className="absolute inset-0"
+          imgClassName="transition-transform duration-700 group-hover:scale-110"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
@@ -636,7 +637,7 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
         <div className="rounded-xl bg-muted/40 px-3 py-2">
           <p className="text-muted-foreground">On-Time</p>
           <p className="font-bold text-emerald-600 dark:text-emerald-400">
-            {supplier.onTimeRate != null ? `${supplier.onTimeRate}%` : "98.7%"}
+            {supplier.onTimeRate != null ? `${supplier.onTimeRate}%` : "—"}
           </p>
         </div>
       </div>
@@ -670,166 +671,6 @@ function SupplierCard({ supplier }: { supplier: Supplier }) {
 
 type FormState = "idle" | "submitting" | "success" | "error";
 
-function ContactSupplierDialog({
-  product,
-  open,
-  onOpenChange,
-}: {
-  product: Product | null;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  const [state, setState] = useState<FormState>("idle");
-  const [form, setForm] = useState({ name: "", email: "", company: "", message: "" });
-
-  useEffect(() => {
-    if (!open) {
-      setState("idle");
-      setForm({ name: "", email: "", company: "", message: "" });
-    }
-  }, [open]);
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setState("submitting");
-    setTimeout(() => {
-      setState("success");
-    }, 800);
-  };
-
-  if (!product) return null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg rounded-3xl border-border/60 bg-card/95 backdrop-blur-xl">
-        <DialogHeader>
-          <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-muted-foreground">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-            Trade-Assured Inquiry
-          </div>
-          <DialogTitle className="text-xl font-black tracking-tight">
-            Contact {product.supplier}
-          </DialogTitle>
-          <DialogDescription>
-            Your message goes directly to the supplier. Replies typically arrive within 24 hours.
-          </DialogDescription>
-        </DialogHeader>
-
-        {state === "success" ? (
-          <div className="py-8 text-center space-y-3">
-            <div className="mx-auto h-14 w-14 rounded-full bg-emerald-500/10 flex items-center justify-center">
-              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-            </div>
-            <h3 className="text-lg font-black">Inquiry sent</h3>
-            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              We've forwarded your message to <span className="font-bold text-foreground">{product.supplier}</span>.
-              Watch your inbox — and your dashboard — for their reply.
-            </p>
-            <Button
-              onClick={() => onOpenChange(false)}
-              className="mt-4 rounded-full px-6 font-bold"
-            >
-              Done
-            </Button>
-          </div>
-        ) : (
-          <form onSubmit={submit} className="space-y-4">
-            <div className="rounded-2xl border border-border/60 bg-muted/30 p-3 flex items-center gap-3">
-              <img
-                src={product.img}
-                alt={product.name}
-                className="h-12 w-12 rounded-xl object-cover"
-                onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold line-clamp-1">{product.name}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {product.supplier} · MOQ {product.moq}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Name *</label>
-                <Input
-                  required
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="Jane Doe"
-                  className="h-10 rounded-xl bg-muted/30"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Company</label>
-                <Input
-                  value={form.company}
-                  onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
-                  placeholder="Acme Imports"
-                  className="h-10 rounded-xl bg-muted/30"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Business Email *</label>
-              <Input
-                type="email"
-                required
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="you@company.com"
-                className="h-10 rounded-xl bg-muted/30"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Message *</label>
-              <Textarea
-                required
-                rows={4}
-                value={form.message}
-                onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-                placeholder={`Hi ${product.supplier}, we're interested in ${product.name} (MOQ ${product.moq}). Please send your best FOB price and lead time to Lagos.`}
-                className="rounded-xl bg-muted/30 resize-none"
-              />
-            </div>
-
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-emerald-700 dark:text-emerald-300 flex items-start gap-2">
-              <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <span>Your contact details are protected by our Buyer Privacy Shield. Suppliers see your inquiry only after mutual confirmation.</span>
-            </div>
-
-            <DialogFooter className="gap-2 sm:gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => onOpenChange(false)}
-                className="rounded-full font-bold"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={state === "submitting"}
-                className="rounded-full px-6 font-bold gap-2 shadow-lg shadow-primary/20"
-              >
-                {state === "submitting" ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Sending…
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" /> Send Inquiry
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function RfqDialog({
   open,
   onOpenChange,
@@ -840,6 +681,8 @@ function RfqDialog({
   prefill?: string;
 }) {
   const [state, setState] = useState<FormState>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const signedIn = useIsSignedIn(open);
   const [form, setForm] = useState({
     title: prefill ?? "",
     category: "general",
@@ -856,15 +699,35 @@ function RfqDialog({
       setForm((f) => ({ ...f, title: prefill ?? f.title }));
     } else {
       setState("idle");
+      setError(null);
     }
   }, [open, prefill]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!getAccessToken()) return;
+
     setState("submitting");
-    setTimeout(() => {
+    setError(null);
+    const description = [
+      form.details.trim(),
+      form.quantity.trim() && `Quantity: ${form.quantity.trim()}`,
+      form.destination.trim() && `Ship to: ${form.destination.trim()}`,
+      form.name.trim() && `Contact: ${form.name.trim()}`,
+      form.email.trim() && `Email: ${form.email.trim()}`,
+    ].filter(Boolean).join("\n");
+
+    try {
+      await B2BDash.createInquiry({
+        title: form.title.trim(),
+        description: description || form.title.trim(),
+        budget_range: form.targetPrice.trim() || undefined,
+      });
       setState("success");
-    }, 900);
+    } catch (caught) {
+      setError(describeApiError(caught, "We couldn't post your RFQ. Please try again."));
+      setState("error");
+    }
   };
 
   return (
@@ -879,19 +742,25 @@ function RfqDialog({
             Get sealed quotes from verified suppliers
           </DialogTitle>
           <DialogDescription>
-            Free to post. Suppliers typically respond within 24-72 hours.
+            {signedIn ? "Suppliers respond from their seller portal." : "Sign in or register to post an RFQ."}
           </DialogDescription>
         </DialogHeader>
 
-        {state === "success" ? (
+        {!signedIn ? (
+          <SignInGate
+            title="Sign in to post an RFQ"
+            description="RFQs are tied to a verified buyer account so suppliers know who they're quoting and you can compare their offers in your dashboard."
+            onNavigate={() => onOpenChange(false)}
+          />
+        ) : state === "success" ? (
           <div className="py-10 text-center space-y-4">
             <div className="mx-auto h-16 w-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
               <CheckCircle2 className="h-10 w-10 text-emerald-500" />
             </div>
-            <h3 className="text-xl font-black">RFQ Published</h3>
+            <h3 className="text-xl font-black">RFQ posted</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Your RFQ has been broadcast to 1,000+ suppliers in the matching category.
-              You'll receive sealed quotes in your dashboard inbox.
+              Verified suppliers in this marketplace can quote it from their seller portal.
+              You will see responses in your buyer dashboard.
             </p>
             <div className="flex justify-center gap-2 pt-2">
               <Button
@@ -904,7 +773,7 @@ function RfqDialog({
               >
                 Post Another
               </Button>
-              <Link href="/marketplace/register" onClick={() => onOpenChange(false)}>
+              <Link href="/dashboard/b2b-marketplace" onClick={() => onOpenChange(false)}>
                 <Button className="rounded-full font-bold gap-2 shadow-lg shadow-primary/20">
                   Open My Dashboard <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -1008,6 +877,7 @@ function RfqDialog({
               </div>
             </div>
 
+            {error && <p className="text-sm font-medium text-destructive">{error}</p>}
             <DialogFooter className="gap-2 sm:gap-2">
               <Button
                 type="button"
@@ -1217,7 +1087,6 @@ export default function B2BLandingTemplate({
   // ── Resolve content from the tenant landing template; fall back to built-in defaults ──
   const b2b = template?.b2b ?? {};
   const brandName = brandSettings?.app_title?.trim() || tenantName?.trim() || "B2B Marketplace";
-  const customLandingHtml = useCustomLandingHtml(template, brandName, "B2B", true, brandSettings);
   const pubImg = (u?: string) => {
     if (!u) return "";
     // Private media serve URL → public-serve so it loads without a login, on any device.
@@ -1298,6 +1167,7 @@ export default function B2BLandingTemplate({
   });
   const mapProduct = (p: any, i: number): Product => ({
     id: p.id != null ? String(p.id) : `p-${i}`,
+    supplierId: typeof p.supplier_id === "number" ? p.supplier_id : null,
     name: p.name,
     price: p.price ?? "",
     moq: p.moq ?? "",
@@ -1377,7 +1247,7 @@ export default function B2BLandingTemplate({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchCategory, setSearchCategory] = useState("all");
-  const [contactProduct, setContactProduct] = useState<Product | null>(null);
+  const [contactTarget, setContactTarget] = useState<ContactTarget | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
   const [rfqOpen, setRfqOpen] = useState(false);
   const [rfqPrefill, setRfqPrefill] = useState<string | undefined>(undefined);
@@ -1417,7 +1287,14 @@ export default function B2BLandingTemplate({
   }, [debouncedQuery, searchHits, products, searchCategory]);
 
   const handleContact = (p: Product) => {
-    setContactProduct(p);
+    setContactTarget({
+      supplierId: p.supplierId ?? null,
+      supplierName: p.supplier,
+      productId: p.id,
+      productName: p.name,
+      moq: p.moq,
+      image: p.img,
+    });
     setContactOpen(true);
   };
 
@@ -1438,17 +1315,6 @@ export default function B2BLandingTemplate({
       window.scrollTo({ top: y, behavior: "smooth" });
     }
   };
-
-  // Templates that carry their own page code render it instead of this design.
-  if (customLandingHtml && template) {
-    return (
-      <CustomLandingFrame
-        html={customLandingHtml}
-        title={`${brandName} landing page`}
-        mode={template.rendering.mode}
-      />
-    );
-  }
 
   return (
     <div className="relative min-h-screen w-full text-foreground overflow-x-hidden">
@@ -1678,8 +1544,8 @@ export default function B2BLandingTemplate({
               <p className="text-muted-foreground mt-2 inline-flex items-center gap-2">
                 {isSearching && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
                 {debouncedQuery
-                  ? `${filteredProducts.length} result${filteredProducts.length === 1 ? "" : "s"} via Meilisearch`
-                  : `${filteredProducts.length} of ${products.length} products · curated daily`}
+                  ? `${filteredProducts.length} result${filteredProducts.length === 1 ? "" : "s"}`
+                  : `${Math.min(filteredProducts.length, 8)} of ${products.length} products on this page`}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1719,16 +1585,33 @@ export default function B2BLandingTemplate({
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProducts.map((p) => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  onContact={handleContact}
-                  onQuote={handleQuote}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredProducts.slice(0, 8).map((p) => (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    onContact={handleContact}
+                    onQuote={handleQuote}
+                  />
+                ))}
+              </div>
+              <div className="mt-8 flex justify-center">
+                <Button asChild variant="outline" className="rounded-full font-bold gap-1.5">
+                  <Link
+                    href={`/marketplace/products${(() => {
+                      const query = new URLSearchParams();
+                      if (searchQuery.trim()) query.set("search", searchQuery.trim());
+                      if (searchCategory !== "all") query.set("category", searchCategory);
+                      const qs = query.toString();
+                      return qs ? `?${qs}` : "";
+                    })()}`}
+                  >
+                    See all products <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            </>
           )}
         </div>
       </section>
@@ -1749,16 +1632,23 @@ export default function B2BLandingTemplate({
               </p>
             </div>
             <Button asChild variant="ghost" className="rounded-full font-bold gap-1">
-              <Link href="/marketplace/register">
+              <Link href="/marketplace/suppliers">
                 Browse all suppliers <ChevronRight className="h-4 w-4" />
               </Link>
             </Button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {suppliers.map((s) => (
-              <SupplierCard key={s.name} supplier={s} />
+            {suppliers.slice(0, 6).map((s) => (
+              <SupplierCard key={s.id ?? s.name} supplier={s} />
             ))}
+          </div>
+          <div className="mt-8 flex justify-center">
+            <Button asChild variant="outline" className="rounded-full font-bold gap-1.5">
+              <Link href="/marketplace/suppliers">
+                See all suppliers <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
           </div>
         </div>
       </section>
@@ -2129,7 +2019,7 @@ export default function B2BLandingTemplate({
 
       {/* Modals */}
       <ContactSupplierDialog
-        product={contactProduct}
+        target={contactTarget}
         open={contactOpen}
         onOpenChange={setContactOpen}
       />

@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { getAccessToken } from "@/lib/runtime-context";
 import { useCart } from "@/modules/b2b-marketplace/cart/cart-store";
-import { B2BDash, type B2BOrder } from "@/modules/b2b-marketplace/api";
+import { B2BDash, formatMoney, type B2BOrder } from "@/modules/b2b-marketplace/api";
+import { PayOrderPanel } from "@/modules/b2b-marketplace/components/PayOrderPanel";
 
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -29,8 +30,6 @@ export default function CheckoutPage() {
     notes: "",
   });
 
-  const [payMethod, setPayMethod] = useState<"direct" | "card">("direct");
-  const [reference, setReference] = useState("");
   const [paid, setPaid] = useState(false);
 
   const place = useMutation({
@@ -49,17 +48,6 @@ export default function CheckoutPage() {
     },
   });
 
-  const payDirect = useMutation({
-    mutationFn: () => B2BDash.payOrder(placed!.id, reference || undefined),
-    onSuccess: () => setPaid(true),
-  });
-
-  const payCard = useMutation({
-    mutationFn: () =>
-      B2BDash.stripeCheckout(placed!.id, typeof window !== "undefined" ? window.location.origin + "/dashboard/b2b-marketplace" : ""),
-    onSuccess: (res) => { if (res?.checkout_url) window.location.href = res.checkout_url; },
-  });
-
   // ── Order placed → payment ──
   if (placed) {
     if (paid) {
@@ -71,7 +59,7 @@ export default function CheckoutPage() {
             </div>
             <h1 className="text-3xl font-black">Payment submitted</h1>
             <p className="mt-2 text-muted-foreground">
-              Order <span className="font-bold text-foreground">{placed.order_number}</span> · {money(placed.subtotal)}.
+              Order <span className="font-bold text-foreground">{placed.order_number}</span> · {formatMoney(placed.subtotal, placed.currency)}.
               The marketplace will confirm your payment and release the order to the supplier.
             </p>
             <div className="mt-8 flex justify-center gap-3">
@@ -96,48 +84,18 @@ export default function CheckoutPage() {
           <div className="rounded-2xl border border-border/60 bg-card/50 p-5">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Amount due</span>
-              <span className="text-2xl font-black text-primary">{money(placed.subtotal)}</span>
+              <span className="text-2xl font-black text-primary">{formatMoney(placed.subtotal, placed.currency)}</span>
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">
               Paid to the platform (incl. {placed.platform_fee_percent}% handling); the supplier is paid out after delivery.
             </p>
 
-            {/* Method toggle */}
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              {([
-                { k: "direct", label: "Direct / bank transfer", icon: Lock },
-                { k: "card", label: "Pay by card (Stripe)", icon: Lock },
-              ] as const).map((m) => (
-                <button key={m.k} type="button" onClick={() => setPayMethod(m.k)}
-                  className={"rounded-xl border p-3 text-left text-sm font-bold transition-all " + (payMethod === m.k ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border/60 hover:border-primary/40")}>
-                  {m.label}
-                </button>
-              ))}
+            <div className="mt-5">
+              <PayOrderPanel
+                order={{ id: placed.id, order_number: placed.order_number, subtotal: placed.subtotal, currency: placed.currency }}
+                onSubmitted={() => setPaid(true)}
+              />
             </div>
-
-            {payMethod === "direct" ? (
-              <div className="mt-4 space-y-3">
-                <div className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
-                  Transfer <b className="text-foreground">{money(placed.subtotal)}</b> to the marketplace settlement account, using
-                  reference <b className="text-foreground">{placed.order_number}</b>, then submit your payment reference below.
-                </div>
-                <Input placeholder="Your payment / transfer reference" value={reference} onChange={(e) => setReference(e.target.value)} />
-                <Button onClick={() => payDirect.mutate()} disabled={payDirect.isPending} className="h-11 w-full rounded-xl font-bold gap-2">
-                  {payDirect.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} I've paid — submit
-                </Button>
-              </div>
-            ) : (
-              <div className="mt-4 space-y-2">
-                <Button onClick={() => payCard.mutate()} disabled={payCard.isPending} className="h-11 w-full rounded-xl font-bold gap-2">
-                  {payCard.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Pay by card
-                </Button>
-                {payCard.isError && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    {(payCard.error as any)?.response?.data?.message || "Card payments aren't enabled yet — use direct transfer, or ask the admin to configure Stripe."}
-                  </p>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="mt-4 text-center">

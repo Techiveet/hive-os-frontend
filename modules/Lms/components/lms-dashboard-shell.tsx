@@ -9,6 +9,8 @@ import {
   Bookmark,
   CalendarDays,
   ChevronDown,
+  Award,
+  BarChart3,
   ClipboardList,
   FileText,
   GraduationCap,
@@ -95,6 +97,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "lms.nav.my_courses", label: "My Courses", href: "/learn/courses", icon: BookOpen, roles: ALL },
   { key: "lms.nav.bookmarks", label: "Bookmarks", href: "/learn/bookmarks", icon: Bookmark, roles: ALL },
   { key: "lms.nav.grades", label: "Grades", href: "/learn/grades", icon: ListChecks, roles: ALL },
+  { key: "lms.nav.certificates", label: "Certificates", href: "/learn/certificates", icon: Award, roles: ALL },
   { key: "lms.nav.calendar", label: "Calendar", href: "/learn/calendar", icon: CalendarDays, roles: ALL },
   { key: "lms.nav.messages", label: "Messages", href: "/learn/messages", icon: MessageSquare, roles: ALL },
   { key: "lms.nav.create_course", label: "Create Course", href: "/learn/manage?tab=courses", icon: FileText, roles: AUTHORS },
@@ -104,6 +107,7 @@ const NAV_ITEMS: NavItem[] = [
   // own assessments and staff the authoring list.
   { key: "lms.nav.quizzes", label: "Quizzes", href: "/learn/quizzes", icon: GraduationCap, roles: ALL },
   // Moderation is a staff job; learners rate a course from its own page.
+  { key: "lms.nav.analytics", label: "Analytics", href: "/learn/analytics", icon: BarChart3, roles: STAFF },
   { key: "lms.nav.reviews", label: "Reviews", href: "/learn/reviews", icon: Star, roles: STAFF },
   // Writing the strip above the navigation is authoring, not marking.
   { key: "lms.nav.announcements", label: "Announcements", href: "/learn/announcements", icon: Megaphone, roles: AUTHORS },

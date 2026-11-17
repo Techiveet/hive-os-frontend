@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Check, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { cartStore, parsePrice } from "@/modules/b2b-marketplace/cart/cart-store";
+import { cartStore, parseMoq, parsePrice } from "@/modules/b2b-marketplace/cart/cart-store";
 
 type CartProductInput = {
   id: string;
@@ -17,7 +17,7 @@ type CartProductInput = {
 
 export function AddToCartButton({
   product,
-  quantity = 1,
+  quantity,
   size = "sm",
   className,
   label = "Add to Cart",
@@ -30,6 +30,8 @@ export function AddToCartButton({
 }) {
   const [added, setAdded] = useState(false);
 
+  const minQty = parseMoq(product.moq);
+
   const onAdd = () => {
     cartStore.add(
       {
@@ -40,8 +42,9 @@ export function AddToCartButton({
         priceLabel: product.priceLabel ?? null,
         unitPrice: parsePrice(product.priceLabel),
         moq: product.moq ?? null,
+        minQty,
       },
-      quantity,
+      quantity ?? minQty,
     );
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1300);
@@ -55,7 +58,7 @@ export function AddToCartButton({
       className={cn("rounded-xl font-bold gap-1.5 transition-colors", added && "bg-emerald-600 hover:bg-emerald-600", className)}
     >
       {added ? <Check className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />}
-      {added ? "Added" : label}
+      {added ? "Added" : minQty > 1 ? `${label} (min ${minQty.toLocaleString()})` : label}
     </Button>
   );
 }

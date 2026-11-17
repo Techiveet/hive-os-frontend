@@ -412,6 +412,7 @@ export function QuizBuilder({ quiz }: { quiz?: LmsQuiz }) {
   const toLocalInput = (value?: string | null) => (value ? value.slice(0, 16) : "");
   const [availableFrom, setAvailableFrom] = React.useState(toLocalInput(quiz?.available_from));
   const [dueAt, setDueAt] = React.useState(toLocalInput(quiz?.due_at));
+  const [isRequired, setIsRequired] = React.useState(quiz?.is_required ?? true);
   const [shuffle, setShuffle] = React.useState(Boolean(quiz?.shuffle_questions));
   const [shuffleOptions, setShuffleOptions] = React.useState(Boolean(quiz?.shuffle_options));
   const [questionCount, setQuestionCount] = React.useState(
@@ -526,6 +527,7 @@ export function QuizBuilder({ quiz }: { quiz?: LmsQuiz }) {
     available_from: availableFrom || null,
     due_at: dueAt || null,
     shuffle_questions: shuffle,
+    is_required: isRequired,
     shuffle_options: shuffleOptions,
     question_count: questionCount.trim() === "" ? null : Number(questionCount),
     audience,
@@ -1047,6 +1049,16 @@ export function QuizBuilder({ quiz }: { quiz?: LmsQuiz }) {
                 Leave both blank to keep the quiz open for as long as it is published.
               </p>
             </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="quiz-required" className="font-normal">
+                Required to complete the course
+              </Label>
+              <Switch id="quiz-required" checked={isRequired} onCheckedChange={setIsRequired} />
+            </div>
+            <p className="-mt-2 text-[13px]" style={{ color: LMS_TOKENS.muted }}>
+              When on, learners must pass this quiz before the course counts as finished. Turn it off for practice quizzes.
+            </p>
 
             <div className="flex items-center justify-between gap-4">
               <Label htmlFor="quiz-shuffle" className="font-normal">

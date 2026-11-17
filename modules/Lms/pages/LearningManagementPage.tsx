@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   Archive,
@@ -76,6 +76,47 @@ const courseLevels: LmsCourseLevel[] = ["beginner", "intermediate", "advanced", 
 const courseStatuses: Array<LmsCourseStatus | "all"> = ["all", "draft", "published", "archived"];
 const enrollmentStatuses: Array<LmsEnrollmentStatus | "all"> = ["all", "assigned", "in_progress", "completed", "overdue", "cancelled"];
 
+/**
+ * Stops a Dialog from closing when the interaction that triggered
+ * "outside" actually happened inside a Select popup.
+ *
+ * Select content is portalled outside the DialogContent, so Radix sees a click
+ * on an option (or the click that dismisses the dropdown) as an outside
+ * interaction and closes the whole modal. Spread this onto every DialogContent
+ * that contains a Select.
+ */
+const SELECT_POPUP_SELECTOR = [
+  "[data-radix-select-content]",
+  "[data-radix-select-viewport]",
+  "[data-radix-popper-content-wrapper]",
+  "[data-radix-dropdown-menu-content]",
+  "[data-radix-dropdown-menu-item]",
+  "[role='listbox']",
+  "[role='option']",
+  "[role='combobox']",
+  "[role='menu']",
+  "[role='menuitem']",
+].join(", ");
+
+function keepOpenForSelect(event: Event) {
+  const target = event.target as HTMLElement | null;
+  // Check if the click originated from inside a Select component
+  if (target?.closest?.(SELECT_POPUP_SELECTOR)) {
+    event.preventDefault();
+    return;
+  }
+  // Also check if clicking on a Select trigger button
+  if (target?.closest?.("[data-radix-select-trigger]")) {
+    event.preventDefault();
+    return;
+  }
+}
+
+const dialogSelectGuard = {
+  onPointerDownOutside: keepOpenForSelect,
+  onInteractOutside: keepOpenForSelect,
+};
+
 export default function LearningManagementPage({ initialTab = "overview" }: LearningManagementPageProps) {
   const lms = useLmsCopy();
   const queryClient = useQueryClient();
@@ -124,12 +165,16 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
       per_page: 100,
     }),
     enabled: canViewCourses || canAssignCourses,
+    // Keep showing the previous list while a new filter combination loads,
+    // so the page (and any open dialog) never unmounts mid-interaction.
+    placeholderData: keepPreviousData,
   });
 
   const enrollmentsQuery = useQuery({
     queryKey: ["learning-enrollments", { enrollmentStatus }],
     queryFn: () => learningApi.getEnrollments({ status: enrollmentStatus, per_page: 100 }),
     enabled: canViewLearners || canAssignCourses,
+    placeholderData: keepPreviousData,
   });
 
   const learnersQuery = useQuery({
@@ -184,11 +229,21 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
   const reports = reportsQuery.data;
   const learners = learnersQuery.data || [];
   const myLearning = myLearningQuery.data || [];
-  const loading = summaryQuery.isLoading || coursesQuery.isLoading;
+  // Only show the full-page skeleton on the very first load. Once data exists,
+  // refetches (new filters, invalidations) must not unmount the page and
+  // every dialog inside it.
+  const loading =
+    (summaryQuery.isLoading && !summaryQuery.data) ||
+    (coursesQuery.isLoading && !coursesQuery.data);
 
   if (loading) {
     return <LearningSkeleton />;
   }
+
+  const openCreateCourse = () => {
+    setEditingCourse(null);
+    setCourseDialogOpen(true);
+  };
 
   return (
     <main className="space-y-8 pb-16" aria-labelledby="learning-management-title">
@@ -218,7 +273,7 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
             </Button>
           )}
           {canManageCourses && (
-            <Button onClick={() => setCourseDialogOpen(true)} className="min-h-11">
+            <Button onClick={openCreateCourse} className="min-h-11">
               <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
               {lms("admin.create_course", "Create course")}
             </Button>
@@ -249,10 +304,7 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
             onSearchChange={setCourseSearch}
             onStatusChange={setCourseStatus}
             onLevelChange={setCourseLevel}
-            onCreateCourse={() => {
-              setEditingCourse(null);
-              setCourseDialogOpen(true);
-            }}
+            onCreateCourse={openCreateCourse}
             onEditCourse={(course) => {
               setEditingCourse(course);
               setCourseDialogOpen(true);
@@ -786,6 +838,12 @@ const BLANK_COURSE_FORM = {
   summary: "",
   description: "",
   passing_score: 70,
+  visibility: "internal" as "internal" | "assigned" | "public",
+  capacity: "" as string,
+  starts_at: "" as string,
+  ends_at: "" as string,
+  certificate_enabled: true,
+  sequential_lessons: false,
   lesson_title: "",
   lesson_duration: 15,
 };
@@ -827,6 +885,12 @@ function CourseDialog({
             summary: course.summary ?? "",
             description: course.description ?? "",
             passing_score: course.passing_score ?? 70,
+            visibility: course.visibility ?? "internal",
+            capacity: course.capacity ? String(course.capacity) : "",
+            starts_at: course.starts_at ? course.starts_at.slice(0, 10) : "",
+            ends_at: course.ends_at ? course.ends_at.slice(0, 10) : "",
+            certificate_enabled: course.certificate_enabled ?? true,
+            sequential_lessons: course.sequential_lessons ?? false,
           }
         : BLANK_COURSE_FORM,
     );
@@ -840,7 +904,13 @@ function CourseDialog({
         category: form.category || undefined,
         level: form.level,
         status: form.status,
-        visibility: "internal" as const,
+        // Only "public" courses appear in the public catalogue and on the landing page.
+        visibility: form.visibility,
+        capacity: form.capacity ? Number(form.capacity) : null,
+        starts_at: form.starts_at || null,
+        ends_at: form.ends_at || null,
+        certificate_enabled: form.certificate_enabled,
+        sequential_lessons: form.sequential_lessons,
         summary: form.summary || undefined,
         description: form.description || undefined,
         passing_score: form.passing_score,
@@ -886,7 +956,7 @@ function CourseDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" {...dialogSelectGuard}>
         <DialogHeader>
           <DialogTitle>
             {editing
@@ -929,6 +999,27 @@ function CourseDialog({
                 onChange={(event) => setForm({ ...form, passing_score: Number(event.target.value) })}
               />
             </Field>
+            <Field label={lms("admin.course_dialog.visibility", "Who can see it")} htmlFor="lms-course-dialog-visibility">
+              <Select value={form.visibility} onValueChange={(value) => setForm({ ...form, visibility: value as "internal" | "assigned" | "public" })}>
+                <SelectTrigger id="lms-course-dialog-visibility" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="internal">{lms("admin.course_dialog.visibility_internal", "Internal (staff and assigned learners)")}</SelectItem>
+                  <SelectItem value="assigned">{lms("admin.course_dialog.visibility_assigned", "Assigned learners only")}</SelectItem>
+                  <SelectItem value="public">{lms("admin.course_dialog.visibility_public", "Public catalogue (anyone can sign up)")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label={lms("admin.course_dialog.capacity", "Seats (leave empty for unlimited)")} htmlFor="lms-course-capacity">
+              <Input id="lms-course-capacity" type="number" min={1} value={form.capacity} onChange={(event) => setForm({ ...form, capacity: event.target.value })} />
+            </Field>
+            <Field label={lms("admin.course_dialog.starts_at", "Opens on")} htmlFor="lms-course-starts">
+              <Input id="lms-course-starts" type="date" value={form.starts_at} onChange={(event) => setForm({ ...form, starts_at: event.target.value })} />
+            </Field>
+            <Field label={lms("admin.course_dialog.ends_at", "Closes for new learners on")} htmlFor="lms-course-ends">
+              <Input id="lms-course-ends" type="date" min={form.starts_at || undefined} value={form.ends_at} onChange={(event) => setForm({ ...form, ends_at: event.target.value })} />
+            </Field>
             <Field label={lms("admin.course_dialog.level", "Level")} htmlFor="lms-course-dialog-level">
               <Select value={form.level} onValueChange={(value) => setForm({ ...form, level: value as LmsCourseLevel })}>
                 <SelectTrigger id="lms-course-dialog-level" className="w-full">
@@ -950,6 +1041,22 @@ function CourseDialog({
                 </SelectContent>
               </Select>
             </Field>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox checked={form.certificate_enabled} onCheckedChange={(checked) => setForm({ ...form, certificate_enabled: checked === true })} />
+              <span>
+                <strong>{lms("admin.course_dialog.certificate", "Award a certificate")}</strong>
+                <span className="block text-muted-foreground">{lms("admin.course_dialog.certificate_hint", "Learners get a verifiable certificate when they finish.")}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox checked={form.sequential_lessons} onCheckedChange={(checked) => setForm({ ...form, sequential_lessons: checked === true })} />
+              <span>
+                <strong>{lms("admin.course_dialog.sequential", "Take lessons in order")}</strong>
+                <span className="block text-muted-foreground">{lms("admin.course_dialog.sequential_hint", "A lesson opens once the one before it is finished.")}</span>
+              </span>
+            </label>
           </div>
           <Field label={lms("admin.course_dialog.summary", "Summary")} htmlFor="lms-course-summary">
             <Textarea id="lms-course-summary" value={form.summary} onChange={(event) => setForm({ ...form, summary: event.target.value })} />
@@ -1049,7 +1156,7 @@ function LessonDialog({ course, onOpenChange }: { course: LmsCourse | null; onOp
 
   return (
     <Dialog open={Boolean(course)} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-xl" {...dialogSelectGuard}>
         <DialogHeader>
           <DialogTitle>Add lesson</DialogTitle>
           <DialogDescription>{course ? `Extend ${course.title}.` : "Add a lesson to a course."}</DialogDescription>
@@ -1135,6 +1242,7 @@ function EnrollmentDialog({ open, onOpenChange, courses }: { open: boolean; onOp
     queryKey: ["lms-user-search", search],
     queryFn: () => learningApi.searchUsers(search),
     enabled: open,
+    placeholderData: keepPreviousData,
   });
 
   const mutation = useMutation({
@@ -1159,7 +1267,7 @@ function EnrollmentDialog({ open, onOpenChange, courses }: { open: boolean; onOp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" {...dialogSelectGuard}>
         <DialogHeader>
           <DialogTitle>Assign learners</DialogTitle>
           <DialogDescription>Select a course, search active users, and assign training with an optional due date.</DialogDescription>

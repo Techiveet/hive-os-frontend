@@ -37,7 +37,14 @@ import { formatEtb, TemplatePurchaseDialog } from "@/modules/landing-templates/c
 
 type MarketplaceCard = TenantTemplateCard;
 
-export function TenantTemplateMarketplace({ onSelected }: { onSelected?: () => void }) {
+export function TenantTemplateMarketplace({
+  onSelected,
+  refreshToken = 0,
+}: {
+  onSelected?: () => void;
+  /** Bump after the tenant business type is saved so this list is not stuck on the previous category. */
+  refreshToken?: number;
+}) {
   const [templates, setTemplates] = React.useState<MarketplaceCard[]>([]);
   const [current, setCurrent] = React.useState<{ template_id: number | null; status: string } | null>(null);
   const [recommendedId, setRecommendedId] = React.useState<number | null>(null);
@@ -69,7 +76,7 @@ export function TenantTemplateMarketplace({ onSelected }: { onSelected?: () => v
 
   React.useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshToken]);
 
   // Back from the payment gateway: ?template_checkout=<token>[&cancelled=1].
   const checkoutToken = searchParams.get("template_checkout");

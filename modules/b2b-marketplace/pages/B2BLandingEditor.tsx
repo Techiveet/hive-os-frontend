@@ -35,6 +35,16 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { SecureAssetImage } from "@/components/ui/secure-asset-image";
 import { FileManagerClient } from "@/components/dashboard/file-manager-client";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -143,6 +153,7 @@ export default function B2BLandingEditor() {
 
   // media picker — targets: "category_<i>", "product_<i>"
   const [mediaTarget, setMediaTarget] = useState<string | null>(null);
+  const [showLoadPresetsDialog, setShowLoadPresetsDialog] = useState(false);
 
   // tab persistence
   useEffect(() => {
@@ -225,11 +236,10 @@ export default function B2BLandingEditor() {
   });
 
   const loadPresets = () => {
-    if (confirm("Load the premium marketplace presets? This replaces the current content in every tab.")) {
-      applyB2b(undefined);
-      setIsDirty(true);
-      toast.success("Presets loaded — tweak and Save Changes to publish.");
-    }
+    applyB2b(undefined);
+    setIsDirty(true);
+    setShowLoadPresetsDialog(false);
+    toast.success("Presets loaded — tweak and Save Changes to publish.");
   };
 
   const handleFileSelect = (file: { media_details?: { public_url?: string; url?: string }; url?: string; path?: string }) => {
@@ -277,7 +287,7 @@ export default function B2BLandingEditor() {
               <RefreshCcw className="h-3.5 w-3.5" /> Retry
             </Button>
           )}
-          <Button onClick={loadPresets} variant="outline" size="sm" className="rounded-full gap-1.5">
+          <Button onClick={() => setShowLoadPresetsDialog(true)} variant="outline" size="sm" className="rounded-full gap-1.5">
             <Sparkles className="h-3.5 w-3.5" /> Load Presets
           </Button>
           <a href="/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground border rounded-full px-3 py-1.5 transition-colors">
@@ -564,6 +574,24 @@ export default function B2BLandingEditor() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Load Presets confirmation dialog */}
+      <AlertDialog open={showLoadPresetsDialog} onOpenChange={setShowLoadPresetsDialog}>
+        <AlertDialogContent className="rounded-[2rem] border-border/60 bg-background/95 backdrop-blur-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Load Presets</AlertDialogTitle>
+            <AlertDialogDescription>
+              Load the premium marketplace presets? This replaces the current content in every tab.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={loadPresets} className="rounded-full">
+              Load Presets
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

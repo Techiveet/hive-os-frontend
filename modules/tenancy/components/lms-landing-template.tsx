@@ -156,7 +156,7 @@ const DEFAULT_COURSES: LmsCourseCard[] = [
     duration: "4 weeks",
     lessons: "12 lessons",
     level: "Beginner",
-    rating: "4.9",
+    rating: null,
   },
   {
     title: "Compliance training operations",
@@ -166,7 +166,7 @@ const DEFAULT_COURSES: LmsCourseCard[] = [
     duration: "3 weeks",
     lessons: "9 lessons",
     level: "Intermediate",
-    rating: "4.8",
+    rating: null,
   },
   {
     title: "Manager coaching pathway",
@@ -176,7 +176,7 @@ const DEFAULT_COURSES: LmsCourseCard[] = [
     duration: "6 weeks",
     lessons: "18 lessons",
     level: "Advanced",
-    rating: "4.9",
+    rating: null,
   },
 ];
 
@@ -274,7 +274,7 @@ const buildCourses = (template: TenantLandingTemplate): LmsCourseCard[] => {
       duration: index % 2 === 0 ? "4 weeks" : "6 weeks",
       lessons: `${(index + 3) * 3} lessons`,
       level: index % 3 === 0 ? "Beginner" : index % 3 === 1 ? "Intermediate" : "Advanced",
-      rating: index % 2 === 0 ? "4.9" : "4.8",
+      rating: null,
     }));
   }
 
@@ -295,7 +295,7 @@ const buildCourses = (template: TenantLandingTemplate): LmsCourseCard[] => {
     duration: index % 2 === 0 ? "4 weeks" : "6 weeks",
     lessons: `${(index + 3) * 3} lessons`,
     level: index % 3 === 0 ? "Beginner" : index % 3 === 1 ? "Intermediate" : "Advanced",
-    rating: index % 2 === 0 ? "4.9" : "4.8",
+    rating: null,
   }));
 
   return built.length > 0 ? built : DEFAULT_COURSES;
@@ -328,7 +328,8 @@ const buildPublicCourses = (landing: LmsPublicLanding | null): LmsCourseCard[] =
     duration: formatCourseDuration(course.duration_minutes),
     lessons: `${course.lessons_count} ${course.lessons_count === 1 ? "lesson" : "lessons"}`,
     level: course.level ? course.level.charAt(0).toUpperCase() + course.level.slice(1) : "Beginner",
-    rating: course.rating || "4.9",
+    // A rating shown here has to come from real reviews; "no reviews yet" stays empty.
+    rating: course.rating !== null && course.rating !== undefined && course.rating !== "" ? course.rating : null,
     enrollHref: `${REGISTER_HREF}?course_id=${encodeURIComponent(course.id)}`,
     detailHref: `/courses/${encodeURIComponent(course.id)}`,
     instructor: course.instructor_name,
@@ -749,12 +750,21 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
               </div>
             </div>
 
-            <div className="absolute -right-2 top-1/3 hidden animate-[lms-float_7s_ease-in-out_infinite_0.8s] rounded-2xl bg-white p-4 shadow-2xl md:block lg:-right-8">
-              <p className="text-sm font-bold" style={{ color: TEXT_NAVY }}>Learner rating</p>
-              <div className="mt-2 flex items-center gap-2">
-                <Stars rating="4.9" />
-              </div>
-            </div>
+            {(() => {
+              // The average of the ratings real learners gave; nothing at all until there are some.
+              const rated = courses.map((c) => Number(c.rating)).filter((n) => Number.isFinite(n) && n > 0);
+              if (rated.length === 0) return null;
+              const average = (rated.reduce((sum, n) => sum + n, 0) / rated.length).toFixed(1);
+
+              return (
+                <div className="absolute -right-2 top-1/3 hidden animate-[lms-float_7s_ease-in-out_infinite_0.8s] rounded-2xl bg-white p-4 shadow-2xl md:block lg:-right-8">
+                  <p className="text-sm font-bold" style={{ color: TEXT_NAVY }}>Learner rating</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Stars rating={average} />
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="absolute -bottom-6 left-6 right-6 hidden rounded-2xl bg-white p-5 shadow-2xl md:block">
               <div className="flex items-start gap-4">
@@ -881,10 +891,14 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
                     ) : null}
                   </div>
                   <div className="px-5 pb-5 pt-3">
-                    <div className="flex items-center gap-2">
-                      <Stars rating={course.rating} />
-                      <span className="text-xs" style={{ color: MUTED }}>rating</span>
-                    </div>
+                    {course.rating !== null && course.rating !== undefined ? (
+                      <div className="flex items-center gap-2">
+                        <Stars rating={course.rating} />
+                        <span className="text-xs" style={{ color: MUTED }}>rating</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-medium" style={{ color: MUTED }}>New course</span>
+                    )}
                     <h3 className="mt-3 line-clamp-2 text-lg font-bold leading-snug" style={{ color: TEXT_NAVY }}>
                       {course.title}
                     </h3>
@@ -1007,9 +1021,6 @@ export function LmsLandingTemplate({ brandSettings, template, tenantName }: LmsL
                   <h3 className="mt-5 text-lg font-bold" style={{ color: TEXT_NAVY }}>{instructor.name}</h3>
                   <p className="mt-1 text-sm font-medium" style={{ color: TEXT_PURPLE }}>{instructor.role}</p>
                   <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>{instructor.description}</p>
-                  <div className="mt-3 flex justify-center">
-                    <Stars />
-                  </div>
                 </article>
               </li>
             ))}

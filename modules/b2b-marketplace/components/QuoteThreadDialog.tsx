@@ -14,8 +14,9 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { B2BDash, type B2BQuote } from "@/modules/b2b-marketplace/api";
+import { QuoteAttachments } from "@/modules/b2b-marketplace/components/QuoteAttachments";
 
-export function QuoteThreadDialog({ quote, onClose }: { quote: B2BQuote | null; onClose: () => void }) {
+export function QuoteThreadDialog({ quote, onClose, canAttach = false }: { quote: B2BQuote | null; onClose: () => void; canAttach?: boolean }) {
   const qc = useQueryClient();
   const [text, setText] = useState("");
 
@@ -23,6 +24,10 @@ export function QuoteThreadDialog({ quote, onClose }: { quote: B2BQuote | null; 
     queryKey: ["b2b", "quoteMessages", quote?.id],
     queryFn: () => B2BDash.messages(quote!.id),
     enabled: !!quote,
+    // New messages show up without reopening the thread (near-real-time; the other
+    // party is also notified by email / in-app notification).
+    refetchInterval: quote ? 6000 : false,
+    refetchIntervalInBackground: false,
   });
 
   const send = useMutation({
@@ -42,6 +47,8 @@ export function QuoteThreadDialog({ quote, onClose }: { quote: B2BQuote | null; 
           <DialogTitle>Negotiation · {quote?.seller}</DialogTitle>
           <DialogDescription className="truncate">{quote?.inquiry_title}</DialogDescription>
         </DialogHeader>
+
+        {quote && <QuoteAttachments quoteId={quote.id} canUpload={canAttach} />}
 
         <div className="max-h-72 space-y-2 overflow-y-auto py-2">
           {messagesQ.isLoading ? (

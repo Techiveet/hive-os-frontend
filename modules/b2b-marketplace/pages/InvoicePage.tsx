@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { B2BDash } from "@/modules/b2b-marketplace/api";
+import { B2BDash, formatMoney } from "@/modules/b2b-marketplace/api";
 
-const money = (n: number) => `$${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (n: number, currency?: string | null) => formatMoney(n, currency);
 
 export default function InvoicePage({ id }: { id?: string }) {
   const { data: inv, isLoading, isError } = useQuery({
@@ -89,22 +89,22 @@ export default function InvoicePage({ id }: { id?: string }) {
               <tr key={i} className="border-b">
                 <td className="py-2 pl-2">{it.name}</td>
                 <td className="py-2 text-right">{it.quantity}</td>
-                <td className="py-2 text-right">{money(it.unit_price)}</td>
-                <td className="py-2 pr-2 text-right">{money(it.line_total)}</td>
+                <td className="py-2 text-right">{money(it.unit_price, inv.currency)}</td>
+                <td className="py-2 pr-2 text-right">{money(it.line_total, inv.currency)}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
         <div className="ml-auto mt-4 w-64 text-sm">
-          <div className="flex justify-between py-1"><span className="text-gray-500">Subtotal</span><span className="font-semibold">{money(inv.subtotal)}</span></div>
+          <div className="flex justify-between py-1"><span className="text-gray-500">Subtotal</span><span className="font-semibold">{money(inv.subtotal, inv.currency)}</span></div>
           {inv.is_admin_view && (
             <>
-              <div className="flex justify-between py-1 text-gray-500"><span>Platform fee ({inv.platform_fee_percent}%)</span><span>{money(inv.platform_fee_amount)}</span></div>
-              <div className="flex justify-between py-1 text-gray-500"><span>Supplier payout</span><span>{money(inv.seller_payout_amount)}</span></div>
+              <div className="flex justify-between py-1 text-gray-500"><span>Platform fee ({inv.platform_fee_percent}%)</span><span>{money(inv.platform_fee_amount, inv.currency)}</span></div>
+              <div className="flex justify-between py-1 text-gray-500"><span>Supplier payout</span><span>{money(inv.seller_payout_amount, inv.currency)}</span></div>
             </>
           )}
-          <div className="mt-1 flex justify-between border-t py-2 text-base font-black"><span>Total</span><span>{money(inv.subtotal)}</span></div>
+          <div className="mt-1 flex justify-between border-t py-2 text-base font-black"><span>Total</span><span>{money(inv.subtotal, inv.currency)}</span></div>
         </div>
 
         {inv.notes && <p className="mt-6 border-t pt-4 text-xs text-gray-500"><b>Notes:</b> {inv.notes}</p>}

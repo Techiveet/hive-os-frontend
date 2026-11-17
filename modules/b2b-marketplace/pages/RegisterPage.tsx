@@ -16,7 +16,7 @@ export default function RegisterPage() {
   const params = useSearchParams();
   const initialRole = params.get("role") === "seller" ? "seller" : "buyer";
   const [role, setRole] = useState<"buyer" | "seller">(initialRole);
-  const [form, setForm] = useState({ name: "", email: "", password: "", company: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", company: "", tax_id: "", phone: "", country: "" });
   const [done, setDone] = useState(false);
 
   const submit = useMutation({
@@ -26,6 +26,9 @@ export default function RegisterPage() {
         email: form.email,
         password: form.password,
         company: form.company || undefined,
+        tax_id: form.tax_id || undefined,
+        phone: form.phone || undefined,
+        country: form.country || undefined,
         requested_role: role,
       }),
     onSuccess: () => setDone(true),
@@ -48,8 +51,10 @@ export default function RegisterPage() {
             </div>
             <h1 className="text-2xl font-black">Registration received</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Your <b>{role}</b> account has been created and is <b>pending approval</b>. An administrator
-              will verify and activate it — you'll be able to sign in and access the {role} tools once approved.
+              Please <b>confirm your email address</b> using the link we just sent to <b>{form.email}</b>.{" "}
+              {role === "buyer"
+                ? "As soon as it is confirmed your buyer account is active and you can sign in."
+                : "Once it is confirmed, an administrator will review and activate your supplier account — you'll be able to sign in once approved."}
             </p>
             <div className="mt-6 flex justify-center gap-3">
               <Button asChild variant="outline" className="rounded-xl"><Link href="/">Browse marketplace</Link></Button>
@@ -59,7 +64,7 @@ export default function RegisterPage() {
         ) : (
           <>
             <h1 className="text-3xl font-black tracking-tight">Create your account</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Join the marketplace as a buyer or a supplier. An admin approves new accounts.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Join the marketplace as a buyer or a supplier. Buyers are active once their email is confirmed; suppliers are approved by an admin.</p>
 
             {/* Role toggle */}
             <div className="mt-6 grid grid-cols-2 gap-3">
@@ -85,9 +90,14 @@ export default function RegisterPage() {
 
             <form onSubmit={(e) => { e.preventDefault(); submit.mutate(); }} className="mt-5 space-y-3">
               <Input required placeholder="Full name *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <Input placeholder={role === "seller" ? "Company name" : "Company (optional)"} value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+              <Input required placeholder="Company name *" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+              <Input placeholder="Tax / VAT / business registration ID (optional)" value={form.tax_id} maxLength={64} onChange={(e) => setForm({ ...form, tax_id: e.target.value })} />
+              <div className="grid grid-cols-2 gap-3">
+                <Input placeholder="Phone (optional)" value={form.phone} maxLength={64} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <Input placeholder="Country (optional)" value={form.country} maxLength={128} onChange={(e) => setForm({ ...form, country: e.target.value })} />
+              </div>
               <Input required type="email" placeholder="Work email *" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              <Input required type="password" minLength={8} placeholder="Password (min 8 characters) *" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <Input required type="password" minLength={8} placeholder="Password (min 8, letters and numbers) *" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
 
               {submit.isError && (
                 <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

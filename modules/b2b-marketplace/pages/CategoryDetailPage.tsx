@@ -19,32 +19,33 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { B2BApi, type B2BProduct, type B2BSupplier } from "@/modules/b2b-marketplace/api";
+import { ProductPhoto } from "@/modules/b2b-marketplace/components/product-photo";
 
 function ProductTile({ product }: { product: B2BProduct }) {
   return (
     <Link
       href={`/marketplace/product/${product.id}`}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card/70 backdrop-blur-xl hover:border-primary/40 hover:shadow-xl transition-all"
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card/70 backdrop-blur-xl hover:border-primary/40 hover:shadow-xl transition-all"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-muted/20">
-        {product.image && (
-          <img
-            src={product.image}
-            alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-            onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
-          />
-        )}
-        <div className="absolute top-2 left-2 flex flex-wrap gap-1">
-          {product.badges.slice(0, 2).map((b) => (
-            <Badge key={b} className="bg-background/90 text-foreground border border-border/60 text-[11px]">{b}</Badge>
-          ))}
-        </div>
+      <ProductPhoto
+        src={product.image}
+        alt={product.name}
+        className="aspect-[4/3]"
+        imgClassName="transition-transform duration-500 group-hover:scale-110"
+      />
+      <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+        {product.badges.slice(0, 2).map((b) => (
+          <Badge key={b} className="bg-background/90 text-foreground border border-border/60 text-[11px]">{b}</Badge>
+        ))}
       </div>
       <div className="p-4">
         <p className="line-clamp-2 text-sm font-bold leading-snug min-h-[2.5rem]">{product.name}</p>
         <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Star className="h-3 w-3 text-amber-500 fill-current" /> {product.rating} · {product.reviews.toLocaleString()}
+          {product.rating != null && product.reviews > 0 ? (
+            <><Star className="h-3 w-3 text-amber-500 fill-current" /> {product.rating} · {product.reviews.toLocaleString()}</>
+          ) : (
+            <span>No reviews yet</span>
+          )}
         </div>
         <p className="mt-2 text-lg font-black text-primary">{product.price}</p>
         <p className="text-[11px] text-muted-foreground">MOQ: {product.moq}</p>
@@ -70,7 +71,7 @@ function SupplierTile({ supplier }: { supplier: B2BSupplier }) {
         <p className="truncate text-sm font-bold inline-flex items-center gap-1">
           {supplier.name}{supplier.verified && <BadgeCheck className="h-3.5 w-3.5 text-blue-500" />}
         </p>
-        <p className="text-xs text-muted-foreground">{supplier.flag} {supplier.country} · {supplier.rating}★</p>
+        <p className="text-xs text-muted-foreground">{supplier.flag} {supplier.country}{supplier.rating != null ? ` · ${supplier.rating}★` : ""}</p>
       </div>
     </Link>
   );

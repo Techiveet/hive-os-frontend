@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { B2BApi, type B2BProduct } from "@/modules/b2b-marketplace/api";
+import { ProductPhoto } from "@/modules/b2b-marketplace/components/product-photo";
 
 function ProductTile({ product }: { product: B2BProduct }) {
   return (
@@ -26,16 +27,12 @@ function ProductTile({ product }: { product: B2BProduct }) {
       href={`/marketplace/product/${product.id}`}
       className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card/70 backdrop-blur-xl hover:border-primary/40 hover:shadow-xl transition-all"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-muted/20">
-        {product.image && (
-          <img
-            src={product.image}
-            alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-            onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
-          />
-        )}
-      </div>
+      <ProductPhoto
+        src={product.image}
+        alt={product.name}
+        className="aspect-[4/3]"
+        imgClassName="transition-transform duration-500 group-hover:scale-110"
+      />
       <div className="p-4">
         <p className="line-clamp-2 text-sm font-bold leading-snug min-h-[2.5rem]">{product.name}</p>
         <p className="mt-2 text-lg font-black text-primary">{product.price}</p>
@@ -121,9 +118,15 @@ export default function SupplierDetailPage({ id }: { id?: string }) {
                   {supplier.industry && <span>· {supplier.industry}</span>}
                 </p>
                 <div className="mt-2 inline-flex items-center gap-1.5 text-sm">
-                  <Star className="h-4 w-4 text-amber-500 fill-current" />
-                  <span className="font-bold">{supplier.rating}</span>
-                  <span className="text-muted-foreground">rating</span>
+                  {supplier.rating != null ? (
+                    <>
+                      <Star className="h-4 w-4 text-amber-500 fill-current" />
+                      <span className="font-bold">{supplier.rating}</span>
+                      <span className="text-muted-foreground">rating</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">New supplier · no reviews yet</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -138,7 +141,7 @@ export default function SupplierDetailPage({ id }: { id?: string }) {
               label="On-time delivery"
               value={supplier.on_time_rate != null ? `${supplier.on_time_rate}%` : "—"}
             />
-            <Stat icon={Star} label="Buyer rating" value={`${supplier.rating}★`} />
+            <Stat icon={Star} label="Buyer rating" value={supplier.rating != null ? `${supplier.rating}★` : "—"} />
           </div>
 
           {/* Products */}

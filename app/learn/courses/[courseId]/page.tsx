@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Award,
   Bookmark as BookmarkIcon,
   Check,
   ChevronLeft,
@@ -440,6 +441,45 @@ function CoursePlayerContent() {
               </ul>
             </LmsPanel>
 
+            {/* What is still needed: a course is finished by the lessons AND its required quizzes/assignments. */}
+            {enrolment?.requirements ? (
+              <LmsPanel title="To finish this course">
+                <ul className="space-y-3">
+                  <RequirementRow
+                    done={enrolment.requirements.lessons_done >= enrolment.requirements.lessons_total}
+                    label={`Finish the required lessons (${enrolment.requirements.lessons_done}/${enrolment.requirements.lessons_total})`}
+                  />
+                  {enrolment.requirements.quizzes.map((quiz) => (
+                    <RequirementRow
+                      key={quiz.id}
+                      done={quiz.passed}
+                      label={`Pass the quiz: ${quiz.title}`}
+                      detail={quiz.attempted ? (quiz.percent !== null ? `best result ${quiz.percent}%` : "awaiting marking") : "not attempted yet"}
+                      href="/learn/quizzes"
+                    />
+                  ))}
+                  {enrolment.requirements.assignments.map((assignment) => (
+                    <RequirementRow
+                      key={assignment.id}
+                      done={assignment.met}
+                      label={`Complete the assignment: ${assignment.title}`}
+                      detail={assignment.submitted ? (assignment.percent !== null ? `scored ${assignment.percent}%` : "awaiting marking") : "not submitted yet"}
+                      href="/learn/assignments"
+                    />
+                  ))}
+                </ul>
+                {enrolment.certificate ? (
+                  <Link
+                    href={`/learn/certificates/${enrolment.certificate.id}`}
+                    className="mt-5 inline-flex items-center gap-2 text-[15px] font-semibold hover:underline"
+                    style={{ color: LMS_TOKENS.navy }}
+                  >
+                    <Award className="size-4" aria-hidden="true" /> View your certificate
+                  </Link>
+                ) : null}
+              </LmsPanel>
+            ) : null}
+
             {!enrolment ? (
               <LmsPanel>
                 <p className="text-[15px]" style={{ color: LMS_TOKENS.muted }}>
@@ -451,6 +491,30 @@ function CoursePlayerContent() {
         </div>
       )}
     </LmsDashboardShell>
+  );
+}
+
+function RequirementRow({ done, label, detail, href }: { done: boolean; label: string; detail?: string; href?: string }) {
+  const text = (
+    <>
+      <span className="block text-[15px]" style={{ color: LMS_TOKENS.navy }}>{label}</span>
+      {detail ? <span className="block text-[13px]" style={{ color: LMS_TOKENS.muted }}>{detail}</span> : null}
+    </>
+  );
+
+  return (
+    <li className="flex items-start gap-3">
+      <span
+        className={cn("mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border-2")}
+        style={done ? { backgroundColor: LMS_TOKENS.green, borderColor: LMS_TOKENS.green } : { borderColor: "#CBD5E1" }}
+        aria-label={done ? "Done" : "Not done yet"}
+      >
+        {done ? <Check className="size-3" aria-hidden="true" style={{ color: LMS_TOKENS.navy }} /> : null}
+      </span>
+      <span className="min-w-0">
+        {href && !done ? <Link href={href} className="hover:underline">{text}</Link> : text}
+      </span>
+    </li>
   );
 }
 

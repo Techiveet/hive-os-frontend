@@ -126,6 +126,78 @@ function SafeLogo({
 
 type FooterLink = { label: string; href?: string; section?: string };
 
+type TenantLandingFamily = "b2b" | "lms" | "hospitality" | "generic";
+
+const HOSPITALITY_TEMPLATE_KEYS = new Set([
+  "savory-lounge-nightclub",
+  "savory-lounge",
+  "restaurant-modern",
+  "hotel-hospitality",
+  "restaurant",
+]);
+const B2B_TEMPLATE_KEYS = new Set(["b2b-marketplace", "b2b"]);
+const LMS_TEMPLATE_KEYS = new Set(["lms-academy", "lms"]);
+const HOSPITALITY_BUSINESS_TYPES = new Set([
+  "restaurant",
+  "hotel",
+  "nightclub",
+  "lounge",
+  "hospitality",
+  "bistro",
+]);
+const B2B_BUSINESS_TYPES = new Set(["b2b", "wholesale", "trade"]);
+const LMS_BUSINESS_TYPES = new Set(["lms", "education"]);
+
+function familyFromTemplateKey(key: string): TenantLandingFamily | null {
+  if (B2B_TEMPLATE_KEYS.has(key)) return "b2b";
+  if (LMS_TEMPLATE_KEYS.has(key)) return "lms";
+  if (HOSPITALITY_TEMPLATE_KEYS.has(key)) return "hospitality";
+  return null;
+}
+
+function familyFromBusinessType(type: string | null | undefined): TenantLandingFamily | null {
+  const value = String(type ?? "");
+  if (!value || value === "general" || value === "signature") return null;
+  if (B2B_BUSINESS_TYPES.has(value)) return "b2b";
+  if (LMS_BUSINESS_TYPES.has(value)) return "lms";
+  if (HOSPITALITY_BUSINESS_TYPES.has(value)) return "hospitality";
+  return null;
+}
+
+/** Slug is only a default for tenants that have not committed a template yet. */
+function familyFromSlug(slug: string | null | undefined): TenantLandingFamily | null {
+  if (!slug) return null;
+  if (slug === "global-b2b") return "b2b";
+  if (slug === "lms-demo" || slug.includes("lms")) return "lms";
+  if (slug === "savory-lounge" || slug === "lanouveil") return "hospitality";
+  return null;
+}
+
+function resolveTenantLandingFamily(input: {
+  templateKey?: string | null;
+  templateBusinessType?: string | null;
+  businessType?: string | null;
+  slug?: string | null;
+}): TenantLandingFamily {
+  const templateKey = input.templateKey ?? "";
+  const fromKey = familyFromTemplateKey(templateKey);
+  if (fromKey) return fromKey;
+
+  // A committed preset we do not have a dedicated React page for (water,
+  // technology, a custom HTML package) must win over the host slug.
+  // lanouveil would otherwise keep rendering the restaurant page.
+  if (templateKey) {
+    return familyFromBusinessType(input.templateBusinessType) ?? "generic";
+  }
+
+  return (
+    familyFromBusinessType(input.templateBusinessType) ??
+    familyFromBusinessType(input.businessType) ??
+    familyFromSlug(input.slug) ??
+    "generic"
+  );
+}
+
 /** Footer link list. Renders a real anchor or a scroll button — never dead text. */
 function FooterColumn({
   title,
@@ -709,32 +781,29 @@ function LandingUI({
   ];
 
   if (isTenantExperience) {
-    if (isLoadingTenantLanding) {
-      /*
-       * What identifies a tenant as an LMS is business_type on the landing
-       * payload — which is precisely what has not arrived yet at this point.
-       * So the same two signals the nightclub branch below uses: the slug, and
-       * a payload React Query still holds from an earlier visit.
-       *
-       * Without this the LMS fell through to MarketplacePreloader and a student
-       * opening their course site was greeted by a dark grid of shopping carts
-       * reading "Loading marketplace".
-       */
-      const looksLikeLms =
-        tenantLandingPayload?.business_type === "lms" ||
-        detectedTenantSlug === "lms-demo" ||
-        (detectedTenantSlug?.includes("lms") ?? false);
+    const businessType = tenantLandingPayload?.business_type;
+    const resolvedTemplate = resolveLandingTemplate(tenantLandingPayload?.landing_page_template);
+    const selectedTemplateKey = resolvedTemplate.meta?.template_key ?? "";
+    const selectedTemplateBusinessType = resolvedTemplate.meta?.business_type ?? businessType;
+    // Committed template key, then business type, then the historical slug
+    // default. lanouveil used to force the restaurant page even after a tenant
+    // committed another preset (for example Global B2B Marketplace).
+    const landingFamily = resolveTenantLandingFamily({
+      templateKey: tenantLandingPayload ? selectedTemplateKey : "",
+      templateBusinessType: tenantLandingPayload ? selectedTemplateBusinessType : null,
+      businessType,
+      slug: detectedTenantSlug,
+    });
+    const isHospitalityTemplate = landingFamily === "hospitality";
+    const isLmsTemplate = landingFamily === "lms";
+    const isB2BTemplate = landingFamily === "b2b";
 
-      if (looksLikeLms) {
+    if (isLoadingTenantLanding) {
+      if (isLmsTemplate) {
         return <LmsPreloader brandName={brandSettings?.app_title || detectedTenantSlug} />;
       }
 
-      if (
-        detectedTenantSlug === "savory-lounge" ||
-        detectedTenantSlug === "lanouveil" ||
-        tenantLandingPayload?.business_type === "restaurant" ||
-        tenantLandingPayload?.business_type === "hotel"
-      ) {
+      if (isHospitalityTemplate) {
         return (
           <div className="flex h-screen w-screen items-center justify-center bg-[#080510]">
             <div className="flex flex-col items-center gap-4">
@@ -749,28 +818,7 @@ function LandingUI({
       return <MarketplacePreloader brandName={brandSettings?.app_title || detectedTenantSlug} />;
     }
 
-    const businessType = tenantLandingPayload?.business_type;
-    const resolvedTemplate = resolveLandingTemplate(tenantLandingPayload?.landing_page_template);
-    const selectedTemplateKey = resolvedTemplate.meta?.template_key ?? "";
-    const selectedTemplateBusinessType = resolvedTemplate.meta?.business_type ?? businessType;
     const hasCustomCode = (resolvedTemplate.rendering.mode === "custom_code" || resolvedTemplate.rendering.mode === "raw_package") && Boolean(resolvedTemplate.rendering.html?.trim());
-    const hospitalityBusinessTypes = ["restaurant", "hotel", "nightclub", "lounge", "hospitality", "bistro"];
-    const isHospitalityTemplate =
-      selectedTemplateKey === "savory-lounge-nightclub" ||
-      selectedTemplateKey === "savory-lounge" ||
-      selectedTemplateKey === "restaurant-modern" ||
-      selectedTemplateKey === "hotel-hospitality" ||
-      selectedTemplateKey === "restaurant" ||
-      detectedTenantSlug === "savory-lounge" ||
-      detectedTenantSlug === "lanouveil" ||
-      hospitalityBusinessTypes.includes(String(businessType ?? "")) ||
-      hospitalityBusinessTypes.includes(String(selectedTemplateBusinessType ?? ""));
-    const isLmsTemplate = selectedTemplateKey === "lms-academy" || selectedTemplateKey === "lms" || detectedTenantSlug === "lms-demo" || (
-      selectedTemplateBusinessType === "lms" && (!selectedTemplateKey || selectedTemplateKey === "signature")
-    );
-    const isB2BTemplate = selectedTemplateKey === "b2b-marketplace" || selectedTemplateKey === "b2b" || detectedTenantSlug === "global-b2b" || (
-      selectedTemplateBusinessType === "b2b" && (!selectedTemplateKey || selectedTemplateKey === "signature")
-    );
 
     const hasAssignedTemplate = Boolean(
       (tenantLandingPayload?.has_template && tenantLandingPayload?.landing_page_template) ||
@@ -802,16 +850,31 @@ function LandingUI({
     }
 
     /*
-     * LMS and hospitality React landings are checked before stored custom code.
-     *
-     * Every tenant can carry a custom_code/raw_package blob, so that branch
-     * otherwise always wins and an LMS/restaurant tenant renders as raw HTML
-     * inside a full-screen iframe — losing menus, reservations, feedback, and
-     * the shared site chrome those React templates provide.
+     * LMS, B2B, and hospitality React landings are checked before stored custom
+     * code. Every tenant can carry a custom_code/raw_package blob, so that
+     * branch otherwise always wins and those tenants render as raw HTML inside
+     * a full-screen iframe — losing the shared site chrome those React
+     * templates provide. Each of those components still honours custom code
+     * itself when the committed template actually owns HTML.
      */
     if (isLmsTemplate) {
       return (
         <LmsLandingTemplate
+          brandSettings={brandSettings}
+          template={resolvedTemplate}
+          tenantName={
+            tenantLandingPayload?.tenant?.name ||
+            brandSettings?.app_title ||
+            detectedTenantSlug ||
+            t('landing.common.tenant_workspace', "Tenant Workspace")
+          }
+        />
+      );
+    }
+
+    if (isB2BTemplate) {
+      return (
+        <B2BLandingTemplate
           brandSettings={brandSettings}
           template={resolvedTemplate}
           tenantName={

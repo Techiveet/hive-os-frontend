@@ -18,6 +18,8 @@ export type LmsAssignment = {
   available_from?: string | null;
   due_at?: string | null;
   allow_late: boolean;
+  /** Must be handed in and graded for the course to count as complete. */
+  is_required?: boolean;
   status: LmsAssignmentStatus;
   sort_order: number;
   course?: { id: string; title: string };
@@ -78,6 +80,7 @@ export type LmsAssignmentPayload = {
   available_from?: string | null;
   due_at?: string | null;
   allow_late?: boolean;
+  is_required?: boolean;
   status?: LmsAssignmentStatus;
 };
 

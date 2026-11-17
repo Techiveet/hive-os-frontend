@@ -40,6 +40,7 @@ export function AssignmentBuilder({ assignment }: { assignment?: LmsAssignment }
   const [availableFrom, setAvailableFrom] = React.useState(toLocalInput(assignment?.available_from));
   const [dueAt, setDueAt] = React.useState(toLocalInput(assignment?.due_at));
   const [allowLate, setAllowLate] = React.useState(assignment?.allow_late ?? true);
+  const [isRequired, setIsRequired] = React.useState(assignment?.is_required ?? true);
 
   const courses = useQuery({
     queryKey: ["lms", "courses", "for-assignment"],
@@ -66,6 +67,7 @@ export function AssignmentBuilder({ assignment }: { assignment?: LmsAssignment }
     available_from: availableFrom || null,
     due_at: dueAt || null,
     allow_late: allowLate,
+    is_required: isRequired,
   });
 
   const save = useMutation({
@@ -186,6 +188,16 @@ export function AssignmentBuilder({ assignment }: { assignment?: LmsAssignment }
                 onChange={(event) => setDueAt(event.target.value)}
               />
             </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="assignment-required" className="font-normal">
+                Required to complete the course
+              </Label>
+              <Switch id="assignment-required" checked={isRequired} onCheckedChange={setIsRequired} />
+            </div>
+            <p className="-mt-2 text-[13px]" style={{ color: LMS_TOKENS.muted }}>
+              When on, learners must hand this in and be graded at or above the course passing score before the course counts as finished.
+            </p>
 
             <div className="flex items-center justify-between gap-4">
               <Label htmlFor="assignment-late" className="font-normal">
