@@ -1001,7 +1001,7 @@ export function SupportWebchatWidget({
             : drag.position
               ? "fixed"
               : "fixed bottom-6 right-6"
-        } support-bot-accessible z-50 print:hidden ${drag.dragging ? "cursor-grabbing" : ""}`}
+        } support-bot-accessible z-40 print:hidden ${drag.dragging ? "cursor-grabbing" : ""}`}
         style={{ ...drag.style, touchAction: embedded ? undefined : "none" }}
       >
         <button

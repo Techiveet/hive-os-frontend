@@ -100,14 +100,19 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
     };
   }, []);
 
-  // A hidden drawer must not keep the desktop page inert after a resize.
+  // A hidden drawer must not keep the desktop page inert after a resize, and
+  // a desktop hover panel must not linger when the viewport drops below lg.
   React.useEffect(() => {
     const desktop = window.matchMedia("(min-width: 1024px)");
-    const closeOnDesktop = () => {
-      if (desktop.matches) setMobileOpen(false);
+    const syncViewportMenus = () => {
+      if (desktop.matches) {
+        setMobileOpen(false);
+      } else {
+        setOpenKey(null);
+      }
     };
-    desktop.addEventListener("change", closeOnDesktop);
-    return () => desktop.removeEventListener("change", closeOnDesktop);
+    desktop.addEventListener("change", syncViewportMenus);
+    return () => desktop.removeEventListener("change", syncViewportMenus);
   }, []);
 
   React.useEffect(
@@ -143,7 +148,13 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
   };
 
   return (
-    <DialogPrimitive.Root open={mobileOpen} onOpenChange={setMobileOpen}>
+    <DialogPrimitive.Root
+      open={mobileOpen}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) setOpenKey(null);
+        setMobileOpen(nextOpen);
+      }}
+    >
       <motion.header
         ref={navRef}
         initial={false}
@@ -286,6 +297,7 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
       </motion.header>
 
       <MobileNav
+        open={mobileOpen}
         items={items}
         isTenant={isTenant}
         onClose={() => setMobileOpen(false)}
@@ -360,7 +372,7 @@ function MegaMenu({
       // viewport, so a menu hanging off a right-hand trigger cannot overflow.
       style={{ width: `min(94vw, ${width})` }}
       className={cn(
-        "absolute left-1/2 top-[calc(100%+12px)] z-10 -translate-x-1/2 rounded-3xl border border-border/60",
+        "hidden lg:block absolute left-1/2 top-[calc(100%+12px)] z-10 -translate-x-1/2 rounded-3xl border border-border/60",
         // Invisible bridge across the gap between bar and panel, so travelling
         // from the trigger to a link never leaves the hover subtree.
         "before:absolute before:inset-x-0 before:-top-3 before:h-3 before:content-['']",
@@ -475,11 +487,13 @@ function MegaLink({
 /* ── Mobile drawer ──────────────────────────────────────────────────────── */
 
 function MobileNav({
+  open,
   items,
   isTenant,
   onClose,
   onSection,
 }: {
+  open: boolean;
   items: LandingNavItem[];
   isTenant: boolean;
   onClose: () => void;
@@ -488,6 +502,10 @@ function MobileNav({
   const { t } = useTranslation();
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const titleRef = React.useRef<HTMLHeadingElement>(null);
+
+  React.useEffect(() => {
+    if (!open) setExpanded(null);
+  }, [open]);
 
   return (
     <DialogPrimitive.Portal>

@@ -449,6 +449,32 @@ function fallbackAmount(meta: PlanMeta) {
   return Number(meta.price.replace(/[^\d.]/g, "")) || 0;
 }
 
+const CORE_CATALOG_MODULES = [
+  "financial_management",
+  "invoice_billing",
+  "human_resources",
+  "payroll_management",
+  "inventory_control",
+  "sales_management",
+  "crm",
+  "procurement_management",
+  "project_management",
+  "workflow_automation",
+];
+
+const MEDIA_TOOL_MODULES = new Set([
+  "image_editor",
+  "video_player",
+  "audio_player",
+  "media_library",
+  "document_converter",
+]);
+
+function rankCatalogModuleSlug(slug: string) {
+  const coreIndex = CORE_CATALOG_MODULES.indexOf(slug);
+  return coreIndex >= 0 ? coreIndex : MEDIA_TOOL_MODULES.has(slug) ? 100 : 50;
+}
+
 function buildPlanFeatures(
   planKey: string,
   fallback: PlanMeta,
@@ -458,14 +484,8 @@ function buildPlanFeatures(
 ) {
   const moduleNames = new Map(catalog.map((module) => [module.slug, module.name]));
   // Keep the catalog's entitlements, but present business modules before tools.
-  const coreModules = ["financial_management", "invoice_billing", "human_resources", "payroll_management", "inventory_control", "sales_management", "crm", "procurement_management", "project_management", "workflow_automation"];
-  const mediaTools = new Set(["image_editor", "video_player", "audio_player", "media_library", "document_converter"]);
-  const rank = (slug: string) => {
-    const coreIndex = coreModules.indexOf(slug);
-    return coreIndex >= 0 ? coreIndex : mediaTools.has(slug) ? 100 : 50;
-  };
   const includedModules = [...(planDefaults[planKey] ?? [])]
-    .sort((a, b) => rank(a) - rank(b))
+    .sort((a, b) => rankCatalogModuleSlug(a) - rankCatalogModuleSlug(b))
     .map((slug) => moduleNames.get(slug))
     .filter((name): name is string => Boolean(name));
 
@@ -564,7 +584,10 @@ function LandingUI({
   // plans therefore apply from the first post-mount render onwards.
   const catalogPayload = (mounted ? catalogData?.data : undefined) ?? {};
   const catalogModules = useMemo(
-    () => (catalogPayload.catalog ?? []) as SignupCatalogModule[],
+    () =>
+      [...((catalogPayload.catalog ?? []) as SignupCatalogModule[])].sort(
+        (a, b) => rankCatalogModuleSlug(a.slug) - rankCatalogModuleSlug(b.slug),
+      ),
     [catalogPayload.catalog],
   );
   const planPricing = (catalogPayload.plan_pricing ?? {}) as Record<string, CatalogPlan>;
@@ -1919,10 +1942,15 @@ function LandingUI({
 
             </div>
             <p className="mt-7 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-              {t(
-                "landing.cta.note",
-                "No credit card required for Larva & Startup plans · Powered by ArifPay",
-              )}
+              {publicQuoteExperience
+                ? t(
+                    "landing.cta.note_quote",
+                    "Tailored module packages & onboarding · Powered by ArifPay",
+                  )
+                : t(
+                    "landing.cta.note",
+                    "No credit card required for Larva & Startup plans · Powered by ArifPay",
+                  )}
             </p>
           </Reveal>
         </section>

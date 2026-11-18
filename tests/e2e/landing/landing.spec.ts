@@ -140,3 +140,32 @@ test("architecture is readable before scrolling to its section", async ({ page }
   await expect(page.locator("#architecture").getByRole("heading", { name: "Containerized Multi-Tenancy" })).toBeVisible();
   expect(await page.locator("#architecture > div > div > div").evaluateAll(elements => elements.every(el => getComputedStyle(el).opacity === "1"))).toBe(true);
 });
+
+test("quote-mode catalogue orders core ERP modules before media tools", async ({ page }) => {
+  await loadLanding(page);
+  await page.route("**/api/v1/public/subscriptions/catalog", async route => {
+    await route.fulfill({
+      json: {
+        data: {
+          catalog: modules.map(([slug, name]) => ({ slug, name, category: "Suite", description })),
+          plan_pricing: {},
+          plan_defaults: {},
+          billing_policy: { public_catalog_mode: "self_service", public_show_subscription_types: false },
+        },
+      },
+    });
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const catalogue = page.locator("#pricing section[aria-labelledby='all-modules-heading']");
+  await expect(catalogue).toBeVisible();
+  const names = await catalogue.locator("li > p:first-child").allInnerTexts();
+  expect(names.slice(0, 5)).toEqual([
+    "Financial Management",
+    "Invoice & Billing",
+    "Human Resources",
+    "Payroll Management",
+    "Inventory Control",
+  ]);
+  expect(names.indexOf("Financial Management")).toBeLessThan(names.indexOf("Image Editor"));
+  await expect(page.getByText("No credit card required for Larva & Startup plans")).toHaveCount(0);
+});
