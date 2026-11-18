@@ -109,7 +109,7 @@ for (const theme of ["dark", "light"]) {
     await architecture.scrollIntoViewIfNeeded();
     await expect(architecture.getByRole("heading", { name: "Containerized Multi-Tenancy" })).toBeVisible();
     expect(await architecture.getByRole("heading", { name: "Containerized Multi-Tenancy" }).evaluate(el => {
-      for (let p: HTMLElement | null = el; p; p = p.parentElement) if (getComputedStyle(p).opacity === "0") return false;
+      for (let p: Element | null = el; p; p = p.parentElement) if (getComputedStyle(p).opacity === "0") return false;
       return true;
     })).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("architecture.png") });
