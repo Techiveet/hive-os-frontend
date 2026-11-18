@@ -912,6 +912,21 @@ textarea,
   --color-muted-foreground: hsl(var(--muted-foreground));
 }
 
+/* Portalled navigation cannot inherit the marketing page's local tokens. */
+.landing-mobile-dialog :where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.landing-mobile-dialog [data-slot="button"] {
+  --color-primary: hsl(221 83% 43%);
+}
+
+.landing-contact-form:focus-within {
+  outline: 2px solid hsl(var(--foreground));
+  outline-offset: 2px;
+}
+
 .text-honey {
   color: hsl(var(--honey-readable));
 }

@@ -457,7 +457,15 @@ function buildPlanFeatures(
   storageLabel: string,
 ) {
   const moduleNames = new Map(catalog.map((module) => [module.slug, module.name]));
-  const includedModules = (planDefaults[planKey] ?? [])
+  // Keep the catalog's entitlements, but present business modules before tools.
+  const coreModules = ["financial_management", "invoice_billing", "human_resources", "payroll_management", "inventory_control", "sales_management", "crm", "procurement_management", "project_management", "workflow_automation"];
+  const mediaTools = new Set(["image_editor", "video_player", "audio_player", "media_library", "document_converter"]);
+  const rank = (slug: string) => {
+    const coreIndex = coreModules.indexOf(slug);
+    return coreIndex >= 0 ? coreIndex : mediaTools.has(slug) ? 100 : 50;
+  };
+  const includedModules = [...(planDefaults[planKey] ?? [])]
+    .sort((a, b) => rank(a) - rank(b))
     .map((slug) => moduleNames.get(slug))
     .filter((name): name is string => Boolean(name));
 
@@ -504,7 +512,7 @@ function LandingUI({
 
   // 🚀 FETCH PUBLIC BRAND SETTINGS
   const { data: brandData, dataUpdatedAt: brandDataUpdatedAt } = useQuery({
-    queryKey: ["publicBrandSettings", detectedTenantSlug, isTenantExperience, workspaceScope],
+    queryKey: ["publicBrandSettings", workspaceScope],
     queryFn: async () => {
       const res = await fetch(`${getBackendApiRoot()}/settings/brand/public`, {
         headers: {
@@ -899,7 +907,7 @@ function LandingUI({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 12 }}
             transition={springSoft}
-            className="fixed bottom-8 right-8 z-[100]"
+            className="fixed bottom-7 right-24 z-40"
           >
             <Button
               onClick={scrollToTop}
@@ -1243,7 +1251,7 @@ function LandingUI({
       {/* --- MULTI-TENANCY & DOCKER ARCHITECTURE --- */}
       <SectionShell id="architecture" tone="base" glow="primary">
         <div className="flex flex-col items-center gap-14 lg:flex-row lg:gap-16">
-          <Reveal variant="scale" className="order-2 w-full flex-1 lg:order-1">
+          <div className="order-2 w-full flex-1 lg:order-1">
             <div className="relative mx-auto max-w-md">
               <div
                 aria-hidden
@@ -1280,9 +1288,9 @@ function LandingUI({
                 </div>
               </div>
             </div>
-          </Reveal>
+          </div>
 
-          <Reveal className="order-1 flex-1 lg:order-2">
+          <div className="order-1 flex-1 lg:order-2">
             <Eyebrow align="left">
               {t("landing.architecture.badge", "Techive engineering")}
             </Eyebrow>
@@ -1328,7 +1336,7 @@ function LandingUI({
                 </li>
               ))}
             </ul>
-          </Reveal>
+          </div>
         </div>
       </SectionShell>
 
@@ -1680,7 +1688,7 @@ function LandingUI({
                           {plan.label}
                         </div>
                       </div>
-                      <p className="mb-5 text-xs text-muted-foreground min-h-[32px] line-clamp-2">{plan.tagline}</p>
+                      <p className="mb-5 min-h-8 text-xs leading-relaxed text-muted-foreground">{plan.tagline}</p>
 
                       <div className="flex items-baseline gap-1">
                         {publicQuoteExperience ? (
@@ -1923,7 +1931,7 @@ function LandingUI({
       {/* --- FOOTER --- */}
       <footer
         id="contact"
-        className="relative z-10 border-t border-border bg-card pt-20 pb-8 px-6 overflow-hidden"
+        className="relative z-10 border-t border-border bg-card pt-20 pb-28 px-6 overflow-hidden"
       >
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-primary/5 blur-[100px] pointer-events-none"></div>
 
@@ -1947,33 +1955,34 @@ function LandingUI({
               {brandSettings?.footer_text ||
                 t('landing.footer.tagline', 'The robust Enterprise Resource Planning system. Streamlining Finance, HR, Smart Mobility, and Logistics for the modern Ethiopian business.')}
             </p>
-            {/* Was an input with no form and a decorative arrow — typing an
-                email did nothing. It now hands the address to the demo request
-                form, which is the platform's real contact channel. */}
+            <label htmlFor="footer-email" className="block text-sm font-medium text-foreground">
+              {t("landing.footer.contact_email", "Email for a demo")}
+            </label>
             <form
               onSubmit={(event) => {
                 event.preventDefault();
                 const email = footerEmail.trim();
                 router.push(email ? `/request-demo?email=${encodeURIComponent(email)}` : "/request-demo");
               }}
-              className="group mt-6 flex max-w-xs items-center border-b border-border pb-2 focus-within:border-primary"
+              className="landing-contact-form group mt-2 grid w-full max-w-md grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 rounded-lg border border-muted-foreground p-3"
             >
-              <label htmlFor="footer-email" className="mr-2 font-mono text-primary">
+              <span aria-hidden="true" className="col-span-2 mb-2 font-mono text-primary">
                 system@{initialTenantSlug}:~$
-              </label>
+              </span>
               <input
                 id="footer-email"
                 type="email"
+                name="email"
                 autoComplete="email"
                 value={footerEmail}
                 onChange={(event) => setFooterEmail(event.target.value)}
-                placeholder={t('landing.footer.newsletter', 'enter email for updates')}
-                className="w-full border-none bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0"
+                placeholder="you@company.com"
+                className="min-h-11 min-w-0 w-full rounded-sm border-none bg-transparent font-mono text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               />
               <button
                 type="submit"
-                aria-label={t("landing.footer.subscribe", "Send")}
-                className="rounded-sm text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                aria-label={t("landing.footer.request_demo", "Request a demo")}
+                className="flex size-11 items-center justify-center rounded-sm text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-2" />
               </button>
@@ -2042,7 +2051,7 @@ function LandingUI({
       </footer>
 
       {/* Floating AI Customer Support Webchat Widget */}
-      <SupportWebchatWidget botSlug="hive-ai-assistant" />
+      <SupportWebchatWidget botSlug="workspace-assistant" />
     </div>
   );
 }

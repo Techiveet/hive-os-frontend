@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, ChevronDown, Menu, X } from "lucide-react";
+import { Dialog as DialogPrimitive } from "radix-ui";
 
 import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
@@ -37,6 +38,7 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
   const [scrolled, setScrolled] = React.useState(false);
   const [openKey, setOpenKey] = React.useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [interactive, setInteractive] = React.useState(false);
   const [activeSection, setActiveSection] = React.useState<string | null>(null);
 
   const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,6 +54,7 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
 
   // ── Condense the bar into a floating pill past the fold ──────────────────
   React.useEffect(() => {
+    setInteractive(true);
     const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -85,7 +88,6 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       setOpenKey(null);
-      setMobileOpen(false);
     };
     const onPointerDown = (event: PointerEvent) => {
       if (!navRef.current?.contains(event.target as Node)) setOpenKey(null);
@@ -98,15 +100,15 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
     };
   }, []);
 
-  // Lock the page while the mobile drawer owns the screen.
+  // A hidden drawer must not keep the desktop page inert after a resize.
   React.useEffect(() => {
-    if (!mobileOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeOnDesktop = () => {
+      if (desktop.matches) setMobileOpen(false);
     };
-  }, [mobileOpen]);
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, []);
 
   React.useEffect(
     () => () => {
@@ -141,7 +143,7 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
   };
 
   return (
-    <>
+    <DialogPrimitive.Root open={mobileOpen} onOpenChange={setMobileOpen}>
       <motion.header
         ref={navRef}
         initial={false}
@@ -164,6 +166,7 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
           className="relative mx-auto"
         >
         <motion.nav
+          aria-label={t("landing.nav.primary", "Main")}
           className={cn(
             "flex items-center justify-between gap-3 rounded-full px-4 py-2 transition-[background-color,border-color,box-shadow] duration-500 md:px-6",
             scrolled
@@ -255,15 +258,16 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
               </Link>
             )}
 
+            <DialogPrimitive.Trigger asChild>
             <button
               type="button"
-              onClick={() => setMobileOpen(true)}
+              disabled={!interactive}
               aria-label={t("landing.nav.open_menu", "Open menu")}
-              aria-expanded={mobileOpen}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 lg:hidden"
+              className="flex size-11 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground lg:hidden"
             >
               <Menu className="h-[18px] w-[18px]" />
             </button>
+            </DialogPrimitive.Trigger>
           </div>
         </motion.nav>
 
@@ -282,14 +286,12 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
       </motion.header>
 
       <MobileNav
-        open={mobileOpen}
         items={items}
         isTenant={isTenant}
-        reduced={Boolean(reduced)}
         onClose={() => setMobileOpen(false)}
         onSection={goToSection}
       />
-    </>
+    </DialogPrimitive.Root>
   );
 }
 
@@ -473,144 +475,135 @@ function MegaLink({
 /* ── Mobile drawer ──────────────────────────────────────────────────────── */
 
 function MobileNav({
-  open,
   items,
   isTenant,
-  reduced,
   onClose,
   onSection,
 }: {
-  open: boolean;
   items: LandingNavItem[];
   isTenant: boolean;
-  reduced: boolean;
   onClose: () => void;
   onSection: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = React.useState<string | null>(null);
+  const titleRef = React.useRef<HTMLHeadingElement>(null);
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: DURATION.fast }}
-            onClick={onClose}
-            className="fixed inset-0 z-[60] bg-background/80 backdrop-blur-sm lg:hidden"
-          />
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("landing.nav.menu", "Navigation")}
-            initial={reduced ? { opacity: 0 } : { x: "100%" }}
-            animate={reduced ? { opacity: 1 } : { x: 0 }}
-            exit={reduced ? { opacity: 0 } : { x: "100%" }}
-            transition={reduced ? { duration: 0.15 } : { duration: 0.42, ease: EASE }}
-            className="fixed inset-y-0 right-0 z-[70] flex w-[min(92vw,26rem)] flex-col border-l border-border bg-background lg:hidden"
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay
+        className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm lg:hidden"
+      />
+      <DialogPrimitive.Content
+        aria-describedby={undefined}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          titleRef.current?.focus();
+        }}
+        className={cn(
+          "landing-mobile-dialog fixed inset-y-0 right-0 z-[70] flex w-[min(92vw,26rem)] flex-col border-l border-border bg-background text-foreground shadow-2xl outline-none lg:hidden",
+          !isTenant && "hive-landing",
+        )}
+      >
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <DialogPrimitive.Title ref={titleRef} tabIndex={-1} className="font-space text-sm font-bold uppercase tracking-widest text-muted-foreground outline-none">
+            {t("landing.nav.menu", "Navigation")}
+          </DialogPrimitive.Title>
+          <DialogPrimitive.Close asChild>
+          <button
+            type="button"
+            aria-label={t("landing.nav.close_menu", "Close menu")}
+            className="flex size-11 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
           >
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <span className="font-space text-sm font-bold uppercase tracking-widest text-muted-foreground">
-                {t("landing.nav.menu", "Navigation")}
-              </span>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label={t("landing.nav.close_menu", "Close menu")}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+            <X className="h-4 w-4" />
+          </button>
+          </DialogPrimitive.Close>
+        </div>
 
-            <div className="hive-mobile-sidebar-scroll flex-1 px-3 py-4">
-              {items.map((item) => {
-                if (!item.groups) {
-                  return (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => item.section && onSection(item.section)}
-                      className="flex w-full items-center justify-between rounded-xl px-3 py-3.5 text-left font-space text-sm font-bold uppercase tracking-wide text-foreground transition-colors hover:bg-muted/50"
+        <nav aria-label={t("landing.nav.mobile", "Mobile")} className="hive-mobile-sidebar-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
+          {items.map((item) => {
+            if (!item.groups) {
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => item.section && onSection(item.section)}
+                  className="flex w-full items-center justify-between rounded-xl px-3 py-3.5 text-left font-space text-sm font-bold uppercase tracking-wide text-foreground transition-colors hover:bg-muted/50"
+                >
+                  {item.label}
+                </button>
+              );
+            }
+
+            const isOpen = expanded === item.key;
+            return (
+              <div key={item.key}>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(isOpen ? null : item.key)}
+                  aria-expanded={isOpen}
+                  className="flex w-full items-center justify-between rounded-xl px-3 py-3.5 text-left font-space text-sm font-bold uppercase tracking-wide text-foreground transition-colors hover:bg-muted/50"
+                >
+                  {item.label}
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 text-muted-foreground transition-transform duration-300",
+                      isOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.3, ease: EASE }}
+                      className="overflow-hidden"
                     >
-                      {item.label}
-                    </button>
-                  );
-                }
-
-                const isOpen = expanded === item.key;
-                return (
-                  <div key={item.key}>
-                    <button
-                      type="button"
-                      onClick={() => setExpanded(isOpen ? null : item.key)}
-                      aria-expanded={isOpen}
-                      className="flex w-full items-center justify-between rounded-xl px-3 py-3.5 text-left font-space text-sm font-bold uppercase tracking-wide text-foreground transition-colors hover:bg-muted/50"
-                    >
-                      {item.label}
-                      <ChevronDown
-                        className={cn(
-                          "h-4 w-4 text-muted-foreground transition-transform duration-300",
-                          isOpen && "rotate-180",
-                        )}
-                      />
-                    </button>
-                    <AnimatePresence initial={false}>
-                      {isOpen && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.3, ease: EASE }}
-                          className="overflow-hidden"
-                        >
-                          <div className="space-y-0.5 border-l border-border/70 pb-2 pl-3 ml-3">
-                            {item.groups.flatMap((group) => group.links).map((link) => (
-                              <MegaLink
-                                key={link.label}
-                                link={link}
-                                onSection={onSection}
-                                onClose={onClose}
-                              />
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="space-y-2 border-t border-border p-4">
-              {!isTenant && (
-                <Link href="/auth/signup" onClick={onClose} className="block">
-                  <Button className="h-12 w-full rounded-xl border-none bg-primary font-space font-bold uppercase tracking-wider text-primary-foreground shadow-lg shadow-primary/20">
-                    {t("landing.hero.cta_free", "Get Started Free")}
-                  </Button>
-                </Link>
-              )}
-              {isTenant && (
-                <Link href="/sign-in" onClick={onClose} className="block">
-                  <Button
-                    variant="outline"
-                    className="h-12 w-full rounded-xl font-space font-bold uppercase tracking-wider"
-                  >
-                    {t("landing.nav.signin", "Sign In")}
-                  </Button>
-                </Link>
-              )}
-              <div className="flex items-center justify-center gap-3 pt-2">
-                <LanguageSwitcher />
-                <ThemeToggle />
+                      <div className="space-y-0.5 border-l border-border/70 pb-2 pl-3 ml-3">
+                        {item.groups.flatMap((group) => group.links).map((link) => (
+                          <MegaLink
+                            key={link.label}
+                            link={link}
+                            onSection={onSection}
+                            onClose={onClose}
+                          />
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+            );
+          })}
+        </nav>
+
+        <div className="space-y-2 border-t border-border p-4">
+          {!isTenant && (
+              <Button asChild className="h-12 w-full rounded-xl border-none bg-primary font-space font-bold uppercase tracking-wider text-primary-foreground shadow-lg shadow-primary/20">
+            <Link href="/auth/signup" onClick={onClose}>
+                {t("landing.hero.cta_free", "Get Started Free")}
+            </Link>
+              </Button>
+          )}
+          {isTenant && (
+              <Button
+                asChild
+                variant="outline"
+                className="h-12 w-full rounded-xl font-space font-bold uppercase tracking-wider"
+              >
+            <Link href="/sign-in" onClick={onClose}>
+                {t("landing.nav.signin", "Sign In")}
+            </Link>
+              </Button>
+          )}
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <LanguageSwitcher />
+            <ThemeToggle />
+          </div>
+        </div>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
   );
 }

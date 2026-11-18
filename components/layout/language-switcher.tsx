@@ -53,9 +53,9 @@ export function LanguageSwitcher({ id, className }: { id?: string; className?: s
           id={id}
           variant="ghost"
           className={cn(
-            "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full p-0",
+            "flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-full px-2.5 py-2",
             "text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary",
-            "focus-visible:ring-2 focus-visible:ring-primary/50",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground",
             className,
           )}
           aria-label={t("topbar.select_language", "Select Language")}
@@ -67,7 +67,7 @@ export function LanguageSwitcher({ id, className }: { id?: string; className?: s
           )}
           <span
             suppressHydrationWarning
-            className="absolute -bottom-0.5 -right-0.5 rounded-[4px] border border-background bg-primary px-1 text-[10px] font-black uppercase tracking-widest text-primary-foreground shadow-sm"
+            className="text-[11px] font-bold uppercase tracking-wide"
           >
             {locale}
           </span>
