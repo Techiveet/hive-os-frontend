@@ -28,8 +28,13 @@ export function PayoutAccountCard() {
   const q = useQuery({ queryKey: ["b2b", "myPayoutAccount"], queryFn: () => B2BDash.myPayoutAccount() });
   const account = q.data ?? null;
 
+  // When Chapa is on, the supplier picks their bank or wallet from Chapa's list: that is what lets the marketplace pay them automatically.
+  const banksQ = useQuery({ queryKey: ["b2b", "payoutBanks"], queryFn: () => B2BDash.payoutBanks(), staleTime: 5 * 60_000 });
+  const banks = banksQ.data?.enabled ? banksQ.data.banks : [];
+  const useList = banks.length > 0;
+
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<B2BPayoutAccountInput>({ method: "bank", bank_name: "", account_name: "", account_number: "" });
+  const [form, setForm] = useState<B2BPayoutAccountInput>({ method: "bank", bank_name: "", account_name: "", account_number: "", bank_code: null });
 
   const startEditing = () => {
     setForm({
@@ -37,6 +42,7 @@ export function PayoutAccountCard() {
       bank_name: account?.bank_name ?? "",
       account_name: account?.account_name ?? "",
       account_number: "", // the full number is never sent back; it has to be typed again
+      bank_code: account?.bank_code ?? null,
     });
     setEditing(true);
   };
@@ -48,6 +54,7 @@ export function PayoutAccountCard() {
         bank_name: form.bank_name.trim(),
         account_name: form.account_name.trim(),
         account_number: form.account_number.trim(),
+        ...(useList && form.bank_code ? { bank_code: form.bank_code } : {}),
       }),
     onSuccess: () => {
       setEditing(false);
@@ -56,7 +63,9 @@ export function PayoutAccountCard() {
   });
 
   const valid =
-    form.bank_name.trim() !== "" && form.account_name.trim() !== "" && ACCOUNT_NUMBER_PATTERN.test(form.account_number.trim());
+    (useList ? !!form.bank_code : form.bank_name.trim() !== "") &&
+    form.account_name.trim() !== "" &&
+    ACCOUNT_NUMBER_PATTERN.test(form.account_number.trim());
   const showForm = editing || (!q.isLoading && !account);
 
   return (
@@ -70,24 +79,44 @@ export function PayoutAccountCard() {
         <p className="text-sm text-muted-foreground">
           This is where the marketplace sends your money after an order is delivered and completed. The account name must match your
           verified company. An admin checks it before your first payout, and changing any detail sends it back for checking.
+          {useList && " Choosing your bank from the list lets the marketplace pay you automatically."}
         </p>
 
         {q.isLoading ? (
           <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
         ) : showForm ? (
           <div className="space-y-3">
-            <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v as "bank" | "wallet" })}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="bank">Bank account</SelectItem>
-                <SelectItem value="wallet">Mobile wallet</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              placeholder={form.method === "bank" ? "Bank name *" : "Wallet provider (e.g. Telebirr) *"}
-              value={form.bank_name} maxLength={120}
-              onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
-            />
+            {useList ? (
+              <Select
+                value={form.bank_code ? String(form.bank_code) : ""}
+                onValueChange={(v) => {
+                  const bank = banks.find((b) => String(b.id) === v);
+                  if (bank) setForm({ ...form, bank_code: bank.id, bank_name: bank.name, method: bank.is_mobile_money ? "wallet" : "bank" });
+                }}
+              >
+                <SelectTrigger className="h-10"><SelectValue placeholder="Choose your bank or wallet *" /></SelectTrigger>
+                <SelectContent>
+                  {banks.map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>{b.name}{b.is_mobile_money ? " (wallet)" : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <>
+                <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v as "bank" | "wallet" })}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bank">Bank account</SelectItem>
+                    <SelectItem value="wallet">Mobile wallet</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder={form.method === "bank" ? "Bank name *" : "Wallet provider (e.g. Telebirr) *"}
+                  value={form.bank_name} maxLength={120}
+                  onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
+                />
+              </>
+            )}
             <Input placeholder="Account holder name *" value={form.account_name} maxLength={160} onChange={(e) => setForm({ ...form, account_name: e.target.value })} />
             <Input
               placeholder={form.method === "bank" ? "Account number *" : "Wallet number *"}

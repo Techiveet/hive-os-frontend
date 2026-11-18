@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, AlertTriangle, Loader2, X } from "lucide-react";
 import { B2BDash } from "@/modules/b2b-marketplace/api";
 
-type Banner = { kind: "checking" | "ok" | "warn"; text: string };
+type Banner = { kind: "checking" | "ok" | "warn"; text: string; orderId?: number };
 
 const errorText = (e: unknown): string => {
   const err = e as { response?: { data?: { message?: string } }; message?: string };
@@ -14,7 +14,11 @@ const errorText = (e: unknown): string => {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-
+/**
+ * Chapa sends the buyer back with ?payment=chapa&order=ID. The webhook may be a few
+ * seconds late, so ask the server to re-check the payment with Chapa right away
+ * (a few tries), then show the result.
+ */
 export function PaymentReturnBanner() {
   const qc = useQueryClient();
   const [banner, setBanner] = React.useState<Banner | null>(null);
@@ -40,7 +44,7 @@ export function PaymentReturnBanner() {
         try {
           const res = await B2BDash.chapaVerify(id);
           if (res.outcome === "paid") {
-            setBanner({ kind: "ok", text: "Payment received. Your order is confirmed." });
+            setBanner({ kind: "ok", text: "Payment received. Your order is confirmed.", orderId: id });
             break;
           }
           if (res.outcome === "failed" || res.outcome === "mismatch") {
@@ -72,6 +76,17 @@ export function PaymentReturnBanner() {
     <div className={"flex items-start gap-2 rounded-xl border px-4 py-3 text-sm " + tone} role="status">
       {banner.kind === "checking" ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" /> : banner.kind === "ok" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
       <span className="flex-1">{banner.text}</span>
+      {banner.kind === "ok" && banner.orderId && (
+        // Chapa's own receipt page only flashes before sending the buyer back, so the receipt opens in its own tab here.
+        <a
+          href={`/marketplace/orders/${banner.orderId}/invoice`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 rounded-md border border-current/30 px-2 py-0.5 text-xs font-bold hover:underline"
+        >
+          View receipt
+        </a>
+      )}
       {banner.kind !== "checking" && (
         <button type="button" aria-label="Dismiss" onClick={() => setBanner(null)}><X className="h-4 w-4" /></button>
       )}

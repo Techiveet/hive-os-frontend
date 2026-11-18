@@ -1,22 +1,29 @@
 "use client";
 
 import React from "react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   Archive,
+  Award,
+  BarChart3,
   BookOpen,
   CheckCircle2,
+  ClipboardList,
   GraduationCap,
   Layers3,
+  ListChecks,
+  Megaphone,
   PenLine,
   Plus,
   Search,
   Send,
+  Star,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,47 +83,6 @@ const courseLevels: LmsCourseLevel[] = ["beginner", "intermediate", "advanced", 
 const courseStatuses: Array<LmsCourseStatus | "all"> = ["all", "draft", "published", "archived"];
 const enrollmentStatuses: Array<LmsEnrollmentStatus | "all"> = ["all", "assigned", "in_progress", "completed", "overdue", "cancelled"];
 
-/**
- * Stops a Dialog from closing when the interaction that triggered
- * "outside" actually happened inside a Select popup.
- *
- * Select content is portalled outside the DialogContent, so Radix sees a click
- * on an option (or the click that dismisses the dropdown) as an outside
- * interaction and closes the whole modal. Spread this onto every DialogContent
- * that contains a Select.
- */
-const SELECT_POPUP_SELECTOR = [
-  "[data-radix-select-content]",
-  "[data-radix-select-viewport]",
-  "[data-radix-popper-content-wrapper]",
-  "[data-radix-dropdown-menu-content]",
-  "[data-radix-dropdown-menu-item]",
-  "[role='listbox']",
-  "[role='option']",
-  "[role='combobox']",
-  "[role='menu']",
-  "[role='menuitem']",
-].join(", ");
-
-function keepOpenForSelect(event: Event) {
-  const target = event.target as HTMLElement | null;
-  // Check if the click originated from inside a Select component
-  if (target?.closest?.(SELECT_POPUP_SELECTOR)) {
-    event.preventDefault();
-    return;
-  }
-  // Also check if clicking on a Select trigger button
-  if (target?.closest?.("[data-radix-select-trigger]")) {
-    event.preventDefault();
-    return;
-  }
-}
-
-const dialogSelectGuard = {
-  onPointerDownOutside: keepOpenForSelect,
-  onInteractOutside: keepOpenForSelect,
-};
-
 export default function LearningManagementPage({ initialTab = "overview" }: LearningManagementPageProps) {
   const lms = useLmsCopy();
   const queryClient = useQueryClient();
@@ -149,6 +115,11 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
   const canViewLearners = hasAnyPermission(["view_lms_learners", "manage_lms_enrollments", "manage_learning_management"]);
   const canViewReports = hasAnyPermission(["view_lms_reports", "manage_lms_reports", "manage_learning_management"]);
   const canViewMyLearning = hasAnyPermission(["view_my_learning", "view_learning_management", "manage_learning_management"]);
+  // Quizzes, assignments, grading, announcements, reviews, certificates and analytics live in the
+  // learning portal (/learn). Inside the portal itself (this page is also mounted at /learn/manage)
+  // the sidebar already has them, so the shortcuts only show on the ERP dashboard.
+  const pathname = usePathname();
+  const showPortalLinks = !pathname?.startsWith("/learn");
 
   const summaryQuery = useQuery({
     queryKey: ["learning-summary"],
@@ -165,16 +136,12 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
       per_page: 100,
     }),
     enabled: canViewCourses || canAssignCourses,
-    // Keep showing the previous list while a new filter combination loads,
-    // so the page (and any open dialog) never unmounts mid-interaction.
-    placeholderData: keepPreviousData,
   });
 
   const enrollmentsQuery = useQuery({
     queryKey: ["learning-enrollments", { enrollmentStatus }],
     queryFn: () => learningApi.getEnrollments({ status: enrollmentStatus, per_page: 100 }),
     enabled: canViewLearners || canAssignCourses,
-    placeholderData: keepPreviousData,
   });
 
   const learnersQuery = useQuery({
@@ -229,21 +196,11 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
   const reports = reportsQuery.data;
   const learners = learnersQuery.data || [];
   const myLearning = myLearningQuery.data || [];
-  // Only show the full-page skeleton on the very first load. Once data exists,
-  // refetches (new filters, invalidations) must not unmount the page and
-  // every dialog inside it.
-  const loading =
-    (summaryQuery.isLoading && !summaryQuery.data) ||
-    (coursesQuery.isLoading && !coursesQuery.data);
+  const loading = summaryQuery.isLoading || coursesQuery.isLoading;
 
   if (loading) {
     return <LearningSkeleton />;
   }
-
-  const openCreateCourse = () => {
-    setEditingCourse(null);
-    setCourseDialogOpen(true);
-  };
 
   return (
     <main className="space-y-8 pb-16" aria-labelledby="learning-management-title">
@@ -273,13 +230,49 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
             </Button>
           )}
           {canManageCourses && (
-            <Button onClick={openCreateCourse} className="min-h-11">
+            <Button onClick={() => setCourseDialogOpen(true)} className="min-h-11">
               <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
               {lms("admin.create_course", "Create course")}
             </Button>
           )}
         </div>
       </div>
+
+      {showPortalLinks && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">{lms("admin.portal.title", "Learning portal")}</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {lms("admin.portal.subtitle", "Quizzes, assignments, marking, announcements, reviews, certificates and analytics are managed in the learning portal.")}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { href: "/learn", label: lms("admin.portal.home", "Open learning portal"), icon: GraduationCap, show: true },
+                { href: "/learn/quizzes", label: lms("admin.portal.quizzes", "Quizzes"), icon: GraduationCap, show: true },
+                { href: "/learn/assignments", label: lms("admin.portal.assignments", "Assignments"), icon: ClipboardList, show: true },
+                { href: "/learn/grades", label: lms("admin.portal.grades", "Grades & marking"), icon: ListChecks, show: true },
+                { href: "/learn/announcements", label: lms("admin.portal.announcements", "Announcements"), icon: Megaphone, show: canManageCourses },
+                { href: "/learn/reviews", label: lms("admin.portal.reviews", "Reviews"), icon: Star, show: true },
+                { href: "/learn/certificates", label: lms("admin.portal.certificates", "Certificates"), icon: Award, show: true },
+                { href: "/learn/analytics", label: lms("admin.portal.analytics", "Analytics"), icon: BarChart3, show: canViewReports },
+              ]
+                .filter((item) => item.show)
+                .map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+                  >
+                    <item.icon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                    {item.label}
+                  </Link>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as LearningTab)} className="space-y-6">
         <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-muted/60 p-1 md:w-fit" aria-label={lms("admin.tabs.aria", "Learning management sections")}>
@@ -304,7 +297,10 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
             onSearchChange={setCourseSearch}
             onStatusChange={setCourseStatus}
             onLevelChange={setCourseLevel}
-            onCreateCourse={openCreateCourse}
+            onCreateCourse={() => {
+              setEditingCourse(null);
+              setCourseDialogOpen(true);
+            }}
             onEditCourse={(course) => {
               setEditingCourse(course);
               setCourseDialogOpen(true);
@@ -956,7 +952,7 @@ function CourseDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" {...dialogSelectGuard}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {editing
@@ -1156,7 +1152,7 @@ function LessonDialog({ course, onOpenChange }: { course: LmsCourse | null; onOp
 
   return (
     <Dialog open={Boolean(course)} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl" {...dialogSelectGuard}>
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Add lesson</DialogTitle>
           <DialogDescription>{course ? `Extend ${course.title}.` : "Add a lesson to a course."}</DialogDescription>
@@ -1242,7 +1238,6 @@ function EnrollmentDialog({ open, onOpenChange, courses }: { open: boolean; onOp
     queryKey: ["lms-user-search", search],
     queryFn: () => learningApi.searchUsers(search),
     enabled: open,
-    placeholderData: keepPreviousData,
   });
 
   const mutation = useMutation({
@@ -1267,7 +1262,7 @@ function EnrollmentDialog({ open, onOpenChange, courses }: { open: boolean; onOp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" {...dialogSelectGuard}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Assign learners</DialogTitle>
           <DialogDescription>Select a course, search active users, and assign training with an optional due date.</DialogDescription>

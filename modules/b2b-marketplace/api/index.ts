@@ -390,6 +390,15 @@ export const B2BDash = {
 
   // Supplier payout destination (bank / wallet) and its admin verification
   myPayoutAccount: () => body<B2BSellerPayoutAccount | null>(api.get("/b2b-marketplace/seller/payout-account")),
+  payoutBanks: () => body<B2BPayoutBanks>(api.get("/b2b-marketplace/seller/payout-banks")),
+  sendPayoutViaChapa: (orderId: number, partId: number) =>
+    body<B2BAdminOrder>(api.post(`/b2b-marketplace/orders/${orderId}/payouts/${partId}/chapa`)),
+  refreshPayout: (orderId: number, partId: number) =>
+    body<B2BAdminOrder>(api.post(`/b2b-marketplace/orders/${orderId}/payouts/${partId}/refresh`)),
+  confirmPayoutTest: (orderId: number, partId: number) =>
+    body<B2BAdminOrder>(api.post(`/b2b-marketplace/orders/${orderId}/payouts/${partId}/test-confirm`)),
+  cancelPayoutTest: (orderId: number, partId: number) =>
+    body<B2BAdminOrder>(api.post(`/b2b-marketplace/orders/${orderId}/payouts/${partId}/test-cancel`)),
   savePayoutAccount: (payload: B2BPayoutAccountInput) =>
     body<B2BSellerPayoutAccount>(api.put("/b2b-marketplace/seller/payout-account", payload)),
   payoutAccounts: (status?: "pending" | "verified" | "rejected") =>
@@ -446,12 +455,16 @@ export type B2BOrderPart = {
   gross_amount?: number;
   fee_amount?: number;
   payout_amount?: number;
-  payout_status?: "pending" | "released" | "void";
+  payout_status?: "pending" | "processing" | "released" | "void";
   payout_reference?: string | null;
   payout_released_at?: string | null;
   // Where the money went (snapshot) and where it should go (admin view only)
   payout_destination?: B2BPayoutDestination | null;
   payout_account?: B2BPartPayoutAccount | null;
+  // The latest automatic (Chapa) transfer for this supplier, if one was started
+  payout_transfer?: { status: "initiated" | "success" | "failed"; reference: string; failure_reason: string | null; created_at: string } | null;
+  // True while a transfer is being sent and Chapa runs with a test key (the admin may then confirm or cancel it by hand)
+  payout_test_mode?: boolean;
 };
 
 export type B2BPayoutDestination = {
@@ -469,6 +482,7 @@ export type B2BPartPayoutAccount = {
   bank_name: string;
   account_name: string;
   account_number: string;
+  bank_code?: number | null;
 };
 
 export type B2BPayoutAccountInput = {
@@ -476,7 +490,12 @@ export type B2BPayoutAccountInput = {
   bank_name: string;
   account_name: string;
   account_number: string;
+  bank_code?: number | null;
 };
+
+/** Banks and wallets the marketplace can pay automatically through Chapa. */
+export type B2BPayoutBank = { id: number; name: string; is_mobile_money: boolean };
+export type B2BPayoutBanks = { enabled: boolean; banks: B2BPayoutBank[] };
 
 /** What a supplier sees about their own account (never the full number). */
 export type B2BSellerPayoutAccount = {
@@ -485,6 +504,7 @@ export type B2BSellerPayoutAccount = {
   bank_name: string;
   account_name: string;
   account_number_masked: string | null;
+  bank_code?: number | null;
   status: "pending" | "verified" | "rejected";
   rejection_reason: string | null;
   verified_at: string | null;
@@ -500,6 +520,7 @@ export type B2BAdminPayoutAccount = {
   bank_name: string;
   account_name: string;
   account_number: string;
+  bank_code?: number | null;
   status: "pending" | "verified" | "rejected";
   revision: number;
   rejection_reason: string | null;
@@ -594,7 +615,7 @@ export type B2BOrder = {
   created_at: string;
 };
 
-export type B2BAdminOrder = B2BOrder & { buyer: string | null; shipping_name: string | null };
+export type B2BAdminOrder = B2BOrder & { buyer: string | null; shipping_name: string | null; payout_check?: { state: string; message: string } };
 
 export type B2BSellerOrder = {
   id: number;

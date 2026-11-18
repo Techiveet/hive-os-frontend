@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, GraduationCap, LayoutDashboard, Users } from "lucide-react";
+import { Award, BarChart3, BookOpen, ClipboardList, GraduationCap, LayoutDashboard, Megaphone, Users } from "lucide-react";
 import type { FrontendModuleDefinition } from "@/modules/types";
 import {
   LEARNING_MANAGEMENT_COURSE_ROUTE_PERMISSIONS,
@@ -54,6 +54,58 @@ export const lmsModule: FrontendModuleDefinition = {
       icon: BarChart3,
       subscriptionSlug: "learning_management",
       permissions: [...LEARNING_MANAGEMENT_REPORT_ROUTE_PERMISSIONS],
+      placement: "secondary",
+    },
+    // The learning portal (/learn) holds quizzes, assignments, marking, announcements, certificates and
+    // analytics. These entries are how an ERP-dashboard user reaches it.
+    {
+      moduleId: "lms",
+      translationKey: "nav.lms_quizzes",
+      fallbackLabel: "Quizzes",
+      href: "/learn/quizzes",
+      icon: GraduationCap,
+      subscriptionSlug: "learning_management",
+      permissions: ["manage_learning_management", "manage_lms_courses", "create_lms_courses", "edit_lms_courses", "grade_lms_assessments"],
+      placement: "secondary",
+    },
+    {
+      moduleId: "lms",
+      translationKey: "nav.lms_assignments",
+      fallbackLabel: "Assignments",
+      href: "/learn/assignments",
+      icon: ClipboardList,
+      subscriptionSlug: "learning_management",
+      permissions: ["manage_learning_management", "manage_lms_courses", "create_lms_courses", "edit_lms_courses", "grade_lms_assessments"],
+      placement: "secondary",
+    },
+    {
+      moduleId: "lms",
+      translationKey: "nav.lms_announcements",
+      fallbackLabel: "Announcements",
+      href: "/learn/announcements",
+      icon: Megaphone,
+      subscriptionSlug: "learning_management",
+      permissions: ["manage_learning_management", "manage_lms_courses", "create_lms_courses", "edit_lms_courses"],
+      placement: "secondary",
+    },
+    {
+      moduleId: "lms",
+      translationKey: "nav.lms_certificates",
+      fallbackLabel: "Certificates",
+      href: "/learn/certificates",
+      icon: Award,
+      subscriptionSlug: "learning_management",
+      permissions: ["manage_learning_management", "manage_lms_courses", "view_lms_reports", "view_lms_enrollments", "view_my_learning"],
+      placement: "secondary",
+    },
+    {
+      moduleId: "lms",
+      translationKey: "nav.lms_analytics",
+      fallbackLabel: "Learning Analytics",
+      href: "/learn/analytics",
+      icon: BarChart3,
+      subscriptionSlug: "learning_management",
+      permissions: ["view_lms_reports", "manage_lms_reports", "manage_learning_management"],
       placement: "secondary",
     },
     {

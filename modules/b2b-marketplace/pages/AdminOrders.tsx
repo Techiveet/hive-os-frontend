@@ -78,6 +78,33 @@ export default function AdminOrders() {
     onSuccess: invalidate,
     onError,
   });
+  const [notice, setNotice] = React.useState<string | null>(null);
+  const refreshPayout = useMutation({
+    mutationFn: ({ id, partId }: { id: number; partId: number }) => B2BDash.refreshPayout(id, partId),
+    onSuccess: (o) => {
+      invalidate();
+      setNotice(o.payout_check?.message ?? null);
+    },
+    onError,
+  });
+  // Chapa's test mode never reports a transfer, so with a test key the admin settles it by hand.
+  const testConfirm = useMutation({
+    mutationFn: ({ id, partId }: { id: number; partId: number }) => B2BDash.confirmPayoutTest(id, partId),
+    onSuccess: () => {
+      invalidate();
+      setNotice("Test payout marked as sent.");
+    },
+    onError,
+  });
+  const testCancel = useMutation({
+    mutationFn: ({ id, partId }: { id: number; partId: number }) => B2BDash.cancelPayoutTest(id, partId),
+    onSuccess: () => {
+      invalidate();
+      setNotice("Test payout cancelled. It is pending again.");
+    },
+    onError,
+  });
+
   // Payouts and refunds are done in a dialog: the admin sends the money first, then records the transfer reference.
   const [transfer, setTransfer] = React.useState<TransferTarget | null>(null);
 
@@ -121,6 +148,13 @@ export default function AdminOrders() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span className="flex-1">{error}</span>
           <button type="button" aria-label="Dismiss" onClick={() => setError(null)}><X className="h-4 w-4" /></button>
+        </div>
+      )}
+      {notice && !error && (
+        <div className="flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm" role="status">
+          <Check className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="flex-1">{notice}</span>
+          <button type="button" aria-label="Dismiss" onClick={() => setNotice(null)}><X className="h-4 w-4" /></button>
         </div>
       )}
 
@@ -214,7 +248,44 @@ export default function AdminOrders() {
                       <Badge variant="outline" className="capitalize">{part.fulfillment_status}</Badge>
                       {part.tracking_number && <span className="text-muted-foreground">{part.carrier ? `${part.carrier} · ` : ""}{part.tracking_number}</span>}
                       <span className="font-bold">{money(part.payout_amount ?? 0, o.currency)}</span>
-                      <Badge variant={part.payout_status === "released" ? "default" : "secondary"}>{part.payout_status}</Badge>
+                      <Badge variant={part.payout_status === "released" ? "default" : "secondary"}>{part.payout_status === "processing" ? "being sent" : part.payout_status}</Badge>
+                      {part.payout_status === "processing" && (
+                        <Button
+                          size="sm" variant="outline" className="h-7 text-xs"
+                          disabled={refreshPayout.isPending}
+                          title="Ask Chapa whether the transfer went through"
+                          onClick={() => refreshPayout.mutate({ id: o.id, partId: part.id })}
+                        >
+                          {refreshPayout.isPending && refreshPayout.variables?.partId === part.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Check status"}
+                        </Button>
+                      )}
+                      {part.payout_status === "processing" && part.payout_test_mode && (
+                        <>
+                          <Button
+                            size="sm" variant="outline" className="h-7 text-xs"
+                            disabled={testConfirm.isPending || testCancel.isPending}
+                            title="Chapa test mode never confirms transfers. Mark this one as sent."
+                            onClick={() => {
+                              if (window.confirm("Chapa is in test mode and never reports test transfers. Mark this payout as sent?")) testConfirm.mutate({ id: o.id, partId: part.id });
+                            }}
+                          >
+                            Mark as sent (test)
+                          </Button>
+                          <Button
+                            size="sm" variant="ghost" className="h-7 text-xs"
+                            disabled={testConfirm.isPending || testCancel.isPending}
+                            title="Drop this test transfer so the payout is pending again"
+                            onClick={() => {
+                              if (window.confirm("Cancel this test transfer? The payout goes back to pending.")) testCancel.mutate({ id: o.id, partId: part.id });
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      )}
+                      {part.payout_status === "pending" && part.payout_transfer?.status === "failed" && (
+                        <span className="text-destructive">last automatic payout failed{part.payout_transfer.failure_reason ? `: ${part.payout_transfer.failure_reason}` : ""}</span>
+                      )}
                       {part.payout_status === "pending" && (
                         part.payout_account ? (
                           <Badge variant={part.payout_account.status === "verified" ? "outline" : "destructive"}>
@@ -272,7 +343,7 @@ export default function AdminOrders() {
                     </Select>
                   </div>
                 )}
-                {o.payment_status === "paid" && !(o.parts ?? []).some((p) => p.payout_status === "released") && (
+                {o.payment_status === "paid" && !(o.parts ?? []).some((p) => p.payout_status === "released" || p.payout_status === "processing") && (
                   <Button size="sm" variant="outline" onClick={() => onRefund(o)} className="gap-1 text-destructive">
                     <RotateCcw className="h-3.5 w-3.5" /> Refund
                   </Button>
@@ -320,23 +391,35 @@ function TransferDialog({ target, orders, onClose, onDone }: {
     setReference("");
     setReason("");
     setDetails(EMPTY_REFUND_DETAILS);
+    setManualRefund(false);
   }, [key]);
 
   // Always show the freshest copy of the order (details may have just been saved).
   const order = target ? orders.find((x) => x.id === target.order.id) ?? target.order : null;
   const part = target?.kind === "payout" ? (order?.parts ?? []).find((p) => p.id === target.part.id) ?? target.part : null;
   const viaStripe = order?.payment_method === "stripe";
+  const viaChapa = order?.payment_method === "chapa";
+  // Chapa refunds go through the gateway unless the admin chooses to refund by hand (e.g. Chapa refused it).
+  const [manualRefund, setManualRefund] = React.useState(false);
+  const viaGateway = viaStripe || (viaChapa && !manualRefund);
+
+  const methodsQ = useQuery({ queryKey: ["b2b", "paymentMethods"], queryFn: () => B2BDash.paymentMethods(), staleTime: 60_000 });
+  const chapaEnabled = methodsQ.data?.chapa.enabled === true;
 
   const release = useMutation({
     mutationFn: () => B2BDash.releasePayout(order!.id, part!.id, reference.trim()),
     onSuccess: onDone,
   });
+  const sendViaChapa = useMutation({
+    mutationFn: () => B2BDash.sendPayoutViaChapa(order!.id, part!.id),
+    onSuccess: onDone,
+  });
   const refund = useMutation({
     mutationFn: () =>
       B2BDash.refundOrder(order!.id, {
-        mode: viaStripe ? "auto" : "manual",
+        mode: viaGateway ? "auto" : "manual",
         reason: reason.trim() || undefined,
-        reference: viaStripe ? undefined : reference.trim(),
+        reference: viaGateway ? undefined : reference.trim(),
       }),
     onSuccess: onDone,
   });
@@ -351,7 +434,11 @@ function TransferDialog({ target, orders, onClose, onDone }: {
   const account = part?.payout_account ?? null;
   const accountOk = account?.status === "verified";
   const refundDetails = order?.refund_details ?? null;
-  const error = release.isError ? release.error : refund.isError ? refund.error : saveDetails.isError ? saveDetails.error : null;
+  const isEtb = (order?.currency || "").toUpperCase() === "ETB";
+  const canSendViaChapa = chapaEnabled && isEtb && accountOk && !!account?.bank_code;
+  const error = sendViaChapa.isError
+    ? sendViaChapa.error
+    : release.isError ? release.error : refund.isError ? refund.error : saveDetails.isError ? saveDetails.error : null;
 
   return (
     <Dialog open={!!target} onOpenChange={(o) => !o && onClose()}>
@@ -379,8 +466,28 @@ function TransferDialog({ target, orders, onClose, onDone }: {
                     : "This supplier has not added a payout account yet. Ask them to add one, then verify it in the \"Payout Accounts\" tab."}
                 </p>
               )}
+              {canSendViaChapa ? (
+                <div className="space-y-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-3">
+                  <p className="text-sm font-bold">Pay automatically through Chapa</p>
+                  <p className="text-xs text-muted-foreground">
+                    Chapa sends {money(part.payout_amount ?? 0, order.currency)} from your Chapa balance to the verified account above. It shows as
+                    &quot;being sent&quot; until Chapa confirms, and is put back to pending if the transfer fails.
+                  </p>
+                  <Button onClick={() => sendViaChapa.mutate()} disabled={sendViaChapa.isPending} className="w-full gap-2">
+                    {sendViaChapa.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Send via Chapa
+                  </Button>
+                </div>
+              ) : (
+                chapaEnabled && accountOk && (
+                  <p className="text-xs text-muted-foreground">
+                    {!isEtb
+                      ? "Automatic payouts are only available for ETB orders."
+                      : "This supplier did not pick their bank from the Chapa list, so automatic payout is unavailable. Ask them to choose their bank again."}
+                  </p>
+                )
+              )}
               <p className="text-xs text-muted-foreground">
-                This does not move money. Send the transfer from your bank or wallet first, then enter its reference here to record it.
+                {canSendViaChapa ? "Or pay it yourself: " : ""}This does not move money. Send the transfer from your bank or wallet first, then enter its reference here to record it.
               </p>
               <Input placeholder="Transfer reference *" value={reference} maxLength={250} onChange={(e) => setReference(e.target.value)} />
             </div>
@@ -402,11 +509,23 @@ function TransferDialog({ target, orders, onClose, onDone }: {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3 py-2">
+              {viaChapa && (
+                <div className="space-y-1 rounded-xl bg-muted/40 px-3 py-2 text-sm">
+                  <p>
+                    {manualRefund
+                      ? "You will refund the buyer yourself."
+                      : "This was paid through Chapa. The refund is requested from Chapa and goes back to the buyer's payment method. It can take a while to complete; Chapa keeps its fees and takes the amount from your Chapa balance."}
+                  </p>
+                  <button type="button" className="text-xs font-semibold text-primary underline" onClick={() => setManualRefund((m) => !m)}>
+                    {manualRefund ? "Refund through Chapa instead" : "Refund manually instead (for example if Chapa refuses it)"}
+                  </button>
+                </div>
+              )}
               {viaStripe ? (
                 <p className="rounded-xl bg-muted/40 px-3 py-2 text-sm">
                   This was paid by card. The refund goes back to the buyer&apos;s card automatically through Stripe.
                 </p>
-              ) : (
+              ) : viaGateway ? null : (
                 <>
                   {refundDetails ? (
                     <div className="rounded-xl bg-muted/40 px-4 py-3 text-sm">
@@ -439,10 +558,10 @@ function TransferDialog({ target, orders, onClose, onDone }: {
               <Button
                 variant="destructive"
                 onClick={() => refund.mutate()}
-                disabled={refund.isPending || (!viaStripe && (!refundDetails || reference.trim() === ""))}
+                disabled={refund.isPending || (!viaGateway && (!refundDetails || reference.trim() === ""))}
                 className="w-full gap-2"
               >
-                {refund.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {viaStripe ? "Refund to card" : "Record refund as sent"}
+                {refund.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {viaStripe ? "Refund to card" : viaGateway ? "Refund through Chapa" : "Record refund as sent"}
               </Button>
             </DialogFooter>
           </>
