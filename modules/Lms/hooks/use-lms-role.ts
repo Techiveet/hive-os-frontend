@@ -46,6 +46,13 @@ export const LMS_MODERATE_PERMISSIONS = [
   "manage_learning_management",
 ] as const;
 
+/** Permissions that let someone add teachers and assistants. */
+export const LMS_STAFF_MANAGE_PERMISSIONS = [
+  "manage_learning_management",
+  "manage_users",
+  "create_users",
+] as const;
+
 /**
  * Which side of the LMS the signed-in user is on, plus the finer-grained
  * answers the quiz, assignment and review screens need.
@@ -56,19 +63,22 @@ export function useLmsRole(): {
   canAuthor: boolean;
   canGrade: boolean;
   canModerate: boolean;
+  canManageStaff: boolean;
 } {
   const { hasAnyPermission } = usePermissions();
 
   const isStaff = hasAnyPermission([...LMS_STAFF_PERMISSIONS]);
   const canAuthor = hasAnyPermission([...LMS_AUTHOR_PERMISSIONS]);
+  const canManageStaff = hasAnyPermission([...LMS_STAFF_MANAGE_PERMISSIONS]);
 
   return {
     // Staff who cannot author are teaching assistants: they get the marking
     // screens and the cohort, without Create Course.
-    role: isStaff ? (canAuthor ? "instructor" : "assistant") : "learner",
+    role: isStaff ? (canManageStaff ? "admin" : canAuthor ? "instructor" : "assistant") : "learner",
     isStaff,
     canAuthor,
     canGrade: hasAnyPermission([...LMS_GRADE_PERMISSIONS]),
     canModerate: hasAnyPermission([...LMS_MODERATE_PERMISSIONS]),
+    canManageStaff,
   };
 }

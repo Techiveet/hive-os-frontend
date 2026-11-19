@@ -25,6 +25,9 @@ export type LmsLesson = {
   duration_minutes: number;
   sort_order: number;
   is_required: boolean;
+  /** Staff list only: learners who opened / finished this lesson. */
+  started_count?: number;
+  completed_count?: number;
 };
 
 export type LmsCourse = {
@@ -307,6 +310,9 @@ export const learningApi = {
   updateLesson: (courseId: string, lessonId: string, data: Partial<LmsLesson>) =>
     api.put<LmsLesson>(`${LMS_PREFIX}/courses/${courseId}/lessons/${lessonId}`, data).then((res) => res.data),
   deleteLesson: (courseId: string, lessonId: string) => api.delete(`${LMS_PREFIX}/courses/${courseId}/lessons/${lessonId}`),
+  listLessons: (courseId: string) => api.get<LmsLesson[]>(`${LMS_PREFIX}/courses/${courseId}/lessons`).then((res) => res.data),
+  reorderLessons: (courseId: string, lessons: Array<{ id: string; sort_order: number }>) =>
+    api.post<LmsLesson[]>(`${LMS_PREFIX}/courses/${courseId}/lessons/reorder`, { lessons }).then((res) => res.data),
   getEnrollments: (params?: { course_id?: string; status?: LmsEnrollmentStatus | "all"; search?: string; per_page?: number }) =>
     api.get<{ data: LmsEnrollment[] }>(`${LMS_PREFIX}/enrollments`, {
       params: {
@@ -340,6 +346,10 @@ export const learningApi = {
   getAnalytics: (days = 30) => api.get<{ data: LmsAnalytics }>(`${LMS_PREFIX}/analytics`, { params: { days } }).then((res) => res.data.data),
   getLessonAnalytics: (courseId: string) =>
     api.get<{ data: LmsLessonAnalytics }>(`${LMS_PREFIX}/analytics/courses/${courseId}/lessons`).then((res) => res.data.data),
+  // Staff (teachers and assistants) — created from inside the LMS.
+  getStaff: () => api.get<LmsStaffMember[]>(`${LMS_PREFIX}/staff`).then((res) => res.data),
+  createStaff: (data: { name: string; email: string; role: LmsStaffRole }) =>
+    api.post<{ data: LmsCreatedStaff; message: string }>(`${LMS_PREFIX}/staff`, data).then((res) => res.data),
   searchUsers: (search: string) => api.get<LmsUser[]>(`${LMS_PREFIX}/users/search`, { params: { search } }).then((res) => res.data),
 };
 
@@ -398,4 +408,25 @@ export const publicLearningApi = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+};
+
+export type LmsStaffRole = "Teacher" | "Teaching Assistant";
+
+export type LmsStaffMember = {
+  id: number;
+  name: string;
+  email: string;
+  role: LmsStaffRole | null;
+  is_active: boolean;
+  must_change_password: boolean;
+  created_at: string | null;
+};
+
+export type LmsCreatedStaff = {
+  id: number;
+  name: string;
+  email: string;
+  role: LmsStaffRole;
+  /** Shown once, to be handed to the new member. Never returned again. */
+  temporary_password: string;
 };

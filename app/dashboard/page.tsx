@@ -29,6 +29,8 @@ import { getAccessToken, getBackendApiRoot, getTenantHeaders, getTenantId, isTen
 import { DashboardOverviewPlaceholder } from "@/components/ui/loading-states";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
+import { useBusinessType } from "@/hooks/use-business-type";
+import { LmsAdminDashboard } from "@/modules/Lms/components/lms-admin-dashboard";
 import { handleAuthFailureResponse, isImpersonatingSession, stopImpersonation } from "@/lib/auth-sync";
 import {
     ALERTS_ROUTE_PERMISSIONS,
@@ -135,7 +137,17 @@ interface DashboardData {
     }[];
 }
 
+
 export default function DashboardHome() {
+    const { businessType, isLoaded } = useBusinessType();
+
+    if (!isLoaded) return <DashboardLoader />;
+    if (businessType === "lms" || businessType === "education") return <LmsAdminDashboard />;
+
+    return <ErpDashboardHome />;
+}
+
+function ErpDashboardHome() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const { t } = useTranslation();

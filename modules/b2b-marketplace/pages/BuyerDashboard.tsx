@@ -70,7 +70,14 @@ export default function BuyerDashboard() {
   const inquiriesQ = useQuery({ queryKey: ["b2b", "myInquiries"], queryFn: () => B2BDash.inquiries("mine") });
   const quotesQ = useQuery({ queryKey: ["b2b", "buyerQuotes"], queryFn: () => B2BDash.quotes() });
   const favsQ = useQuery({ queryKey: ["b2b", "favorites"], queryFn: () => B2BDash.favorites() });
-  const ordersQ = useQuery({ queryKey: ["b2b", "myOrders"], queryFn: () => B2BDash.orders() });
+  // Always re-read the orders when the page opens or the tab regains focus: a payment made elsewhere (Chapa, another
+  // tab) must never leave a stale Pay button behind.
+  const ordersQ = useQuery({
+    queryKey: ["b2b", "myOrders"],
+    queryFn: () => B2BDash.orders(),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+  });
 
   const inquiries = inquiriesQ.data ?? [];
   const quotes = quotesQ.data ?? [];

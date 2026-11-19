@@ -1,5 +1,6 @@
 "use client";
 
+import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
@@ -22,7 +23,9 @@ import {
   Settings,
   Star,
   UserCircle,
+  UserCog,
   Users,
+  Video,
 } from "lucide-react";
 
 import {
@@ -86,6 +89,8 @@ const ALL: LmsDashboardRole[] = ["learner", "assistant", "instructor", "admin"];
 const STAFF: LmsDashboardRole[] = ["assistant", "instructor", "admin"];
 /** Building and enrolling, as opposed to marking what already exists. */
 const AUTHORS: LmsDashboardRole[] = ["instructor", "admin"];
+/** Running the school itself: adding the people who teach. */
+const ADMINS: LmsDashboardRole[] = ["admin"];
 
 /**
  * Mirrors the template's dashboard sidebar, split by audience. A learner has no
@@ -101,6 +106,8 @@ const NAV_ITEMS: NavItem[] = [
   { key: "lms.nav.calendar", label: "Calendar", href: "/learn/calendar", icon: CalendarDays, roles: ALL },
   { key: "lms.nav.messages", label: "Messages", href: "/learn/messages", icon: MessageSquare, roles: ALL },
   { key: "lms.nav.create_course", label: "Create Course", href: "/learn/manage?tab=courses", icon: FileText, roles: AUTHORS },
+  { key: "lms.nav.staff", label: "Staff", href: "/learn/staff", icon: UserCog, roles: ADMINS },
+  { key: "lms.nav.live", label: "Live classes", href: "/learn/live", icon: Video, roles: ALL },
   { key: "lms.nav.participants", label: "Participants", href: "/learn/manage?tab=learners", icon: Users, roles: STAFF },
   { key: "lms.nav.assignments", label: "Assignments", href: "/learn/assignments", icon: ClipboardList, roles: ALL },
   // Open to learners as well: the page branches by role, giving students their
@@ -114,8 +121,16 @@ const NAV_ITEMS: NavItem[] = [
   { key: "lms.nav.settings", label: "Settings", href: "/learn/settings", icon: Settings, roles: ALL },
 ];
 
-export function lmsNavForRole(role: LmsDashboardRole): NavItem[] {
-  return NAV_ITEMS.filter((item) => item.roles.includes(role));
+/** Nav entries that only make sense when a plan module is on. */
+const MODULE_GATED: Record<string, string> = { "/learn/live": "video_conferencing" };
+
+export function lmsNavForRole(
+  role: LmsDashboardRole,
+  hasModule: (slug: string) => boolean = () => true,
+): NavItem[] {
+  return NAV_ITEMS.filter(
+    (item) => item.roles.includes(role) && (!MODULE_GATED[item.href] || hasModule(MODULE_GATED[item.href])),
+  );
 }
 
 /**
@@ -408,7 +423,8 @@ export function LmsDashboardShell({
 }) {
   const pathname = usePathname();
   const { resolvedTheme } = useTheme();
-  const items = React.useMemo(() => lmsNavForRole(role), [role]);
+  const { hasModule } = useTenantModuleAccess();
+  const items = React.useMemo(() => lmsNavForRole(role, hasModule), [role, hasModule]);
 
   const isActive = React.useCallback(
     (href: string) => {

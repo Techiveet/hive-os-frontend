@@ -73,6 +73,16 @@ export default function LmsStudentLoginPage() {
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
+  // The platform sign-in shows why a session ended (expired, signed out
+  // elsewhere); keep that behaviour now that LMS users land here instead.
+  React.useEffect(() => {
+    const reason = sessionStorage.getItem("hive_eject_reason");
+    if (reason) {
+      setError(reason);
+      sessionStorage.removeItem("hive_eject_reason");
+    }
+  }, []);
+
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
@@ -85,6 +95,7 @@ export default function LmsStudentLoginPage() {
     try {
       const res = await fetch(apiUrl, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
@@ -103,7 +114,12 @@ export default function LmsStudentLoginPage() {
       // 2FA global intercept — mirrors the platform sign-in flow.
       if (data.requires_2fa || data.global_2fa_enforced) {
         safeSessionStorageSetItem("hive_pending_email", email);
-        safeSessionStorageSetItem(POST_LOGIN_REDIRECT_STORAGE_KEY, resolveSafePostLoginRedirect());
+        const explicitRedirect = new URLSearchParams(window.location.search).get("redirect")?.trim();
+        if (explicitRedirect?.startsWith("/") && !explicitRedirect.startsWith("//") && !explicitRedirect.includes("\\")) {
+          safeSessionStorageSetItem(POST_LOGIN_REDIRECT_STORAGE_KEY, explicitRedirect);
+        } else {
+          safeSessionStorageRemoveItem(POST_LOGIN_REDIRECT_STORAGE_KEY);
+        }
         if (data.two_factor_token) safeSessionStorageSetItem("hive_2fa_token", data.two_factor_token);
 
         if (data.requires_2fa_setup && data.qr_code_url) {
@@ -132,8 +148,19 @@ export default function LmsStudentLoginPage() {
       initializeSessionActivity();
       sessionStorage.removeItem("hive_eject_reason");
 
-      await logFrontendAction({ module: "Auth", action: "session_initialized", description: `Learner ${email} authenticated.` }).catch(() => {});
-      window.location.href = resolveSafePostLoginRedirect(data.data.user);
+      const redirectPath = resolveSafePostLoginRedirect(data.data.user);
+
+      // Accounts created by an administrator carry a temporary password. Same
+      // rule as the platform sign-in: choose a new one before going anywhere.
+      if (data.data.user?.must_change_password) {
+        safeSessionStorageSetItem("hive_password_change_intended", redirectPath);
+        window.location.href = "/change-password";
+        return;
+      }
+
+      safeSessionStorageRemoveItem("hive_password_change_intended");
+      await logFrontendAction({ module: "Auth", action: "session_initialized", description: `User ${email} authenticated.` }).catch(() => {});
+      window.location.href = redirectPath;
     } catch (err: unknown) {
       const message = getErrorMessage(err, "Invalid credentials provided");
       logFrontendAction({ module: "Auth", action: "login_failed", description: `Failed: ${message}` }).catch(() => {});
@@ -156,7 +183,7 @@ export default function LmsStudentLoginPage() {
               className="hidden rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] sm:inline-flex"
               style={{ backgroundColor: `${LMS_TOKENS.green}1f`, color: LMS_TOKENS.navy }}
             >
-              Student portal
+              Sign in
             </span>
           </div>
           <p className="mt-2 text-sm text-[#4F547B]">
@@ -176,7 +203,7 @@ export default function LmsStudentLoginPage() {
           <form onSubmit={handleLogin} className="mt-8 space-y-5">
             <div className="grid gap-2">
               <Label htmlFor="lms-email" className="text-[15px] font-semibold" style={{ color: LMS_TOKENS.navy }}>
-                Username Or Email
+                Email
               </Label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#9AA0C3]" aria-hidden="true" />

@@ -24,6 +24,7 @@ import {
   toRefundPayload,
   type RefundDetailsForm,
 } from "@/modules/b2b-marketplace/components/RefundDetailsFields";
+import { GatewaySettingsCard } from "@/modules/b2b-marketplace/components/GatewaySettingsCard";
 import { getWorkspaceScopeKey } from "@/lib/runtime-context";
 
 const money = (n: number, currency?: string | null) => formatMoney(n, currency);
@@ -180,6 +181,9 @@ export default function AdminOrders() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Where buyers pay and suppliers are paid from: the marketplace's own accounts */}
+      <GatewaySettingsCard />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card><CardContent className="py-4"><p className="text-xs text-muted-foreground">Orders</p><p className="text-2xl font-black">{orders.length}</p></CardContent></Card>

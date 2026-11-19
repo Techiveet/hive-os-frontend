@@ -70,6 +70,33 @@ export default function LoginPage() {
   const viewLogged = useRef(false);
   const workspaceScope = getWorkspaceScopeKey();
 
+  const [hostChecked, setHostChecked] = useState(false);
+  const [onTenantHost, setOnTenantHost] = useState(false);
+  useEffect(() => {
+    setOnTenantHost(isTenantHost(window.location.hostname));
+    setHostChecked(true);
+  }, []);
+  const { data: landingData, isLoading: landingLoading } = useQuery({
+    queryKey: ["tenantPublicLanding", workspaceScope],
+    enabled: onTenantHost,
+    queryFn: async () => {
+      const res = await fetch(`${getBackendApiRoot()}/tenant/public/landing`, {
+        headers: { Accept: "application/json", ...getTenantHeaders() },
+      });
+      if (!res.ok) throw new Error("Failed to fetch tenant landing settings");
+      return res.json();
+    },
+    staleTime: 600000,
+    retry: 1,
+  });
+  const isLmsTenant = landingData?.data?.business_type === "lms";
+
+  useEffect(() => {
+    if (isLmsTenant) {
+      router.replace(`/lms-login${window.location.search}`);
+    }
+  }, [isLmsTenant, router]);
+
   const { data: brandData } = useQuery({
     queryKey: ["publicBrandSettings", workspaceScope],
     queryFn: async () => {
@@ -213,6 +240,12 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // Hold the page blank while we find out which tenant this is, so an LMS
+  // learner never sees the ERP screen flash before being redirected.
+  if (!hostChecked || (onTenantHost && (landingLoading || isLmsTenant))) {
+    return <div className="min-h-screen w-full bg-background" aria-busy="true" />;
+  }
 
   return (
     <div className="min-h-screen w-full grid lg:grid-cols-2 bg-background text-foreground overflow-hidden relative selection:bg-primary/30">

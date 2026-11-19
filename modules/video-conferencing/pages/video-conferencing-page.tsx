@@ -39,7 +39,31 @@ import { formatDuration, formatInZone, type VideoMeeting } from "../lib/meeting-
 const REFRESH_MS = 60_000;
 const TICK_MS = 30_000;
 
-export function VideoConferencingPage() {
+type VideoConferencingPageProps = {
+  /** Where this page is mounted. Used to clear the ?compose= deep link. */
+  basePath?: string;
+  /** Where the chat workspace lives for the surface this page is shown on. */
+  chatPath?: string;
+};
+
+const DASHBOARD_CHAT_PATH = "/dashboard/chat";
+
+/**
+ * Meetings are joined in Chat. The API hands back dashboard links; on another
+ * surface (the learning space has its own chat at /learn/messages) they are
+ * re-pointed, so joining a class never drops a teacher or learner into a
+ * dashboard they cannot use.
+ */
+function withChatPath(meeting: VideoMeeting, chatPath: string): VideoMeeting {
+  return chatPath === DASHBOARD_CHAT_PATH
+    ? meeting
+    : { ...meeting, join_href: meeting.join_href.replace(DASHBOARD_CHAT_PATH, chatPath) };
+}
+
+export function VideoConferencingPage({
+  basePath = "/dashboard/video-conferencing",
+  chatPath = DASHBOARD_CHAT_PATH,
+}: VideoConferencingPageProps = {}) {
   const router = useRouter();
   const conversationSignal = useChatStore((state) =>
     state.conversations.map((conversation) => `${conversation.id}:${conversation.updated_at}`).join("|"),
@@ -68,8 +92,8 @@ export function VideoConferencingPage() {
         api.get("/video-meetings", { params: { scope: "upcoming" } }),
         api.get("/video-meetings", { params: { scope: "history" } }),
       ]);
-      setUpcoming(upcomingResponse.data?.data ?? []);
-      setHistory(historyResponse.data?.data ?? []);
+      setUpcoming(((upcomingResponse.data?.data ?? []) as VideoMeeting[]).map((meeting) => withChatPath(meeting, chatPath)));
+      setHistory(((historyResponse.data?.data ?? []) as VideoMeeting[]).map((meeting) => withChatPath(meeting, chatPath)));
       setLoadFailed(false);
       setNow(Date.now());
     } catch (error) {
@@ -78,7 +102,7 @@ export function VideoConferencingPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [chatPath]);
 
   useEffect(() => {
     void loadMeetings({ spinner: true });
@@ -112,8 +136,8 @@ export function VideoConferencingPage() {
     setComposerMode(compose);
     setEditing(null);
     setComposerOpen(true);
-    router.replace("/dashboard/video-conferencing", { scroll: false });
-  }, [router]);
+    router.replace(basePath, { scroll: false });
+  }, [router, basePath]);
 
   // New chat activity (e.g. an invite or a call ending) can change meeting state.
   useEffect(() => {
@@ -163,7 +187,7 @@ export function VideoConferencingPage() {
     setEditing(null);
     await loadMeetings({ silent: true });
     if (mode === "edit") return;
-    setCreatedMeeting(meeting);
+    setCreatedMeeting(withChatPath(meeting, chatPath));
     if (mode === "scheduled") setTab("upcoming");
   };
 
@@ -203,7 +227,7 @@ export function VideoConferencingPage() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button variant="outline" className="min-h-11 gap-2" asChild>
-              <Link href="/dashboard/chat">
+              <Link href={chatPath}>
                 <MessageSquare className="h-4 w-4" aria-hidden="true" />
                 Open Chat
               </Link>
@@ -328,7 +352,7 @@ export function VideoConferencingPage() {
                         {meeting.status}
                       </Badge>
                       <Button size="sm" variant="ghost" asChild>
-                        <Link href={`/dashboard/chat?conversation=${meeting.conversation_id}`}>
+                        <Link href={`${chatPath}?conversation=${meeting.conversation_id}`}>
                           <MessageSquare className="h-4 w-4" aria-hidden="true" />
                           <span className="sr-only sm:not-sr-only sm:ml-2">Open chat</span>
                         </Link>

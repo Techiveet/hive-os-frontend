@@ -1,4 +1,4 @@
-import { Award, BarChart3, BookOpen, ClipboardList, GraduationCap, LayoutDashboard, Megaphone, Users } from "lucide-react";
+import { Award, BarChart3, BookOpen, ClipboardList, GraduationCap, LayoutDashboard, Megaphone, UserCog, Users } from "lucide-react";
 import type { FrontendModuleDefinition } from "@/modules/types";
 import {
   LEARNING_MANAGEMENT_COURSE_ROUTE_PERMISSIONS,
@@ -34,6 +34,26 @@ export const lmsModule: FrontendModuleDefinition = {
       icon: BookOpen,
       subscriptionSlug: "learning_management",
       permissions: [...LEARNING_MANAGEMENT_COURSE_ROUTE_PERMISSIONS],
+      placement: "primary",
+    },
+    {
+      moduleId: "lms",
+      translationKey: "nav.lms_staff",
+      fallbackLabel: "Teachers & Staff",
+      href: "/learn/staff",
+      icon: UserCog,
+      subscriptionSlug: "learning_management",
+      permissions: ["manage_learning_management", "manage_users", "create_users"],
+      placement: "primary",
+    },
+    {
+      moduleId: "lms",
+      translationKey: "nav.lms_learning_space",
+      fallbackLabel: "Learning Space",
+      href: "/learn",
+      icon: GraduationCap,
+      subscriptionSlug: "learning_management",
+      permissions: [...LEARNING_MANAGEMENT_ROUTE_PERMISSIONS],
       placement: "primary",
     },
     {

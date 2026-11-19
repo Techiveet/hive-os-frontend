@@ -19,6 +19,8 @@ export default function SubscriptionRequiredPage() {
     isTenantSession() &&
     hasAnyPermission(["manage_module_subscriptions", "view_module_subscriptions"]);
   const canOpenProfile = hasAnyPermission(["view_profile", "edit_profile"]);
+  // Marketplace buyers and suppliers have no use for the main dashboard: send them to their own page.
+  const canOpenMarketplace = !canOpenDashboard && hasPermission("view_b2b_marketplace");
 
   const title = isPermissionDenial ? "Access Denied" : "Subscription Required";
   const description = isPermissionDenial
@@ -45,6 +47,10 @@ export default function SubscriptionRequiredPage() {
           {canOpenDashboard ? (
             <Button asChild variant="outline" className="rounded-full">
               <Link href="/dashboard">Back to Dashboard</Link>
+            </Button>
+          ) : canOpenMarketplace ? (
+            <Button asChild variant="outline" className="rounded-full">
+              <Link href="/dashboard/b2b-marketplace">Go to Marketplace</Link>
             </Button>
           ) : canOpenProfile ? (
             <Button asChild variant="outline" className="rounded-full">

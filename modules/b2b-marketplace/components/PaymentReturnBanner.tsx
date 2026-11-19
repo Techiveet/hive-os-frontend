@@ -3,7 +3,7 @@
 import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, AlertTriangle, Loader2, X } from "lucide-react";
-import { B2BDash } from "@/modules/b2b-marketplace/api";
+import { B2BDash, type B2BOrder } from "@/modules/b2b-marketplace/api";
 
 type Banner = { kind: "checking" | "ok" | "warn"; text: string; orderId?: number };
 
@@ -14,11 +14,7 @@ const errorText = (e: unknown): string => {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/**
- * Chapa sends the buyer back with ?payment=chapa&order=ID. The webhook may be a few
- * seconds late, so ask the server to re-check the payment with Chapa right away
- * (a few tries), then show the result.
- */
+
 export function PaymentReturnBanner() {
   const qc = useQueryClient();
   const [banner, setBanner] = React.useState<Banner | null>(null);
@@ -44,6 +40,9 @@ export function PaymentReturnBanner() {
         try {
           const res = await B2BDash.chapaVerify(id);
           if (res.outcome === "paid") {
+            // Put the fresh order straight into the list so the Pay button disappears at once.
+            qc.setQueryData<B2BOrder[] | undefined>(["b2b", "myOrders"], (old) => old?.map((o) => (o.id === res.data.id ? res.data : o)));
+            qc.invalidateQueries({ queryKey: ["b2b", "myOrders"] });
             setBanner({ kind: "ok", text: "Payment received. Your order is confirmed.", orderId: id });
             break;
           }

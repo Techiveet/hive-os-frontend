@@ -22,7 +22,12 @@ const errorText = (e: unknown): string => {
   return err?.response?.data?.message || err?.message || "Something went wrong";
 };
 
-const RETURN_PATH = "/dashboard/b2b-marketplace";
+// Chapa and Stripe send the buyer back here with ?payment=...&order=ID. It is a page of its own that stays put
+// (receipt, back-to-orders button), so the buyer is not bounced straight back to the orders list.
+const RETURN_PATH = "/dashboard/b2b-marketplace/payment-complete";
+
+/** The order was paid after this screen loaded (another tab, a late webhook): there is nothing left to pay. */
+const isAlreadyPaid = (e: unknown): boolean => /already (been )?paid/i.test(errorText(e));
 
 /**
  * Everything a buyer needs to pay one order: bank transfer, Chapa (ETB orders) and
@@ -50,6 +55,9 @@ export function PayOrderPanel({ order, onSubmitted }: { order: PayableOrder; onS
   });
 
   const payChapa = useMutation({
+    onError: (e) => {
+      if (isAlreadyPaid(e)) onSubmitted();
+    },
     mutationFn: async () => {
       // Save refund details first when the buyer filled them in (they are optional here).
       if (refundFormValid(refund)) await B2BDash.updateRefundDetails(order.id, toRefundPayload(refund));
@@ -61,6 +69,9 @@ export function PayOrderPanel({ order, onSubmitted }: { order: PayableOrder; onS
   });
 
   const payCard = useMutation({
+    onError: (e) => {
+      if (isAlreadyPaid(e)) onSubmitted();
+    },
     mutationFn: () => B2BDash.stripeCheckout(order.id, returnUrl()),
     onSuccess: (res) => {
       if (res?.checkout_url) window.location.href = res.checkout_url;

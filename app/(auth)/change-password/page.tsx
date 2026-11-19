@@ -1,5 +1,6 @@
 "use client";
 
+import { readStoredUser, resolveHomePath } from "@/lib/home-path";
 import { safeLocalStorageSetItem, safeSessionStorageSetItem } from '@/lib/safe-storage';
 
 
@@ -57,6 +58,8 @@ type ApiErrorPayload = {
 
 const resolveSafeIntendedPath = (value: string | null): string => {
   const candidate = value?.trim();
+  // An LMS learner or teacher's home is /learn, not the ERP dashboard.
+  const home = resolveHomePath(readStoredUser());
 
   if (
     !candidate ||
@@ -64,12 +67,12 @@ const resolveSafeIntendedPath = (value: string | null): string => {
     candidate.startsWith("//") ||
     candidate.includes("\\")
   ) {
-    return "/dashboard";
+    return home;
   }
 
   const pathname = candidate.split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/";
   return pathname === "/change-password" || pathname.startsWith("/sign-in")
-    ? "/dashboard"
+    ? home
     : candidate;
 };
 

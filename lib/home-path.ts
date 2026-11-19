@@ -13,12 +13,33 @@
 
 const DASHBOARD = "/dashboard";
 const LMS_HOME = "/learn";
+const MARKETPLACE_HOME = "/dashboard/b2b-marketplace";
 
 type HomePathUser = {
   home_path?: string | null;
   business_type?: string | null;
   roles?: unknown;
+  permissions?: unknown;
 };
+
+function permissionNames(user: HomePathUser): string[] {
+  const permissions = user.permissions;
+  if (!Array.isArray(permissions)) return [];
+  return permissions
+    .map((permission) => (typeof permission === "string" ? permission : (permission as { name?: string })?.name))
+    .filter((name): name is string => typeof name === "string");
+}
+
+/**
+ * A B2B marketplace buyer or supplier cannot open the main dashboard (they lack its permission), so
+ * landing them there shows Access Denied. Their home is the marketplace; anyone who can open the
+ * dashboard keeps it.
+ */
+export function isMarketplaceOnlyUser(user: HomePathUser | null | undefined): boolean {
+  if (!user) return false;
+  const permissions = permissionNames(user);
+  return !permissions.includes("view_system_dashboard") && permissions.includes("view_b2b_marketplace");
+}
 
 function roleNames(user: HomePathUser): string[] {
   const roles = user.roles;
@@ -33,7 +54,7 @@ export function resolveHomePath(user: HomePathUser | null | undefined): string {
   if (typeof user.home_path === "string" && user.home_path.startsWith("/")) {
     return user.home_path;
   }
-  if (user.business_type !== "lms") return DASHBOARD;
+  if (user.business_type !== "lms") return isMarketplaceOnlyUser(user) ? MARKETPLACE_HOME : DASHBOARD;
   return roleNames(user).includes("Super Admin") ? DASHBOARD : LMS_HOME;
 }
 

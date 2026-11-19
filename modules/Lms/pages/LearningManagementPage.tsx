@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   Archive,
+  ArrowDown,
+  ArrowUp,
   Award,
   BarChart3,
   BookOpen,
@@ -19,6 +21,7 @@ import {
   Search,
   Send,
   Star,
+  Trash2,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -341,7 +344,7 @@ export default function LearningManagementPage({ initialTab = "overview" }: Lear
           if (!open) setEditingCourse(null);
         }}
       />
-      <LessonDialog course={lessonCourse} onOpenChange={(open) => !open && setLessonCourse(null)} />
+      <LessonsDialog course={lessonCourse} onOpenChange={(open) => !open && setLessonCourse(null)} />
       <EnrollmentDialog open={enrollmentDialogOpen} onOpenChange={setEnrollmentDialogOpen} courses={courses} />
     </main>
   );
@@ -555,7 +558,7 @@ function CoursesSection({
                     {canManageCourses && (
                       <Button variant="outline" size="sm" onClick={() => onAddLesson(course)}>
                         <Layers3 className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {lms("admin.catalog.lesson", "Lesson")}
+                        {lms("admin.catalog.lessons", "Lessons")}
                       </Button>
                     )}
                     {canManageCourses && course.status !== "published" && (
@@ -963,7 +966,7 @@ function CourseDialog({
             {editing
               ? lms(
                   "admin.course_dialog.edit_desc",
-                  "Change the course details. Lessons are managed from the catalog row.",
+                  "Change the course details. Use the Lessons button on the course row to add, edit, reorder or remove its lessons.",
                 )
               : lms("admin.course_dialog.create_desc", "Add the course shell and an optional first lesson.")}
           </DialogDescription>
@@ -1116,46 +1119,225 @@ function inferLessonType(url: string): LmsLesson["content_type"] | null {
   return null;
 }
 
-function LessonDialog({ course, onOpenChange }: { course: LmsCourse | null; onOpenChange: (open: boolean) => void }) {
+/**
+ * Everything about a course's lessons in one place: see them in the order learners take
+ * them, add, edit, move and delete. The same form serves add and edit.
+ */
+function LessonsDialog({ course, onOpenChange }: { course: LmsCourse | null; onOpenChange: (open: boolean) => void }) {
   const lms = useLmsCopy();
   const queryClient = useQueryClient();
-  const [form, setForm] = React.useState({
-    title: "",
-    content_type: "article" as LmsLesson["content_type"],
-    duration_minutes: 15,
-    content: "",
-    resource_url: "",
+  const [editing, setEditing] = React.useState<LmsLesson | "new" | null>(null);
+
+  const lessonsQuery = useQuery({
+    queryKey: ["lms-lessons", course?.id],
+    queryFn: () => learningApi.listLessons(course!.id),
+    enabled: Boolean(course),
+  });
+  const lessons = lessonsQuery.data ?? [];
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["lms-lessons", course?.id] });
+    invalidateLearning(queryClient);
+  };
+
+  const move = useMutation({
+    mutationFn: ({ from, to }: { from: number; to: number }) => {
+      const reordered = [...lessons];
+      const [moved] = reordered.splice(from, 1);
+      reordered.splice(to, 0, moved);
+      return learningApi.reorderLessons(course!.id, reordered.map((lesson, index) => ({ id: lesson.id, sort_order: index + 1 })));
+    },
+    onSuccess: refresh,
+    onError: (error) => toast.error(errorMessage(error, lms("admin.toast.lesson_move_failed", "Unable to reorder lessons."))),
   });
 
-  React.useEffect(() => {
-    if (course) {
-      setForm({ title: "", content_type: "article", duration_minutes: 15, content: "", resource_url: "" });
+  const remove = useMutation({
+    mutationFn: (lesson: LmsLesson) => learningApi.deleteLesson(course!.id, lesson.id),
+    onSuccess: () => {
+      toast.success(lms("admin.toast.lesson_deleted", "Lesson deleted."));
+      refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, lms("admin.toast.lesson_delete_failed", "Unable to delete the lesson."))),
+  });
+
+  const confirmDelete = (lesson: LmsLesson) => {
+    const started = lesson.started_count ?? 0;
+    const warning = started > 0
+      ? `${started} learner${started === 1 ? " has" : "s have"} already opened "${lesson.title}" (${lesson.completed_count ?? 0} finished it). Their progress on it will be deleted.\n\n`
+      : "";
+    if (window.confirm(`${warning}Delete the lesson "${lesson.title}"? This cannot be undone.`)) {
+      remove.mutate(lesson);
     }
-  }, [course]);
+  };
+
+  return (
+    <>
+      <Dialog open={Boolean(course)} onOpenChange={onOpenChange}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{lms("admin.lessons.title", "Lessons")}{course ? ` · ${course.title}` : ""}</DialogTitle>
+            <DialogDescription>
+              {course?.sequential_lessons
+                ? lms("admin.lessons.description_sequential", "Learners take these lessons in this order. Use the arrows to change it.")
+                : lms("admin.lessons.description", "The lessons of this course, in the order they are listed to learners.")}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">
+              {lessons.length} {lessons.length === 1 ? "lesson" : "lessons"}
+              {lessons.length > 0 ? ` · ${lessons.reduce((sum, lesson) => sum + (lesson.duration_minutes || 0), 0)} min` : ""}
+            </p>
+            <div className="flex gap-2">
+              {course && (
+                <Button asChild variant="outline" size="sm">
+                  <a href={`/learn/courses/${course.id}`} target="_blank" rel="noreferrer">{lms("admin.lessons.preview", "Preview as learner")}</a>
+                </Button>
+              )}
+              <Button size="sm" onClick={() => setEditing("new")}>
+                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                {lms("admin.lessons.add", "Add lesson")}
+              </Button>
+            </div>
+          </div>
+
+          {lessonsQuery.isLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">{lms("admin.lessons.loading", "Loading lessons…")}</p>
+          ) : lessons.length === 0 ? (
+            <p className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
+              {lms("admin.lessons.empty", "This course has no lessons yet. Add the first one - a course needs at least one before it can be published.")}
+            </p>
+          ) : (
+            <ol className="space-y-2">
+              {lessons.map((lesson, index) => (
+                <li key={lesson.id} className="flex flex-wrap items-center gap-3 rounded-lg border bg-background p-3">
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold">{index + 1}</span>
+                  <div className="min-w-[180px] flex-1">
+                    <p className="font-medium">{lesson.title}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {enumLabel(lms, lesson.content_type)} · {lesson.duration_minutes || 0} min
+                      {lesson.resource_url ? ` · ${lms("admin.lessons.has_resource", "has a file or link")}` : ""}
+                      {" · "}
+                      {(lesson.started_count ?? 0) > 0
+                        ? `${lesson.completed_count ?? 0} finished, ${lesson.started_count} started`
+                        : lms("admin.lessons.no_learners", "no learner activity yet")}
+                    </p>
+                  </div>
+                  <Badge variant={lesson.is_required ? "default" : "outline"}>
+                    {lesson.is_required ? lms("admin.lessons.required", "Required") : lms("admin.lessons.optional", "Optional")}
+                  </Badge>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost" size="icon" className="h-8 w-8"
+                      aria-label={`Move ${lesson.title} up`}
+                      disabled={index === 0 || move.isPending}
+                      onClick={() => move.mutate({ from: index, to: index - 1 })}
+                    >
+                      <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon" className="h-8 w-8"
+                      aria-label={`Move ${lesson.title} down`}
+                      disabled={index === lessons.length - 1 || move.isPending}
+                      onClick={() => move.mutate({ from: index, to: index + 1 })}
+                    >
+                      <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setEditing(lesson)}>
+                      <PenLine className="mr-2 h-4 w-4" aria-hidden="true" />
+                      {lms("admin.catalog.edit", "Edit")}
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon" className="h-8 w-8 text-destructive"
+                      aria-label={`Delete ${lesson.title}`}
+                      disabled={remove.isPending}
+                      onClick={() => confirmDelete(lesson)}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <LessonFormDialog
+        courseId={course?.id ?? null}
+        lesson={editing === "new" ? null : editing}
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        onSaved={refresh}
+      />
+    </>
+  );
+}
+
+function LessonFormDialog({
+  courseId,
+  lesson,
+  open,
+  onClose,
+  onSaved,
+}: {
+  courseId: string | null;
+  lesson: LmsLesson | null;
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const lms = useLmsCopy();
+  const blank = { title: "", content_type: "article" as LmsLesson["content_type"], duration_minutes: 15, content: "", resource_url: "", is_required: true };
+  const [form, setForm] = React.useState(blank);
+
+  // Start from the lesson being edited, or from a blank form when adding.
+  React.useEffect(() => {
+    if (!open) return;
+    setForm(lesson
+      ? {
+          title: lesson.title,
+          content_type: lesson.content_type,
+          duration_minutes: lesson.duration_minutes ?? 0,
+          content: lesson.content ?? "",
+          resource_url: lesson.resource_url ?? "",
+          is_required: lesson.is_required,
+        }
+      : blank);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, lesson?.id]);
 
   const mutation = useMutation({
-    mutationFn: () => learningApi.addLesson(course?.id || "", {
-      title: form.title,
-      content_type: form.content_type,
-      duration_minutes: form.duration_minutes,
-      content: form.content || undefined,
-      resource_url: form.resource_url || undefined,
-      is_required: true,
-    }),
-    onSuccess: () => {
-      toast.success(lms("admin.toast.lesson_added", "Lesson added."));
-      onOpenChange(false);
-      invalidateLearning(queryClient);
+    mutationFn: () => {
+      const payload = {
+        title: form.title.trim(),
+        content_type: form.content_type,
+        duration_minutes: form.duration_minutes,
+        // Editing must be able to clear these, so send null rather than leaving them out.
+        content: form.content || null,
+        resource_url: form.resource_url || null,
+        is_required: form.is_required,
+      };
+      return lesson
+        ? learningApi.updateLesson(courseId || "", lesson.id, payload)
+        : learningApi.addLesson(courseId || "", payload);
     },
-    onError: (error) => toast.error(errorMessage(error, lms("admin.toast.lesson_failed", "Unable to add lesson."))),
+    onSuccess: () => {
+      toast.success(lesson ? lms("admin.toast.lesson_saved", "Lesson saved.") : lms("admin.toast.lesson_added", "Lesson added."));
+      onSaved();
+      onClose();
+    },
+    onError: (error) => toast.error(errorMessage(error, lms("admin.toast.lesson_failed", "Unable to save the lesson."))),
   });
 
   return (
-    <Dialog open={Boolean(course)} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Add lesson</DialogTitle>
-          <DialogDescription>{course ? `Extend ${course.title}.` : "Add a lesson to a course."}</DialogDescription>
+          <DialogTitle>{lesson ? lms("admin.lessons.edit_title", "Edit lesson") : lms("admin.lessons.add_title", "Add lesson")}</DialogTitle>
+          <DialogDescription>
+            {lesson ? lms("admin.lessons.edit_desc", "Change what learners see in this lesson.") : lms("admin.lessons.add_desc", "It is added at the end of the course; move it with the arrows afterwards.")}
+          </DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -1198,10 +1380,9 @@ function LessonDialog({ course, onOpenChange }: { course: LmsCourse | null; onOp
                 setForm((current) => ({
                   ...current,
                   resource_url: url,
-                  // Pick up the type from the file when the author has not
-                  // chosen one. Uploading an .mp4 and having the lesson saved
-                  // as an article — so it never reaches the video player — is
-                  // never what was meant.
+                  // Pick up the type from the file when the author has not chosen one.
+                  // Uploading an .mp4 and having the lesson saved as an article - so it
+                  // never reaches the video player - is never what was meant.
                   content_type:
                     current.content_type === "article"
                       ? inferLessonType(url) ?? current.content_type
@@ -1213,10 +1394,19 @@ function LessonDialog({ course, onOpenChange }: { course: LmsCourse | null; onOp
           <Field label={lms("admin.lesson_dialog.content", "Lesson content")} htmlFor="lms-lesson-content">
             <Textarea id="lms-lesson-content" value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} />
           </Field>
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox checked={form.is_required} onCheckedChange={(checked) => setForm({ ...form, is_required: checked === true })} />
+            <span>
+              <strong>{lms("admin.lessons.required_label", "Required to finish the course")}</strong>
+              <span className="block text-muted-foreground">
+                {lms("admin.lessons.required_hint", "Turn off for bonus material. Making a lesson optional finishes the course for learners who were only missing it.")}
+              </span>
+            </span>
+          </label>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={mutation.isPending || !course || !form.title.trim()}>
-              Add lesson
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={mutation.isPending || !courseId || !form.title.trim()}>
+              {lesson ? lms("admin.lessons.save", "Save lesson") : lms("admin.lessons.add", "Add lesson")}
             </Button>
           </DialogFooter>
         </form>

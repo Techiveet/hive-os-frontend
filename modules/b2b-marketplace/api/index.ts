@@ -441,6 +441,46 @@ export const B2BDash = {
   marketplaceSettings: () => body<{ commission_percent: number }>(api.get("/b2b-marketplace/settings")),
   updateCommission: (commission_percent: number) =>
     body<{ commission_percent: number }>(api.put("/b2b-marketplace/settings", { commission_percent })),
+
+  // The marketplace's own payment accounts (admin). Secrets are write-only: they are never sent back.
+  paymentGateways: () => body<B2BPaymentGateway[]>(api.get("/b2b-marketplace/payment-gateways")),
+  savePaymentGateway: (provider: B2BGatewayProvider, payload: B2BPaymentGatewayInput) =>
+    body<B2BPaymentGateway[]>(api.put(`/b2b-marketplace/payment-gateways/${provider}`, payload)),
+  removePaymentGateway: (provider: B2BGatewayProvider, confirmPendingOperations = false) =>
+    body<B2BPaymentGateway[]>(
+      api.delete(`/b2b-marketplace/payment-gateways/${provider}`, {
+        data: confirmPendingOperations ? { confirm_pending_operations: true } : {},
+      }),
+    ),
+};
+
+export type B2BGatewayProvider = "chapa" | "stripe";
+
+export type B2BPaymentGateway = {
+  provider: B2BGatewayProvider;
+  label: string;
+  /** The platform owner allows workspaces to use this provider. */
+  platform_enabled: boolean;
+  /** This workspace has saved its own keys. */
+  configured: boolean;
+  /** The workspace's own on/off switch. */
+  enabled: boolean;
+  /** The marketplace can really take payments with it right now. */
+  active: boolean;
+  /** tenant = your own account, central = temporary platform fallback, none = not available. */
+  source: "tenant" | "central" | "none";
+  key_mode: "test" | "live" | null;
+  has_webhook_secret: boolean;
+  webhook_url: string;
+  transfer_approval_url: string | null;
+  updated_at: string | null;
+};
+
+export type B2BPaymentGatewayInput = {
+  enabled?: boolean;
+  secret_key?: string;
+  webhook_secret?: string;
+  confirm_pending_operations?: boolean;
 };
 
 export type B2BOrderPart = {
