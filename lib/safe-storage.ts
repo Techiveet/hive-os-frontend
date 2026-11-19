@@ -172,22 +172,22 @@ export const pruneUserPayload = (rawValue: string): string => {
 const TOKEN_STORAGE_KEYS = new Set(["hive_token", "hive_original_token"]);
 
 /**
- * Scrubs raw personal access tokens into a non-sensitive cookie-session marker
- * before persisting to localStorage. The actual bearer secret is held in an
- * httpOnly cookie (`hive_access_token` / `hive_original_access_token`) managed
- * by the backend. Automated Playwright harnesses (`navigator.webdriver`) keep
- * the token value when calling cross-host backend fixture endpoints directly.
+ * Optionally scrubs raw personal access tokens into a non-sensitive
+ * cookie-session marker before persisting to localStorage when
+ * `NEXT_PUBLIC_COOKIE_ONLY_AUTH="true"` is explicitly enabled alongside a
+ * backend that issues and authenticates HttpOnly session cookies
+ * (`hive_access_token` / `hive_original_access_token`).
+ *
+ * When cookie-only auth is not explicitly enabled, keep the bearer token intact
+ * so deployments whose backend authenticates via `Authorization: Bearer` (and
+ * dual-auth rollouts before the backend cookie rollout) continue to sign in.
  */
 const toCookieSessionMarker = (key: string, value: string): string => {
   if (!TOKEN_STORAGE_KEYS.has(key) || !value || value.startsWith("cookie-session:")) {
     return value;
   }
 
-  const forceCookieOnly = process.env.NEXT_PUBLIC_COOKIE_ONLY_AUTH === "true";
-  const isAutomatedDriver =
-    typeof window !== "undefined" && Boolean(window.navigator?.webdriver);
-
-  if (isAutomatedDriver && !forceCookieOnly) {
+  if (process.env.NEXT_PUBLIC_COOKIE_ONLY_AUTH !== "true") {
     return value;
   }
 
