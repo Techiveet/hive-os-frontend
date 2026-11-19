@@ -403,6 +403,7 @@ function TransferDialog({ target, orders, onClose, onDone }: {
   const part = target?.kind === "payout" ? (order?.parts ?? []).find((p) => p.id === target.part.id) ?? target.part : null;
   const viaStripe = order?.payment_method === "stripe";
   const viaChapa = order?.payment_method === "chapa";
+  const viaArifpay = order?.payment_method === "arifpay";
   // Chapa refunds go through the gateway unless the admin chooses to refund by hand (e.g. Chapa refused it).
   const [manualRefund, setManualRefund] = React.useState(false);
   const viaGateway = viaStripe || (viaChapa && !manualRefund);
@@ -524,6 +525,11 @@ function TransferDialog({ target, orders, onClose, onDone }: {
                     {manualRefund ? "Refund through Chapa instead" : "Refund manually instead (for example if Chapa refuses it)"}
                   </button>
                 </div>
+              )}
+              {viaArifpay && (
+                <p className="rounded-xl bg-muted/40 px-3 py-2 text-sm">
+                  This was paid through ArifPay, which cannot refund payments. Send the refund to the buyer yourself, then record its reference below.
+                </p>
               )}
               {viaStripe ? (
                 <p className="rounded-xl bg-muted/40 px-3 py-2 text-sm">

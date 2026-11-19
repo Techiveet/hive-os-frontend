@@ -385,6 +385,11 @@ export const B2BDash = {
     body<{ checkout_url: string }>(api.post(`/b2b-marketplace/orders/${id}/chapa-checkout`, { return_url: returnUrl })),
   chapaVerify: (id: number) =>
     api.post(`/b2b-marketplace/orders/${id}/chapa-verify`).then((r) => r.data as { message: string; outcome: "paid" | "pending" | "failed" | "mismatch" | "unknown"; data: B2BOrder }),
+  arifpayCheckout: (id: number, payload: { phone: string; payment_methods?: string[]; return_url: string }) =>
+    body<{ checkout_url: string }>(api.post(`/b2b-marketplace/orders/${id}/arifpay-checkout`, payload)),
+  /** Re-check an online payment (Chapa or ArifPay) with the provider. */
+  onlineVerify: (id: number) =>
+    api.post(`/b2b-marketplace/orders/${id}/online-verify`).then((r) => r.data as { message: string; outcome: "paid" | "pending" | "failed" | "mismatch" | "unknown"; data: B2BOrder }),
   updateRefundDetails: (id: number, details: B2BRefundDetailsInput) =>
     body<B2BOrder>(api.put(`/b2b-marketplace/orders/${id}/refund-details`, details)),
 
@@ -454,7 +459,7 @@ export const B2BDash = {
     ),
 };
 
-export type B2BGatewayProvider = "chapa" | "stripe";
+export type B2BGatewayProvider = "chapa" | "stripe" | "arifpay";
 
 export type B2BPaymentGateway = {
   provider: B2BGatewayProvider;
@@ -471,8 +476,13 @@ export type B2BPaymentGateway = {
   source: "tenant" | "central" | "none";
   key_mode: "test" | "live" | null;
   has_webhook_secret: boolean;
-  webhook_url: string;
+  /** Null for ArifPay: it is told the notification address with every payment. */
+  webhook_url: string | null;
   transfer_approval_url: string | null;
+  /** ArifPay only: the bank account every buyer's payment is settled into (masked) and its bank code. */
+  settlement_account_masked?: string | null;
+  settlement_bank?: string | null;
+  has_settlement?: boolean;
   updated_at: string | null;
 };
 
@@ -480,6 +490,8 @@ export type B2BPaymentGatewayInput = {
   enabled?: boolean;
   secret_key?: string;
   webhook_secret?: string;
+  settlement_account?: string;
+  settlement_bank?: string;
   confirm_pending_operations?: boolean;
 };
 
@@ -572,6 +584,7 @@ export type B2BPaymentMethods = {
   default_currency: string;
   manual: { enabled: boolean };
   chapa: { enabled: boolean; currency: string };
+  arifpay: { enabled: boolean; currency: string; methods: { code: string; label: string }[] };
   stripe: { enabled: boolean };
 };
 

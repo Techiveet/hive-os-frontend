@@ -31,7 +31,9 @@ export function PayoutAccountCard() {
   // When Chapa is on, the supplier picks their bank or wallet from Chapa's list: that is what lets the marketplace pay them automatically.
   const banksQ = useQuery({ queryKey: ["b2b", "payoutBanks"], queryFn: () => B2BDash.payoutBanks(), staleTime: 5 * 60_000 });
   const banks = banksQ.data?.enabled ? banksQ.data.banks : [];
-  const useList = banks.length > 0;
+  // A supplier whose bank is not in Chapa's list can still register: they type it in, and the marketplace pays them by hand.
+  const [manualEntry, setManualEntry] = useState(false);
+  const useList = banks.length > 0 && !manualEntry;
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<B2BPayoutAccountInput>({ method: "bank", bank_name: "", account_name: "", account_number: "", bank_code: null });
@@ -44,6 +46,8 @@ export function PayoutAccountCard() {
       account_number: "", // the full number is never sent back; it has to be typed again
       bank_code: account?.bank_code ?? null,
     });
+    // An account saved without a Chapa bank is edited as typed, not forced into the list.
+    setManualEntry(account ? account.bank_code == null : false);
     setEditing(true);
   };
 
@@ -87,6 +91,7 @@ export function PayoutAccountCard() {
         ) : showForm ? (
           <div className="space-y-3">
             {useList ? (
+              <>
               <Select
                 value={form.bank_code ? String(form.bank_code) : ""}
                 onValueChange={(v) => {
@@ -101,8 +106,34 @@ export function PayoutAccountCard() {
                   ))}
                 </SelectContent>
               </Select>
+              <button
+                type="button"
+                className="text-xs font-semibold text-primary underline"
+                onClick={() => {
+                  setForm({ ...form, bank_code: null, bank_name: "", method: "bank" });
+                  setManualEntry(true);
+                }}
+              >
+                My bank or wallet isn&apos;t listed
+              </button>
+              </>
             ) : (
               <>
+                {banks.length > 0 && (
+                  <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                    Type your bank details below. The marketplace will pay you by hand instead of automatically.{" "}
+                    <button
+                      type="button"
+                      className="font-semibold text-primary underline"
+                      onClick={() => {
+                        setForm({ ...form, bank_code: null, bank_name: "" });
+                        setManualEntry(false);
+                      }}
+                    >
+                      Choose from the list instead
+                    </button>
+                  </p>
+                )}
                 <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v as "bank" | "wallet" })}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>

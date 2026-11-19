@@ -10,6 +10,8 @@ import type { Browser, Page } from "@playwright/test";
  *   1. supplier saves a bank account -> admin verifies it -> order is delivered -> admin pays the supplier
  *      automatically through Chapa (including Chapa's server-approval callback)
  *   2. buyer pays through Chapa -> comes back to the app -> admin refunds the payment through Chapa
+ *   3. buyer pays with Telebirr through ArifPay (unpaid until ArifPay confirms) -> admin records a manual refund
+ *      (the workspace needs its own ArifPay key and settlement account; skipped otherwise)
  */
 test.describe.configure({ mode: "serial" });
 test.use({ launchOptions: { args: [] } });
@@ -121,6 +123,64 @@ test("a buyer pays through Chapa and the admin refunds it through Chapa", async 
   expect(chapa.refunds).toHaveLength(1);
   expect(chapa.refunds[0].amount).toBe("400.00");
   expect(chapa.refunds[0].paymentReference).toMatch(/^CHAPA-MOCK-/);
+
+  const invoice = await api<{ data: { payment_status: string } }>(admin, "GET", `/b2b-marketplace/orders/${order.id}/invoice`);
+  expect(invoice.json.data.payment_status).toBe("refunded");
+});
+
+test("a buyer pays through ArifPay and the admin refunds it by hand", async ({ browser, b2b, chapa }) => {
+  test.setTimeout(300_000);
+  const base = frontendUrl(b2b);
+
+  const buyer = await signedInPage(browser, b2b, "buyer");
+  const methods = await api<{ data: { arifpay: { enabled: boolean } } }>(buyer, "GET", "/b2b-marketplace/payment-methods");
+  test.skip(
+    !methods.json.data.arifpay.enabled,
+    "ArifPay is off for this workspace: it needs the platform to allow ArifPay and its own API key and settlement account (b2b:acceptance-fixture --arifpay-base-url sets them)",
+  );
+
+  const order = await placeOrder(buyer, b2b, 2);
+
+  // A session is created with our nonce, the buyer's phone, and the operator's settlement account as beneficiary.
+  const checkout = await api<{ data: { checkout_url: string } }>(buyer, "POST", `/b2b-marketplace/orders/${order.id}/arifpay-checkout`, {
+    phone: "0911223344",
+    payment_methods: ["TELEBIRR_USSD"],
+    return_url: `${base}/dashboard/b2b-marketplace`,
+  });
+  expect(checkout.status).toBe(200);
+  const sessionId = decodeURIComponent(checkout.json.data.checkout_url.split("/").pop() ?? "");
+  const session = chapa.arifSessions.get(sessionId);
+  expect(session?.total).toBe(400);
+  expect(session?.nonce).toMatch(/^b2bpay-[0-9a-f]+-\d+-[0-9a-f]{8}$/);
+  expect(session?.phone).toBe("251911223344");
+  expect(session?.paymentMethods).toEqual(["TELEBIRR_USSD"]);
+  expect(session?.beneficiaries).toHaveLength(1);
+  expect(session?.beneficiaries[0].amount).toBe(400);
+
+  // Coming back to the app proves nothing: until ArifPay confirms, the order is not paid.
+  await buyer.goto(`${base}/dashboard/b2b-marketplace?payment=arifpay&order=${order.id}`);
+  await expect(buyer.getByText(/ArifPay has not confirmed the payment yet/)).toBeVisible({ timeout: 40_000 });
+  const before = await api<{ data: { payment_status: string } }>(buyer, "GET", `/b2b-marketplace/orders/${order.id}`);
+  expect(before.json.data.payment_status).toBe("unpaid");
+
+  // The buyer approves the payment on their phone; the next check settles the order.
+  chapa.markArifPayPaid(sessionId);
+  await buyer.goto(`${base}/dashboard/b2b-marketplace?payment=arifpay&order=${order.id}`);
+  await expect(buyer.getByText("Payment received. Your order is confirmed.")).toBeVisible({ timeout: 30_000 });
+
+  // ArifPay cannot refund: the admin sends the money by hand and records the reference.
+  expect((await api(buyer, "PUT", `/b2b-marketplace/orders/${order.id}/refund-details`, {
+    refund_bank_name: "Commercial Bank of Ethiopia", refund_account_name: "Acceptance Buyer Co", refund_account_number: "0011223344",
+  })).status).toBe(200);
+
+  const admin = await signedInPage(browser, b2b, "admin");
+  await openTab(admin, b2b, "Orders & Payments");
+  await expect(admin.getByText(order.order_number).first()).toBeVisible();
+  await admin.getByRole("button", { name: "Refund", exact: true }).click();
+  await expect(admin.getByText(/ArifPay, which cannot refund payments/)).toBeVisible();
+  await admin.getByPlaceholder("Refund transfer reference *").fill("E2E-ARIF-REFUND-1");
+  await admin.getByRole("button", { name: "Record refund as sent" }).click();
+  await expect(admin.getByRole("button", { name: "Record refund as sent" })).toHaveCount(0);
 
   const invoice = await api<{ data: { payment_status: string } }>(admin, "GET", `/b2b-marketplace/orders/${order.id}/invoice`);
   expect(invoice.json.data.payment_status).toBe("refunded");

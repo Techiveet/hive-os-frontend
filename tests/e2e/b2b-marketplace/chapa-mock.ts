@@ -16,6 +16,15 @@ export type MockTransfer = {
   status: "pending" | "success" | "failed";
   approvalHttpStatus: number | null;
 };
+export type MockArifSession = {
+  sessionId: string;
+  nonce: string;
+  total: number;
+  phone: string;
+  paymentMethods: string[];
+  beneficiaries: { accountNumber: string; bank: string; amount: number }[];
+  paid: boolean;
+};
 export type MockRefund = { paymentReference: string; amount: string; reference: string; refId: string; reason: string };
 
 export type ChapaMock = {
@@ -23,8 +32,11 @@ export type ChapaMock = {
   payments: Map<string, MockPayment>;
   transfers: Map<string, MockTransfer>;
   refunds: MockRefund[];
+  arifSessions: Map<string, MockArifSession>;
   /** Pretend the buyer completed the hosted checkout. */
   markPaid: (txRef: string) => void;
+  /** Pretend the buyer approved the ArifPay payment (Telebirr prompt, bank app...). */
+  markArifPayPaid: (sessionId: string) => void;
   close: () => Promise<void>;
 };
 
@@ -60,6 +72,7 @@ export const startChapaMock = async (options: Options): Promise<ChapaMock> => {
   const payments = new Map<string, MockPayment>();
   const transfers = new Map<string, MockTransfer>();
   const refunds: MockRefund[] = [];
+  const arifSessions = new Map<string, MockArifSession>();
   let counter = 0;
 
   const approve = async (transfer: MockTransfer) => {
@@ -94,6 +107,43 @@ export const startChapaMock = async (options: Options): Promise<ChapaMock> => {
     const path = url.pathname;
     const method = request.method ?? "GET";
     const raw = method === "GET" ? "" : await readBody(request);
+
+    // ArifPay: hosted checkout sessions (the mock is served under /api, like the real gateway).
+    if (method === "POST" && path === "/api/checkout/session") {
+      const body = JSON.parse(raw) as {
+        nonce: string; phone: string; paymentMethods: string[];
+        beneficiaries: { accountNumber: string; bank: string; amount: number }[];
+      };
+      const sessionId = `ARIF-MOCK-${++counter}`;
+      const total = body.beneficiaries.reduce((sum, b) => sum + Number(b.amount), 0);
+      arifSessions.set(sessionId, {
+        sessionId, nonce: body.nonce, total, phone: body.phone,
+        paymentMethods: body.paymentMethods, beneficiaries: body.beneficiaries, paid: false,
+      });
+
+      return send(response, 200, {
+        error: false,
+        msg: "Success",
+        data: { sessionId, paymentUrl: `${options.publicUrl}/arifpay/${sessionId}`, cancelUrl: "", totalAmount: total },
+      });
+    }
+
+    if (method === "GET" && path.startsWith("/api/checkout/session/")) {
+      const session = arifSessions.get(decodeURIComponent(path.split("/").pop() ?? ""));
+      if (!session) return send(response, 404, { error: true, msg: "Session not found", data: null });
+
+      return send(response, 200, {
+        error: false,
+        msg: "Success",
+        data: {
+          uuid: session.sessionId,
+          nonce: session.nonce,
+          totalAmount: session.total,
+          test: false,
+          transaction: { transactionStatus: session.paid ? "SUCCESS" : "PENDING" },
+        },
+      });
+    }
 
     if (method === "GET" && path === "/v1/banks") {
       return send(response, 200, { message: "Banks retrieved", status: "success", data: BANKS });
@@ -199,6 +249,12 @@ export const startChapaMock = async (options: Options): Promise<ChapaMock> => {
     payments,
     transfers,
     refunds,
+    arifSessions,
+    markArifPayPaid: (sessionId: string) => {
+      const session = arifSessions.get(sessionId);
+      if (!session) throw new Error(`The mock never saw ArifPay session ${sessionId}`);
+      session.paid = true;
+    },
     markPaid: (txRef: string) => {
       const payment = payments.get(txRef);
       if (!payment) throw new Error(`The mock never saw checkout ${txRef}`);

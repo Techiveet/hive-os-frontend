@@ -20,10 +20,12 @@ export function PaymentReturnBanner() {
   const [banner, setBanner] = React.useState<Banner | null>(null);
   const started = React.useRef(false);
 
+
   React.useEffect(() => {
     if (started.current || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get("payment") !== "chapa") return;
+    const provider = params.get("payment");
+    if (provider !== "chapa" && provider !== "arifpay") return;
     const id = Number(params.get("order"));
     if (!id) return;
     started.current = true;
@@ -33,12 +35,13 @@ export function PaymentReturnBanner() {
     ["payment", "order", "trx_ref", "tx_ref", "ref_id", "status"].forEach((k) => url.searchParams.delete(k));
     window.history.replaceState({}, "", url.toString());
 
-    setBanner({ kind: "checking", text: "Checking your payment with Chapa…" });
+    const name = provider === "arifpay" ? "ArifPay" : "Chapa";
+    setBanner({ kind: "checking", text: `Checking your payment with ${name}…` });
 
     (async () => {
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
-          const res = await B2BDash.chapaVerify(id);
+          const res = await B2BDash.onlineVerify(id);
           if (res.outcome === "paid") {
             // Put the fresh order straight into the list so the Pay button disappears at once.
             qc.setQueryData<B2BOrder[] | undefined>(["b2b", "myOrders"], (old) => old?.map((o) => (o.id === res.data.id ? res.data : o)));
@@ -51,7 +54,12 @@ export function PaymentReturnBanner() {
             break;
           }
           if (attempt === 3) {
-            setBanner({ kind: "warn", text: "We have not received the payment yet. If you paid, this order will update automatically within a few minutes." });
+            setBanner({
+              kind: "warn",
+              text: provider === "arifpay"
+                ? "ArifPay has not confirmed the payment yet. If you approved it on your phone, press \"Check payment\" on your order in a minute."
+                : "We have not received the payment yet. If you paid, press \"Check payment\" on your order in a minute.",
+            });
           }
         } catch (e) {
           if (attempt === 3) setBanner({ kind: "warn", text: errorText(e) });

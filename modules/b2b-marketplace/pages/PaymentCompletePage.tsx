@@ -26,7 +26,7 @@ const errorText = (e: unknown): string => {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Where a buyer lands after paying online (Chapa or card). It stays put: the buyer sees that the payment was
+ * Where a buyer lands after paying online (Chapa, ArifPay or card). It stays put: the buyer sees that the payment was
  * received, can open the receipt in its own tab and go back to their orders when they choose, instead of being
  * bounced straight back to the orders list. Chapa and Stripe add ?payment=...&order=ID to the address.
  */
@@ -55,7 +55,7 @@ export default function PaymentCompletePage() {
     const me = ++runId.current;
     const current = () => runId.current === me;
 
-    if (!orderId || (method !== "chapa" && method !== "success")) {
+    if (!orderId || (method !== "chapa" && method !== "arifpay" && method !== "success")) {
       setView({ kind: "warn", text: "We could not tell which payment this page is for. Open your orders to see the latest status." });
       return;
     }
@@ -64,9 +64,9 @@ export default function PaymentCompletePage() {
 
     for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
       try {
-        if (method === "chapa") {
-          // The webhook may be a few seconds late, so ask the server to re-check with Chapa right away.
-          const res = await B2BDash.chapaVerify(orderId);
+        if (method === "chapa" || method === "arifpay") {
+          // The notification may be late (or, with ArifPay, never come), so ask the server to re-check with the provider right away.
+          const res = await B2BDash.onlineVerify(orderId);
           if (!current()) return;
           if (res.outcome === "paid") {
             refreshOrders(res.data);

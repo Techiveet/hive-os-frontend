@@ -32,6 +32,12 @@ const SECRET_HELP: Record<B2BGatewayProvider, { secret: string; webhook: string;
     webhook: "whsec_...",
     webhookHint: "The signing secret Stripe shows for the webhook endpoint below.",
   },
+  arifpay: {
+    secret: "your ArifPay API key",
+    webhook: "",
+    webhookHint:
+      "Buyers pay with Telebirr or their bank on ArifPay's page, and ArifPay pays every payment straight into the bank account below, so it must be YOUR account. ArifPay cannot refund payments: refunds to buyers are sent by you.",
+  },
 };
 
 function CopyField({ label, value }: { label: string; value: string }) {
@@ -72,6 +78,9 @@ function GatewayPanel({ gateway }: { gateway: B2BPaymentGateway }) {
   const help = SECRET_HELP[gateway.provider];
   const [secretKey, setSecretKey] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
+  const [settlementAccount, setSettlementAccount] = useState("");
+  const [settlementBank, setSettlementBank] = useState("");
+  const isArifPay = gateway.provider === "arifpay";
   const [message, setMessage] = useState<string | null>(null);
 
   const done = (data: B2BPaymentGateway[], text: string) => {
@@ -81,6 +90,8 @@ function GatewayPanel({ gateway }: { gateway: B2BPaymentGateway }) {
     qc.invalidateQueries({ queryKey: ["b2b", "payoutBanks"] });
     setSecretKey("");
     setWebhookSecret("");
+    setSettlementAccount("");
+    setSettlementBank("");
     setMessage(text);
   };
 
@@ -99,6 +110,8 @@ function GatewayPanel({ gateway }: { gateway: B2BPaymentGateway }) {
       if (payload.keys) {
         if (secretKey.trim() !== "") body.secret_key = secretKey.trim();
         if (webhookSecret.trim() !== "") body.webhook_secret = webhookSecret.trim();
+        if (settlementAccount.trim() !== "") body.settlement_account = settlementAccount.trim();
+        if (settlementBank.trim() !== "") body.settlement_bank = settlementBank.trim();
       }
       try {
         return await B2BDash.savePaymentGateway(gateway.provider, body);
@@ -128,9 +141,12 @@ function GatewayPanel({ gateway }: { gateway: B2BPaymentGateway }) {
 
   const busy = save.isPending || remove.isPending;
   const error = save.isError ? save.error : remove.isError ? remove.error : null;
-  const canSave = secretKey.trim() !== "" || webhookSecret.trim() !== "";
-  // A first save needs the secret key; later saves may change just the webhook secret.
-  const keysValid = gateway.configured ? canSave : secretKey.trim() !== "";
+  const canSave = secretKey.trim() !== "" || webhookSecret.trim() !== "" || settlementAccount.trim() !== "" || settlementBank.trim() !== "";
+  // A first save needs the secret key (and, for ArifPay, the settlement account and bank);
+  // later saves may change just one thing.
+  const keysValid = gateway.configured
+    ? canSave
+    : secretKey.trim() !== "" && (!isArifPay || (settlementAccount.trim() !== "" && settlementBank.trim() !== ""));
 
   return (
     <div className="space-y-3 rounded-xl border p-4">
@@ -167,22 +183,47 @@ function GatewayPanel({ gateway }: { gateway: B2BPaymentGateway }) {
             <Input
               type="password"
               autoComplete="off"
-              placeholder={gateway.configured ? "Secret key saved - type to replace" : `Secret key * (${help.secret})`}
+              placeholder={
+                gateway.configured
+                  ? `${isArifPay ? "API key" : "Secret key"} saved - type to replace`
+                  : `${isArifPay ? "API key" : "Secret key"} * (${help.secret})`
+              }
               value={secretKey}
               onChange={(e) => setSecretKey(e.target.value)}
             />
-            <Input
-              type="password"
-              autoComplete="off"
-              placeholder={gateway.has_webhook_secret ? "Webhook secret saved - type to replace" : `Webhook secret (${help.webhook})`}
-              value={webhookSecret}
-              onChange={(e) => setWebhookSecret(e.target.value)}
-            />
+            {!isArifPay && (
+              <Input
+                type="password"
+                autoComplete="off"
+                placeholder={gateway.has_webhook_secret ? "Webhook secret saved - type to replace" : `Webhook secret (${help.webhook})`}
+                value={webhookSecret}
+                onChange={(e) => setWebhookSecret(e.target.value)}
+              />
+            )}
           </div>
+          {isArifPay && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input
+                autoComplete="off"
+                inputMode="numeric"
+                placeholder={gateway.has_settlement ? `Account ${gateway.settlement_account_masked} saved - type to replace` : "Your bank account number *"}
+                value={settlementAccount}
+                maxLength={40}
+                onChange={(e) => setSettlementAccount(e.target.value)}
+              />
+              <Input
+                autoComplete="off"
+                placeholder={gateway.settlement_bank ? `Bank code ${gateway.settlement_bank} saved - type to replace` : "Bank code, e.g. AWINETAA *"}
+                value={settlementBank}
+                maxLength={16}
+                onChange={(e) => setSettlementBank(e.target.value)}
+              />
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">{help.webhookHint}</p>
 
           <div className="grid gap-2 sm:grid-cols-2">
-            <CopyField label="Webhook URL (add this in your dashboard)" value={gateway.webhook_url} />
+            {gateway.webhook_url && <CopyField label="Webhook URL (add this in your dashboard)" value={gateway.webhook_url} />}
             {gateway.transfer_approval_url && (
               <CopyField label="Transfer approval URL (add this in your dashboard)" value={gateway.transfer_approval_url} />
             )}
@@ -225,7 +266,7 @@ export function GatewaySettingsCard() {
           <div>
             <p className="text-sm font-bold">Your payment accounts</p>
             <p className="text-xs text-muted-foreground">
-              Buyers pay into your own Chapa or Stripe account and suppliers are paid from it. Without one, buyers can still pay by bank transfer.
+              Buyers pay into your own Chapa, Stripe or ArifPay account. Suppliers are paid from your Chapa account, or by you. Without one, buyers can still pay by bank transfer.
             </p>
           </div>
         </div>

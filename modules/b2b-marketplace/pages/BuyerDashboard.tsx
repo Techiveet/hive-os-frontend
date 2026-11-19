@@ -43,6 +43,7 @@ import {
 import { B2BDash, formatMoney, type B2BInquiry, type B2BOrder, type B2BQuote } from "@/modules/b2b-marketplace/api";
 import { PayOrderPanel } from "@/modules/b2b-marketplace/components/PayOrderPanel";
 import { RefundDetailsDialog } from "@/modules/b2b-marketplace/components/RefundDetailsDialog";
+import { CheckPaymentButton } from "@/modules/b2b-marketplace/components/CheckPaymentButton";
 import { QuoteThreadDialog } from "@/modules/b2b-marketplace/components/QuoteThreadDialog";
 import { AttachmentPicker, RfqAttachmentsToggle } from "@/modules/b2b-marketplace/components/RfqAttachments";
 import { QuoteAttachmentsToggle } from "@/modules/b2b-marketplace/components/QuoteAttachments";
@@ -256,6 +257,9 @@ export default function BuyerDashboard() {
                         <Button size="sm" disabled={confirmReceipt.isPending} onClick={() => confirmReceipt.mutate(o.id)} className="gap-1">
                           <CheckCircle2 className="h-3.5 w-3.5" /> Confirm receipt
                         </Button>
+                      )}
+                      {o.payment_status === "unpaid" && o.status !== "cancelled" && (
+                        <CheckPaymentButton orderId={o.id} onChecked={refreshOrders} />
                       )}
                       {(o.payment_status === "paid" || o.payment_status === "pending_confirmation") && o.status !== "cancelled" && (
                         <Button size="sm" variant="ghost" onClick={() => setRefundOrderDetails(o)} className="gap-1" title="Where a refund would be sent">

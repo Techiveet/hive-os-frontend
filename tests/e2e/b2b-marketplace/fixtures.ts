@@ -38,6 +38,7 @@ const provision = async (fixtureId: string): Promise<B2BFixtureManifest> => {
     `--fixture=${fixtureId}`,
     `--chapa-base-url=${MOCK_URL_FOR_BACKEND}`,
     `--chapa-webhook-secret=${WEBHOOK_SECRET}`,
+    `--arifpay-base-url=${MOCK_URL_FOR_BACKEND}`,
   ]);
   await execFileAsync("docker", [
     "cp",
