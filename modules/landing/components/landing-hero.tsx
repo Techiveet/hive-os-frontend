@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/store/use-translation";
 
-import { DURATION, EASE, springSoft, stagger, wordUp } from "../motion";
+import { EASE, springSoft } from "../motion";
 import { CountUp } from "./count-up";
 import { HiveMark } from "./hive-mark";
 import { HoneycombField } from "./honeycomb-field";
@@ -75,7 +75,7 @@ export function LandingHero({ isTenant, appTitle }: Props) {
       >
         <div
           className={cn(
-            "absolute inset-0 opacity-[0.35]",
+            "absolute inset-x-0 -top-[50px] -bottom-[50px] opacity-[0.35]",
             "[background-image:linear-gradient(to_right,hsl(var(--border)/0.35)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border)/0.35)_1px,transparent_1px)]",
             "[background-size:50px_50px]",
             "[mask-image:radial-gradient(ellipse_at_50%_35%,black_10%,transparent_70%)]",
@@ -107,17 +107,16 @@ export function LandingHero({ isTenant, appTitle }: Props) {
         <HoneycombField />
       </motion.div>
 
+      {/* Above-the-fold hero copy must paint immediately at opacity 1 on SSR
+          so LCP never waits for JS download, hydration, or stagger delays. */}
       <motion.div
         style={reduced ? undefined : { y: textY, opacity: textOpacity }}
-        variants={stagger(0.09)}
-        initial="hidden"
-        animate="show"
         className="relative z-10 flex w-full max-w-5xl flex-col items-center"
       >
         {/* Status pill */}
-        <motion.div variants={wordUp}>
+        <div>
           <div className="liquid-glass mb-7 inline-flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3.5">
-            <HiveMark className="h-6 w-6" />
+            <HiveMark decorative className="h-6 w-6" />
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
@@ -128,14 +127,14 @@ export function LandingHero({ isTenant, appTitle }: Props) {
                 : t("landing.hero.dev_by", "Developed by Techive Technology Solutions")}
             </span>
           </div>
-        </motion.div>
+        </div>
 
         {/* Headline. Two grotesk words plus one Instrument Serif italic — the
             serif carries the whole editorial register, so it is used exactly
             once on the page. */}
         <h1 className="max-w-4xl font-space text-5xl font-black leading-[1.05] tracking-tighter md:text-7xl md:leading-[1.02]">
-          <MaskedLine reduced={reduced}>{headline.lead}</MaskedLine>
-          <MaskedLine reduced={reduced} className="mt-1 md:mt-2">
+          <MaskedLine>{headline.lead}</MaskedLine>
+          <MaskedLine className="mt-1 md:mt-2">
             <span className="hive-gradient-text">{headline.accent}</span>{" "}
             <span className="font-serif font-normal italic tracking-[-1px] text-foreground">
               {headline.tail}
@@ -143,10 +142,7 @@ export function LandingHero({ isTenant, appTitle }: Props) {
           </MaskedLine>
         </h1>
 
-        <motion.p
-          variants={wordUp}
-          className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl"
-        >
+        <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl">
           {isTenant
             ? t(
                 "landing.hero.access_node",
@@ -157,13 +153,10 @@ export function LandingHero({ isTenant, appTitle }: Props) {
                 "landing.hero.hive_desc",
                 "Hive is the comprehensive ERP solution built for scalable businesses in Ethiopia. Connect your Finance, HR, and Supply Chain with local tax and banking integrations.",
               )}
-        </motion.p>
+        </p>
 
         {/* CTAs */}
-        <motion.div
-          variants={wordUp}
-          className="mt-9 flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row"
-        >
+        <div className="mt-9 flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row">
           <Link href={isTenant ? "/sign-in" : "/auth/signup"} className="w-full sm:w-auto">
             <motion.span
               whileHover={reduced ? undefined : { scale: 1.03 }}
@@ -187,13 +180,10 @@ export function LandingHero({ isTenant, appTitle }: Props) {
               {t("landing.hero.cta_demo", "Book a Demo")}
             </Button>
           </Link>
-        </motion.div>
+        </div>
 
         {/* Trust line — every claim here is already stated elsewhere on the page. */}
-        <motion.ul
-          variants={wordUp}
-          className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground/80"
-        >
+        <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground/80">
           {[
             t("landing.hero.trust_card", "No credit card required"),
             t("landing.hero.trust_pay", "ArifPay secured"),
@@ -202,12 +192,12 @@ export function LandingHero({ isTenant, appTitle }: Props) {
             <li key={claim} className="flex items-center gap-5">
               {index > 0 && <span className="h-1 w-1 rounded-full bg-border" />}
               <span className="flex items-center gap-1.5">
-                <ShieldCheck className="h-3 w-3 text-primary" />
+                <ShieldCheck aria-hidden="true" className="h-3 w-3 text-primary" />
                 {claim}
               </span>
             </li>
           ))}
-        </motion.ul>
+        </ul>
       </motion.div>
 
       <HeroConsole progress={scrollYProgress} reduced={Boolean(reduced)} />
@@ -242,31 +232,13 @@ export function LandingHero({ isTenant, appTitle }: Props) {
 function MaskedLine({
   children,
   className,
-  reduced,
 }: {
   children: React.ReactNode;
   className?: string;
-  reduced: boolean | null;
 }) {
   return (
     <span className={cn("block overflow-hidden pb-[0.2em] pt-[0.04em]", className)}>
-      <motion.span
-        variants={
-          reduced
-            ? { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.2 } } }
-            : {
-                hidden: { y: "110%", opacity: 0 },
-                show: {
-                  y: "0%",
-                  opacity: 1,
-                  transition: { duration: 0.95, ease: EASE },
-                },
-              }
-        }
-        className="block"
-      >
-        {children}
-      </motion.span>
+      <span className="block">{children}</span>
     </span>
   );
 }
@@ -327,11 +299,8 @@ function HeroConsole({
   const motionStyle = reduced ? undefined : { rotateX, rotateY: tiltY, scale };
 
   return (
-    <motion.div
+    <div
       ref={ref}
-      initial={{ opacity: 0, y: 40 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: DURATION.slow, ease: EASE, delay: 0.45 }}
       className="relative z-20 mt-16 w-full max-w-6xl [perspective:2000px] md:mt-20"
     >
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-[120px]" />
@@ -342,10 +311,15 @@ function HeroConsole({
         style={{ ...motionStyle, transformOrigin: "center bottom" }}
         className="group relative grid h-[440px] grid-cols-[72px_1fr] overflow-hidden rounded-2xl border border-primary/25 bg-background/60 shadow-[0_30px_80px_-20px_hsl(var(--background))] backdrop-blur-xl transition-colors duration-500 hover:border-primary/50 md:h-[620px] md:grid-cols-[80px_250px_1fr]"
       >
-        {/* Scan sweep — slowed and dimmed from the original 3s/0.5 opacity,
-            which read as a rendering glitch rather than telemetry. */}
+        {/* GPU-composited scan sweep: translate3d on an inset-0 container avoids
+            both non-composited `top` animation and CLS layout shifts. */}
         {!reduced && (
-          <div className="pointer-events-none absolute inset-x-0 z-50 h-px bg-primary/40 shadow-[0_0_12px_hsl(var(--primary))] [animation:scan-beam_6s_cubic-bezier(0.4,0,0.2,1)_infinite]" />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-50 will-change-transform [animation:scan-beam_6s_cubic-bezier(0.4,0,0.2,1)_infinite]"
+          >
+            <div className="h-px w-full bg-primary/40 shadow-[0_0_12px_hsl(var(--primary))]" />
+          </div>
         )}
 
         {/* Icon rail */}
@@ -497,7 +471,7 @@ function HeroConsole({
           <RevenueChart />
         </motion.div>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }
 

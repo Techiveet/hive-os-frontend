@@ -17,25 +17,42 @@ const toCursorUrl = (svg: string) =>
 
 export default function BrandCursor() {
   useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia("(pointer: fine)").matches) {
+      return;
+    }
+
     const root = document.documentElement;
+    let lastPrimary = "";
+    let rafId: number | null = null;
 
     const updateCursorTokens = () => {
+      rafId = null;
       const primary = getComputedStyle(root).getPropertyValue("--primary").trim();
+      if (primary === lastPrimary && root.style.getPropertyValue("--cursor-default")) {
+        return;
+      }
+      lastPrimary = primary;
       const color = primary ? `hsl(${primary})` : "#FFC21A";
 
       root.style.setProperty("--cursor-default", `${toCursorUrl(buildCursorSvg(color, false))}, auto`);
       root.style.setProperty("--cursor-pointer", `${toCursorUrl(buildCursorSvg(color, true))}, pointer`);
     };
 
-    updateCursorTokens();
+    const scheduleUpdate = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(updateCursorTokens);
+    };
 
-    const observer = new MutationObserver(updateCursorTokens);
+    scheduleUpdate();
+
+    const observer = new MutationObserver(scheduleUpdate);
     observer.observe(root, {
       attributes: true,
       attributeFilter: ["style", "class"],
     });
 
     return () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       observer.disconnect();
     };
   }, []);

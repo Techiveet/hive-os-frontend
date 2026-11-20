@@ -26,7 +26,8 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring } from "framer-motion";
 import { useTheme } from "next-themes";
 import Link from "next/link";
@@ -35,18 +36,9 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/store/use-translation";
 import { LandingNavbar } from "@/modules/landing/components/landing-navbar";
 import { LandingHero } from "@/modules/landing/components/landing-hero";
-import { LandingProof } from "@/modules/landing/components/landing-proof";
 import { LandingMetrics } from "@/modules/landing/components/landing-metrics";
-import { LandingSecurity } from "@/modules/landing/components/landing-security";
-import { LandingCompare } from "@/modules/landing/components/landing-compare";
-import { EthiopianPayrollCalculator } from "@/modules/landing/components/ethiopian-payroll-calculator";
-import { ErpWorkbenchPreview } from "@/modules/landing/components/erp-workbench-preview";
-import { SupportWebchatWidget } from "@/components/support-bot/support-webchat-widget";
-import { ErpIndustrySolutions } from "@/modules/landing/components/erp-industry-solutions";
 import { ErpSubdomainChecker } from "@/modules/landing/components/erp-subdomain-checker";
-import { HiveIntro } from "@/modules/landing/components/hive-intro";
 import { HiveBeacon, HiveLockup, HiveMark } from "@/modules/landing/components/hive-mark";
-import { HiveModuleMap } from "@/modules/landing/components/hive-module-map";
 import { AnnualPrice } from "@/modules/subscription/components/annual-price";
 import { fetchPublicSubscriptionCatalog } from "@/modules/subscription/api";
 import type { SignupCatalogModule } from "@/modules/subscription/components/signup-catalog-selector";
@@ -70,13 +62,68 @@ import {
   isTenantHost,
 } from "@/lib/runtime-context";
 import { resolveLandingTemplate } from "@/modules/tenancy/landing-template";
-import { TenantBusinessLanding } from "@/modules/tenancy/components/tenant-business-landing";
-import { RestaurantLandingTemplate } from "@/modules/tenancy/components/restaurant-landing-template";
-import LmsLandingTemplate from "@/modules/tenancy/components/lms-landing-template";
-import B2BLandingTemplate from "@/modules/tenancy/components/b2b-landing-template";
-import { MarketplacePreloader } from "@/modules/b2b-marketplace/components/MarketplacePreloader";
-import { LmsPreloader } from "@/modules/Lms/components/lms-preloader";
 import { formatDocumentTitle } from "@/lib/document-title";
+
+// Code-split below-the-fold interactive widgets and tenant-only templates so the
+// central landing page does not download or evaluate unused JS on first paint.
+const ErpWorkbenchPreview = dynamic(() =>
+  import("@/modules/landing/components/erp-workbench-preview").then((m) => m.ErpWorkbenchPreview),
+);
+const ErpIndustrySolutions = dynamic(() =>
+  import("@/modules/landing/components/erp-industry-solutions").then((m) => m.ErpIndustrySolutions),
+);
+const HiveModuleMap = dynamic(() =>
+  import("@/modules/landing/components/hive-module-map").then((m) => m.HiveModuleMap),
+);
+const EthiopianPayrollCalculator = dynamic(() =>
+  import("@/modules/landing/components/ethiopian-payroll-calculator").then(
+    (m) => m.EthiopianPayrollCalculator,
+  ),
+);
+const LandingSecurity = dynamic(() =>
+  import("@/modules/landing/components/landing-security").then((m) => m.LandingSecurity),
+);
+const LandingProof = dynamic(() =>
+  import("@/modules/landing/components/landing-proof").then((m) => m.LandingProof),
+);
+const LandingCompare = dynamic(() =>
+  import("@/modules/landing/components/landing-compare").then((m) => m.LandingCompare),
+);
+const SupportWebchatWidget = dynamic(
+  () =>
+    import("@/components/support-bot/support-webchat-widget").then((m) => m.SupportWebchatWidget),
+  { ssr: false },
+);
+
+const TenantBusinessLanding = dynamic(
+  () =>
+    import("@/modules/tenancy/components/tenant-business-landing").then(
+      (m) => m.TenantBusinessLanding,
+    ),
+  { ssr: false },
+);
+const RestaurantLandingTemplate = dynamic(
+  () =>
+    import("@/modules/tenancy/components/restaurant-landing-template").then(
+      (m) => m.RestaurantLandingTemplate,
+    ),
+  { ssr: false },
+);
+const LmsLandingTemplate = dynamic(
+  () => import("@/modules/tenancy/components/lms-landing-template"),
+  { ssr: false },
+);
+const MarketplacePreloader = dynamic(
+  () =>
+    import("@/modules/b2b-marketplace/components/MarketplacePreloader").then(
+      (m) => m.MarketplacePreloader,
+    ),
+  { ssr: false },
+);
+const LmsPreloader = dynamic(
+  () => import("@/modules/Lms/components/lms-preloader").then((m) => m.LmsPreloader),
+  { ssr: false },
+);
 
 interface LandingUIProps {
   initialPortalName: string;
@@ -87,39 +134,74 @@ interface LandingUIProps {
 type PartnerLogo = {
   name: string;
   logo: string;
+  width: number;
+  height: number;
 };
 
+function resolveOptimizedBrandLogoUrl(src: string | null, optimizeWidth: number): string | null {
+  if (!src) return null;
+  const match = src.match(/\/api\/v1\/files\/(\d+)\/public-serve(?:\?([^#]*))?/);
+  if (!match) return src;
+  const [, id, rawQuery] = match;
+  const params = new URLSearchParams(rawQuery ?? "");
+  const tenant = params.get("tenant");
+  const nextParams = new URLSearchParams({ id, w: String(optimizeWidth) });
+  if (tenant) nextParams.set("tenant", tenant);
+  return `/api/brand-image?${nextParams.toString()}`;
+}
+
 // 🚀 SAFE LOGO COMPONENT
-// This uses a native <img> tag to completely bypass CORS preflight issues for public assets.
-// It instantly switches to your beautiful text fallbacks if the URL is broken.
+// Serves uploaded raster logos resized & WebP-encoded via /api/brand-image,
+// falling back to the raw public-serve URL and finally to the vector lockup.
 function SafeLogo({
   src,
   alt,
   className,
   fallback,
+  width = 89,
+  height = 32,
+  optimizeWidth = 192,
 }: {
   src: string | null;
   alt: string;
   className: string;
   fallback: React.ReactNode;
+  width?: number;
+  height?: number;
+  optimizeWidth?: number;
 }) {
-  const [failed, setFailed] = useState(false);
+  const optimizedSrc = useMemo(
+    () => resolveOptimizedBrandLogoUrl(src, optimizeWidth),
+    [src, optimizeWidth],
+  );
+  const [stage, setStage] = useState<"optimized" | "raw" | "failed">("optimized");
 
   // Reset the failed state if the source URL changes (e.g. switching Dark/Light mode)
   useEffect(() => {
-    setFailed(false);
+    setStage("optimized");
   }, [src]);
 
-  if (!src || failed) {
+  if (!src || stage === "failed") {
     return <>{fallback}</>;
   }
 
+  const activeSrc = stage === "optimized" && optimizedSrc ? optimizedSrc : src;
+
   return (
     <img
-      src={src}
+      src={activeSrc}
       alt={alt}
+      width={width}
+      height={height}
+      decoding="async"
       className={className}
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (stage === "optimized" && optimizedSrc && optimizedSrc !== src) {
+          setStage("raw");
+        } else {
+          setStage("failed");
+        }
+      }}
     />
   );
 }
@@ -144,9 +226,9 @@ function FooterColumn({
 
   return (
     <div>
-      <h4 className="mb-6 font-space font-bold uppercase tracking-wider text-foreground">
+      <h2 className="mb-6 font-space text-base font-bold uppercase tracking-wider text-foreground">
         {title}
-      </h4>
+      </h2>
       <ul className="space-y-3 text-sm font-medium text-muted-foreground">
         {links.map((link) => (
           <li key={link.label}>
@@ -202,62 +284,12 @@ function Row({
   );
 }
 
-// --- JS DRIVEN INFINITE SCROLL PARTNER COMPONENT ---
+// --- GPU-COMPOSITED CSS INFINITE MARQUEE PARTNER COMPONENT ---
 const PartnerSlider = ({ partners }: { partners: PartnerLogo[] }) => {
   const { t } = useTranslation();
-  const scrollerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-
-    let animationFrameId: number;
-    let isHovered = false;
-
-    const handleMouseEnter = () => (isHovered = true);
-    const handleMouseLeave = () => (isHovered = false);
-
-    // Only horizontal intent (trackpad swipe or shift+wheel) moves the strip.
-    // It used to swallow every vertical wheel event, so page scrolling stalled
-    // whenever the cursor crossed the partner band.
-    const handleWheel = (e: WheelEvent) => {
-      const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
-      if (horizontal !== 0) {
-        e.preventDefault();
-        scroller.scrollLeft += horizontal;
-      }
-    };
-
-    scroller.addEventListener("mouseenter", handleMouseEnter);
-    scroller.addEventListener("mouseleave", handleMouseLeave);
-    scroller.addEventListener("wheel", handleWheel, { passive: false });
-
-    const scrollStep = () => {
-      if (!isHovered) {
-        scroller.scrollLeft += 0.5;
-      }
-
-      if (scroller.scrollLeft >= scroller.scrollWidth / 2) {
-        scroller.scrollLeft -= scroller.scrollWidth / 2;
-      } else if (scroller.scrollLeft <= 0) {
-        scroller.scrollLeft += scroller.scrollWidth / 2;
-      }
-
-      animationFrameId = requestAnimationFrame(scrollStep);
-    };
-
-    animationFrameId = requestAnimationFrame(scrollStep);
-
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-      scroller.removeEventListener("mouseenter", handleMouseEnter);
-      scroller.removeEventListener("mouseleave", handleMouseLeave);
-      scroller.removeEventListener("wheel", handleWheel);
-    };
-  }, []);
 
   return (
-    <div className="w-full bg-background/50 backdrop-blur-sm border-y border-border py-12 overflow-hidden relative z-10 shadow-inner">
+    <div className="partner-marquee-viewport w-full bg-background/50 backdrop-blur-sm border-y border-border py-12 overflow-hidden relative z-10 shadow-inner">
       <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-background to-transparent z-20 pointer-events-none"></div>
       <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-background to-transparent z-20 pointer-events-none"></div>
 
@@ -265,39 +297,39 @@ const PartnerSlider = ({ partners }: { partners: PartnerLogo[] }) => {
         {t('landing.partners.title', 'Ecosystem Integrations & Partners')}
       </div>
 
-      <div
-        ref={scrollerRef}
-        className="flex overflow-x-auto no-scrollbar w-full cursor-grab active:cursor-grabbing"
-      >
-        {[1, 2, 3, 4].map((arrayIndex) => (
+      <div className="flex w-max partner-marquee-track">
+        {[0, 1].map((copyIndex) => (
           <div
-            key={arrayIndex}
+            key={copyIndex}
+            aria-hidden={copyIndex === 1 ? true : undefined}
             className="flex shrink-0 gap-6 items-center pr-6"
           >
-            {partners.map((partner, i) => {
-              return (
-                <div
-                  key={`${arrayIndex}-${i}`}
-                  className="flex items-center gap-4 px-8 py-4 bg-card/40 backdrop-blur-md border border-border/50 rounded-2xl hover:border-primary/50 hover:bg-card/80 transition-all duration-300 group shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(255,255,255,0.02)]"
-                >
-                  <div className="w-12 h-12 p-2 rounded-xl bg-background/80 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm overflow-hidden relative">
-                    <img
-                      src={partner.logo}
-                      alt={`${partner.name} logo`}
-                      className="max-w-full max-h-full object-contain"
-                      suppressHydrationWarning
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.style.display = "none";
-                      }}
-                    />
-                  </div>
-                  <span className="text-lg font-bold font-space tracking-wider text-muted-foreground group-hover:text-foreground transition-colors duration-300 whitespace-nowrap">
-                    {partner.name}
-                  </span>
+            {partners.map((partner, i) => (
+              <div
+                key={`${copyIndex}-${i}`}
+                className="flex items-center gap-4 px-8 py-4 bg-card/40 backdrop-blur-md border border-border/50 rounded-2xl hover:border-primary/50 hover:bg-card/80 transition-colors duration-300 group shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(255,255,255,0.02)]"
+              >
+                <div className="w-12 h-12 p-2 rounded-xl bg-background/80 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm overflow-hidden relative">
+                  <img
+                    src={partner.logo}
+                    alt={copyIndex === 0 ? `${partner.name} logo` : ""}
+                    width={partner.width}
+                    height={partner.height}
+                    loading="lazy"
+                    decoding="async"
+                    className="max-w-full max-h-full w-auto h-auto object-contain"
+                    suppressHydrationWarning
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
                 </div>
-              );
-            })}
+                <span className="text-lg font-bold font-space tracking-wider text-muted-foreground group-hover:text-foreground transition-colors duration-300 whitespace-nowrap">
+                  {partner.name}
+                </span>
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -699,14 +731,14 @@ function LandingUI({
     }
   };
 
-  const partners = [
-    { name: t('landing.partners.cbe', 'COMMERCIAL BANK'), logo: "/logos/cbe.png" },
-    { name: t('landing.partners.telebirr', 'TELEBIRR'), logo: "/logos/telebirr.png" },
-    { name: t('landing.partners.chapa', 'CHAPA'), logo: "/logos/chapa.png" },
-    { name: t('landing.partners.safaricom', 'SAFARICOM'), logo: "/logos/safaricom.png" },
-    { name: t('landing.partners.arifpay', 'ARIFPAY'), logo: "/logos/arifpay.png" },
-    { name: t('landing.partners.insa', 'INSA SECURED'), logo: "/logos/insa.png" },
-    { name: t('landing.partners.ethiotelecom', 'ETHIO TELECOM'), logo: "/logos/ethiotelecom.png" },
+  const partners: PartnerLogo[] = [
+    { name: t('landing.partners.cbe', 'COMMERCIAL BANK'), logo: "/logos/cbe.webp", width: 96, height: 96 },
+    { name: t('landing.partners.telebirr', 'TELEBIRR'), logo: "/logos/telebirr.webp", width: 96, height: 54 },
+    { name: t('landing.partners.chapa', 'CHAPA'), logo: "/logos/chapa.webp", width: 96, height: 38 },
+    { name: t('landing.partners.safaricom', 'SAFARICOM'), logo: "/logos/safaricom.webp", width: 96, height: 48 },
+    { name: t('landing.partners.arifpay', 'ARIFPAY'), logo: "/logos/arifpay.webp", width: 96, height: 35 },
+    { name: t('landing.partners.insa', 'INSA SECURED'), logo: "/logos/insa.webp", width: 96, height: 95 },
+    { name: t('landing.partners.ethiotelecom', 'ETHIO TELECOM'), logo: "/logos/ethiotelecom.webp", width: 96, height: 26 },
   ];
 
   // `landing.platform_faq.*`, not `landing.faq.*`: the restaurant tenant
@@ -913,8 +945,6 @@ function LandingUI({
 
   return (
     <div className="hive-landing relative min-h-screen w-full bg-background text-foreground font-sans selection:bg-amber-400/30 overflow-x-hidden">
-      <HiveIntro />
-
       {/* Reading progress: a cobalt-to-honey filament across the top edge */}
       <motion.div
         aria-hidden
@@ -956,12 +986,16 @@ function LandingUI({
           <SafeLogo
             src={customLogoUrl}
             alt={appTitle}
+            width={89}
+            height={32}
+            optimizeWidth={192}
             className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
             fallback={<HiveLockup />}
           />
         }
       />
 
+      <main id="main-content">
       {/* --- HERO SECTION --- */}
       <LandingHero
         isTenant={initialIsTenant}
@@ -1125,7 +1159,7 @@ function LandingUI({
                     <Icon className="h-5 w-5" />
                   </IconPlate>
                   <div>
-                    <h4 className="mb-1 font-space font-bold">{title}</h4>
+                    <h3 className="mb-1 font-space font-bold">{title}</h3>
                     <p className="text-sm leading-relaxed text-muted-foreground">{desc}</p>
                   </div>
                 </li>
@@ -1261,7 +1295,7 @@ function LandingUI({
                     <Icon className="h-5 w-5" />
                   </IconPlate>
                   <div>
-                    <h4 className="mb-1 font-space font-bold">{title}</h4>
+                    <h3 className="mb-1 font-space font-bold">{title}</h3>
                     <p className="text-sm leading-relaxed text-muted-foreground">{desc}</p>
                   </div>
                 </li>
@@ -1304,7 +1338,7 @@ function LandingUI({
                   {["hive_mesh", "tenant_a_db", "tenant_b_db", "gateway"].map((name) => (
                     <p key={name} className="pl-4">
                       <span className="text-primary">✔</span> {name}
-                      <span className="text-muted-foreground/60"> started</span>
+                      <span className="text-muted-foreground"> started</span>
                     </p>
                   ))}
                   <p className="pt-3 text-primary blink-caret">_</p>
@@ -1353,7 +1387,7 @@ function LandingUI({
                     <Icon className="h-5 w-5" />
                   </IconPlate>
                   <div>
-                    <h4 className="mb-1 font-space font-bold">{title}</h4>
+                    <h3 className="mb-1 font-space font-bold">{title}</h3>
                     <p className="text-sm leading-relaxed text-muted-foreground">{desc}</p>
                   </div>
                 </li>
@@ -1405,7 +1439,7 @@ function LandingUI({
                       <Icon className="h-5 w-5" />
                     </IconPlate>
                     <div>
-                      <h4 className="mb-1 font-space font-bold">{title}</h4>
+                      <h3 className="mb-1 font-space font-bold">{title}</h3>
                       <p className="text-sm leading-relaxed text-muted-foreground">{desc}</p>
                     </div>
                   </div>
@@ -1955,6 +1989,7 @@ function LandingUI({
           </Reveal>
         </section>
       )}
+      </main>
 
       {/* --- FOOTER --- */}
       <footer
@@ -1969,6 +2004,9 @@ function LandingUI({
             <SafeLogo
               src={customLogoUrl}
               alt={appTitle}
+              width={112}
+              height={40}
+              optimizeWidth={256}
               className="h-10 w-auto object-contain mb-4 transition-transform hover:scale-105"
               fallback={
                 <HiveLockup

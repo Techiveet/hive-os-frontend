@@ -272,7 +272,7 @@ export function ErpWorkbenchPreview() {
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-4">
                 <div>
-                  <h4 className="font-space text-base font-bold text-foreground">Multi-Warehouse Stock Ledger</h4>
+                  <h3 className="font-space text-base font-bold text-foreground">Multi-Warehouse Stock Ledger</h3>
                   <p className="font-mono text-xs text-muted-foreground">Real-time inventory levels, batch tracking, &amp; reorder points</p>
                 </div>
 
@@ -316,7 +316,7 @@ export function ErpWorkbenchPreview() {
                           {item.status}
                         </span>
                       </div>
-                      <h5 className="font-space text-sm font-bold text-foreground mb-1 leading-snug">{item.name}</h5>
+                      <h4 className="font-space text-sm font-bold text-foreground mb-1 leading-snug">{item.name}</h4>
                       <div className="flex items-baseline justify-between mt-3 pt-2 border-t border-border/40 font-mono text-xs">
                         <span className="text-muted-foreground">
                           Stock: <strong className="text-foreground">{item.stock} {item.unit}</strong> (Min: {item.min})
@@ -350,7 +350,7 @@ export function ErpWorkbenchPreview() {
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-4">
                 <div>
-                  <h4 className="font-space text-base font-bold text-foreground">Live Fleet Telemetry &amp; Dispatches</h4>
+                  <h3 className="font-space text-base font-bold text-foreground">Live Fleet Telemetry &amp; Dispatches</h3>
                   <p className="font-mono text-xs text-muted-foreground">GPS vehicle tracking, driver performance, &amp; automated fuel logs</p>
                 </div>
                 <span className="flex items-center gap-2 font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300">
@@ -409,7 +409,7 @@ export function ErpWorkbenchPreview() {
             >
               <div className="flex items-center justify-between border-b border-border/60 pb-4">
                 <div>
-                  <h4 className="font-space text-base font-bold text-foreground">Procurement &amp; RFQ Comparison Matrix</h4>
+                  <h3 className="font-space text-base font-bold text-foreground">Procurement &amp; RFQ Comparison Matrix</h3>
                   <p className="font-mono text-xs text-muted-foreground">Automated supplier tender evaluations and three-way PO matching</p>
                 </div>
                 <span className="rounded-full bg-primary/10 px-3 py-1 font-mono text-xs font-bold text-primary">
@@ -437,7 +437,7 @@ export function ErpWorkbenchPreview() {
                         RECOMMENDED
                       </span>
                     )}
-                    <h5 className="font-space text-sm font-bold text-foreground mb-2 pr-12">{bid.supplier}</h5>
+                    <h4 className="font-space text-sm font-bold text-foreground mb-2 pr-12">{bid.supplier}</h4>
                     <p className="font-space text-lg font-extrabold text-foreground mb-2">{bid.quote}</p>
                     <div className="space-y-1 font-mono text-xs text-muted-foreground">
                       <p>Lead time: <strong className="text-foreground">{bid.lead}</strong></p>
@@ -461,7 +461,7 @@ export function ErpWorkbenchPreview() {
             >
               <div className="flex items-center justify-between border-b border-border/60 pb-4">
                 <div>
-                  <h4 className="font-space text-base font-bold text-foreground">Real-Time General Ledger &amp; P&amp;L</h4>
+                  <h3 className="font-space text-base font-bold text-foreground">Real-Time General Ledger &amp; P&amp;L</h3>
                   <p className="font-mono text-xs text-muted-foreground">Consolidated financial health across all operational branches</p>
                 </div>
                 <span className="font-mono text-xs text-muted-foreground">FY 2025/2026</span>

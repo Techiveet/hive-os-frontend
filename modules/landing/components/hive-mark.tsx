@@ -36,9 +36,17 @@ type Props = {
   /** Seconds before the draw sequence starts. */
   delay?: number;
   title?: string;
+  /** Hide from assistive technologies when adjacent text already names the brand. */
+  decorative?: boolean;
 };
 
-export function HiveMark({ className, animate = "static", delay = 0, title = "Hive OS" }: Props) {
+export function HiveMark({
+  className,
+  animate = "static",
+  delay = 0,
+  title = "Hive OS",
+  decorative = false,
+}: Props) {
   const reduced = useReducedMotion();
   const id = React.useId().replace(/:/g, "");
   const draw = animate === "draw" && !reduced;
@@ -62,7 +70,11 @@ export function HiveMark({ className, animate = "static", delay = 0, title = "Hi
   const pivot = (origin: string) => (css ? undefined : { transformOrigin: origin });
 
   return (
-    <svg viewBox="0 0 100 100" role="img" aria-label={title} className={cn("shrink-0", className)}>
+    <svg
+      viewBox="0 0 100 100"
+      {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": title })}
+      className={cn("shrink-0", className)}
+    >
       <defs>
         <linearGradient id={`${id}-rim`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#38bdf8" />

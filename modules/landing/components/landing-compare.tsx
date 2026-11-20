@@ -160,13 +160,13 @@ function SupportMark({ value, emphasis }: { value: Support; emphasis?: boolean }
   if (value === "yes") {
     return (
       <span
-        aria-label={label}
         className={cn(
           "inline-flex h-7 w-7 items-center justify-center rounded-full",
           emphasis ? "bg-primary text-primary-foreground" : "bg-primary/15 text-primary",
         )}
       >
-        <Check className="h-4 w-4" strokeWidth={3} />
+        <Check aria-hidden="true" className="h-4 w-4" strokeWidth={3} />
+        <span className="sr-only">{label}</span>
       </span>
     );
   }
@@ -174,20 +174,20 @@ function SupportMark({ value, emphasis }: { value: Support; emphasis?: boolean }
   if (value === "partial") {
     return (
       <span
-        aria-label={label}
         className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-500/15 text-amber-500"
       >
-        <Minus className="h-4 w-4" strokeWidth={3} />
+        <Minus aria-hidden="true" className="h-4 w-4" strokeWidth={3} />
+        <span className="sr-only">{label}</span>
       </span>
     );
   }
 
   return (
     <span
-      aria-label={label}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground/60"
+      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground"
     >
-      <X className="h-4 w-4" strokeWidth={3} />
+      <X aria-hidden="true" className="h-4 w-4" strokeWidth={3} />
+      <span className="sr-only">{label}</span>
     </span>
   );
 }

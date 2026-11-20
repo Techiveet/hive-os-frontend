@@ -125,13 +125,22 @@ export function HoneycombField({ className }: { className?: string }) {
       }
     };
 
+    let lastFrameTime = 0;
+    const isDesktopPointer =
+      typeof window !== "undefined" &&
+      window.matchMedia("(pointer: fine)").matches &&
+      window.innerWidth >= 768;
+
     const loop = (time: number) => {
-      draw(time);
+      if (time - lastFrameTime >= 33) {
+        lastFrameTime = time;
+        draw(time);
+      }
       frame = requestAnimationFrame(loop);
     };
 
     const start = () => {
-      if (running || reduced || !onScreen || document.hidden) return;
+      if (running || reduced || !isDesktopPointer || !onScreen || document.hidden) return;
       running = true;
       frame = requestAnimationFrame(loop);
     };
@@ -140,11 +149,20 @@ export function HoneycombField({ className }: { className?: string }) {
       cancelAnimationFrame(frame);
     };
 
-    layout();
-    draw(0);
-    start();
+    // Defer initial canvas layout & draw until after first paint/hydration so
+    // the background ambient grid never causes forced reflow or blocks TBT.
+    let disposed = false;
+    let initTimer: number | null = null;
+    const init = () => {
+      if (disposed) return;
+      layout();
+      draw(0);
+      start();
+    };
+    initTimer = window.setTimeout(init, 700);
 
     const resizeObserver = new ResizeObserver(() => {
+      if (width === 0 && height === 0) return;
       layout();
       if (!running) draw(0);
     });
@@ -162,6 +180,7 @@ export function HoneycombField({ className }: { className?: string }) {
 
     // Listen on window: the canvas is pointer-events:none under the hero copy.
     const onPointerMove = (event: PointerEvent) => {
+      if (!isDesktopPointer || width === 0) return;
       const rect = canvas.getBoundingClientRect();
       pointer.tx = event.clientX - rect.left;
       pointer.ty = event.clientY - rect.top;
@@ -174,24 +193,30 @@ export function HoneycombField({ className }: { className?: string }) {
       pointer.tx = -9999;
       pointer.ty = -9999;
     };
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
-    document.addEventListener("pointerleave", onPointerLeave);
+    if (isDesktopPointer) {
+      window.addEventListener("pointermove", onPointerMove, { passive: true });
+      document.addEventListener("pointerleave", onPointerLeave);
+    }
 
     // Re-read the palette when the theme class flips on <html>.
     const themeObserver = new MutationObserver(() => {
       colors = palette();
-      if (!running) draw(0);
+      if (!running && width > 0) draw(0);
     });
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
     return () => {
+      disposed = true;
+      if (initTimer !== null) window.clearTimeout(initTimer);
       stop();
       resizeObserver.disconnect();
       visibility.disconnect();
       themeObserver.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("pointermove", onPointerMove);
-      document.removeEventListener("pointerleave", onPointerLeave);
+      if (isDesktopPointer) {
+        window.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerleave", onPointerLeave);
+      }
     };
   }, [reduced]);
 

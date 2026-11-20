@@ -114,16 +114,9 @@ function Word({
   const start = index / total;
   const end = (index + 1) / total;
 
-  // Floor is 0.35, not 0. `useScroll` measures its target once and only
-  // remeasures on resize, so an in-page anchor jump to #proof can land with a
-  // stale range and read progress 0 — at a lower floor the whole quote would be
-  // an unreadable black rectangle. Unread words stay legibly grey instead.
-  const opacity = useTransform(progress, [start, end], [0.35, 1]);
-  const color = useTransform(
-    progress,
-    [start, end],
-    ["hsl(var(--muted-foreground))", "hsl(var(--foreground))"],
-  );
+  // Keep unread words above WCAG AA contrast (>= 7:1 in both themes) while
+  // still brightening smoothly via GPU-composited opacity as the reader scrolls.
+  const opacity = useTransform(progress, [start, end], [0.72, 1]);
 
   if (reduced) {
     return <span className="mr-[0.3em] text-foreground">{word}</span>;
@@ -131,9 +124,9 @@ function Word({
 
   return (
     <motion.span
-      style={{ opacity, color }}
+      style={{ opacity }}
       transition={{ ease: EASE }}
-      className="mr-[0.3em]"
+      className="mr-[0.3em] text-foreground"
     >
       {word}
     </motion.span>

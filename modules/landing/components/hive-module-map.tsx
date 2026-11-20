@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
+import { motion, useInView, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   BadgeDollarSign,
@@ -270,85 +270,117 @@ export function HiveModuleMap() {
                 x2: (target.left * FIELD_W + 0.5) * 100,
                 y2: (target.top * FIELD_H + CELL_H / 2) * 100,
               }}
-              transition={{ duration: 0.6, ease: EASE }}
+              transition={{ duration: 0.45, ease: EASE }}
               stroke="hsl(var(--honey))"
               strokeWidth={3}
               strokeDasharray="6 4"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
-              className="[animation:dash-flow_1s_linear_infinite]"
             />
           </svg>
 
+          {/* Decorative center core sits outside role="tablist" so the tablist
+              owns exclusively role="tab" controls (WAI-ARIA 1.2). */}
+          <motion.div
+            aria-hidden="true"
+            className="pointer-events-none absolute p-[3%]"
+            style={{
+              left: `${core.left * 100}%`,
+              top: `${core.top * 100}%`,
+              width: `${100 / FIELD_W}%`,
+              height: `${(CELL_H / FIELD_H) * 100}%`,
+              zIndex: 2,
+            }}
+            initial={false}
+            animate={entered || reduced ? { opacity: 1, scale: 1 } : { opacity: 1, scale: 1 }}
+          >
+            <div className="hex-clip relative flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-500 via-blue-700 to-blue-950 shadow-2xl">
+              <div className="hex-clip absolute inset-[4%] bg-[#060b1f]" />
+              <HiveMark decorative className="relative h-[62%] w-[62%] [animation:hex-float_5s_ease-in-out_infinite]" />
+            </div>
+          </motion.div>
+
           <div role="tablist" aria-label={t("landing.hive_map.label", "Hive OS modules")} className="absolute inset-0">
             {POSITIONS.map((pos, index) => {
-              const isCore = index === CORE_INDEX;
+              if (index === CORE_INDEX) return null;
               const module = modules[index];
               const Icon = module.icon;
               const isActive = index === active;
+              const orderPos = moduleOrder.indexOf(index);
               // Ripple outward from the core on entrance.
               const ring = Math.max(Math.abs(pos.row - 2), Math.abs(pos.left - core.left) * FIELD_W);
 
               return (
                 <motion.div
                   key={module.key}
+                  role="none"
                   className="absolute p-[3%]"
                   style={{
                     left: `${pos.left * 100}%`,
                     top: `${pos.top * 100}%`,
                     width: `${100 / FIELD_W}%`,
                     height: `${(CELL_H / FIELD_H) * 100}%`,
-                    zIndex: isActive || isCore ? 2 : 1,
+                    zIndex: isActive ? 2 : 1,
                   }}
                   initial={reduced ? false : { opacity: 0, scale: 0.4 }}
                   animate={entered || reduced ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.4 }}
                   transition={{ duration: 0.6, ease: EASE, delay: 0.1 + ring * 0.12 }}
                 >
-                  {isCore ? (
-                    <div className="hex-clip relative flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-500 via-blue-700 to-blue-950 shadow-2xl">
-                      <div className="hex-clip absolute inset-[4%] bg-[#060b1f]" />
-                      <HiveMark className="relative h-[62%] w-[62%] [animation:hex-float_5s_ease-in-out_infinite]" />
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={isActive}
-                      aria-controls="hive-module-panel"
-                      aria-label={module.title}
-                      onClick={() => select(index)}
-                      onPointerEnter={(event) => event.pointerType === "mouse" && select(index)}
-                      onFocus={() => select(index)}
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-controls="hive-module-panel"
+                    aria-label={module.title}
+                    tabIndex={isActive ? 0 : -1}
+                    onClick={() => select(index)}
+                    onPointerEnter={(event) => event.pointerType === "mouse" && select(index)}
+                    onFocus={() => select(index)}
+                    onKeyDown={(event) => {
+                      if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+                        event.preventDefault();
+                        select(moduleOrder[(orderPos + 1) % moduleOrder.length]);
+                      } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+                        event.preventDefault();
+                        select(moduleOrder[(orderPos - 1 + moduleOrder.length) % moduleOrder.length]);
+                      } else if (event.key === "Home") {
+                        event.preventDefault();
+                        select(moduleOrder[0]);
+                      } else if (event.key === "End") {
+                        event.preventDefault();
+                        select(moduleOrder[moduleOrder.length - 1]);
+                      }
+                    }}
+                    className={cn(
+                      "hex-clip group relative flex h-full w-full items-center justify-center transition-all duration-300 focus-visible:outline-none",
+                      isActive
+                        ? "scale-[1.06] bg-gradient-to-br from-amber-300 via-amber-400 to-orange-500"
+                        : "bg-border hover:bg-primary/60 focus-visible:bg-primary",
+                    )}
+                  >
+                    <span
                       className={cn(
-                        "hex-clip group relative flex h-full w-full items-center justify-center transition-all duration-300 focus-visible:outline-none",
-                        isActive
-                          ? "scale-[1.06] bg-gradient-to-br from-amber-300 via-amber-400 to-orange-500"
-                          : "bg-border hover:bg-primary/60 focus-visible:bg-primary",
+                        "hex-clip absolute inset-[3%] flex flex-col items-center justify-center gap-1 transition-colors duration-300",
+                        isActive ? "bg-[#1a1203]" : "bg-card group-hover:bg-primary/10",
                       )}
                     >
+                      <Icon
+                        aria-hidden="true"
+                        className={cn(
+                          "h-[30%] w-[30%] transition-colors",
+                          isActive ? "text-amber-300" : "text-muted-foreground group-hover:text-primary",
+                        )}
+                      />
                       <span
                         className={cn(
-                          "hex-clip absolute inset-[3%] flex flex-col items-center justify-center gap-1 transition-colors duration-300",
-                          isActive ? "bg-[#1a1203]" : "bg-card group-hover:bg-primary/10",
+                          "hidden max-w-[86%] truncate text-center font-mono text-[8.5px] font-bold uppercase leading-tight tracking-wide md:block",
+                          isActive ? "text-amber-200" : "text-muted-foreground",
                         )}
                       >
-                        <Icon
-                          className={cn(
-                            "h-[30%] w-[30%] transition-colors",
-                            isActive ? "text-amber-300" : "text-muted-foreground group-hover:text-primary",
-                          )}
-                        />
-                        <span
-                          className={cn(
-                            "hidden max-w-[86%] truncate text-center font-mono text-[8.5px] font-bold uppercase leading-tight tracking-wide md:block",
-                            isActive ? "text-amber-200" : "text-muted-foreground",
-                          )}
-                        >
-                          {module.title.split(" ")[0]}
-                        </span>
+                        {module.title.split(" ")[0]}
                       </span>
-                    </button>
-                  )}
+                    </span>
+                  </button>
                 </motion.div>
               );
             })}
@@ -377,35 +409,32 @@ export function HiveModuleMap() {
           )}
         </div>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={current.key}
-            initial={reduced ? { opacity: 0 } : { opacity: 0, y: 14, filter: "blur(6px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            exit={reduced ? { opacity: 0 } : { opacity: 0, y: -10, filter: "blur(4px)" }}
-            transition={{ duration: 0.35, ease: EASE }}
-            className="relative"
-          >
-            <span className="hex-clip mb-5 inline-flex h-14 w-12 items-center justify-center bg-gradient-to-br from-amber-300 to-orange-500">
-              <span className="hex-clip absolute inset-[3px] bg-[#1a1203]" />
-              <CurrentIcon className="relative h-6 w-6 text-amber-300" />
-            </span>
-            <h3 className="font-space text-2xl font-bold tracking-tight md:text-3xl">{current.title}</h3>
-            <p className="mt-3 min-h-[4.5rem] text-pretty text-sm leading-relaxed text-muted-foreground md:text-base">
-              {current.desc}
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {current.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-border/70 bg-background/60 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </motion.div>
-        </AnimatePresence>
+        <motion.div
+          key={current.key}
+          initial={reduced ? false : { opacity: 0.4, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.18, ease: EASE }}
+          className="relative"
+        >
+          <span className="hex-clip mb-5 inline-flex h-14 w-12 items-center justify-center bg-gradient-to-br from-amber-300 to-orange-500">
+            <span className="hex-clip absolute inset-[3px] bg-[#1a1203]" />
+            <CurrentIcon aria-hidden="true" className="relative h-6 w-6 text-amber-300" />
+          </span>
+          <h3 className="font-space text-2xl font-bold tracking-tight md:text-3xl">{current.title}</h3>
+          <p className="mt-3 min-h-[4.5rem] text-pretty text-sm leading-relaxed text-muted-foreground md:text-base">
+            {current.desc}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {current.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border border-border/70 bg-background/60 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </motion.div>
 
         <div className="relative mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-6">
           <p className="max-w-[16rem] text-xs leading-relaxed text-muted-foreground">

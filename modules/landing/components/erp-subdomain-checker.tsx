@@ -43,9 +43,9 @@ export function ErpSubdomainChecker() {
               <Globe className="h-5 w-5" />
             </div>
             <div>
-              <h4 className="font-space text-lg font-bold text-foreground">
+              <h2 className="font-space text-lg font-bold text-foreground">
                 Claim Your Enterprise ERP Portal
-              </h4>
+              </h2>
               <p className="font-mono text-xs text-muted-foreground">
                 Instant DNS provisioning with dedicated SSL and isolated tenant database
               </p>
