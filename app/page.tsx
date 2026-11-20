@@ -147,7 +147,7 @@ function resolveOptimizedBrandLogoUrl(src: string | null, optimizeWidth: number)
   const tenant = params.get("tenant");
   const nextParams = new URLSearchParams({ id, w: String(optimizeWidth) });
   if (tenant) nextParams.set("tenant", tenant);
-  return `/api/brand-image?${nextParams.toString()}`;
+  return `/brand-image?${nextParams.toString()}`;
 }
 
 // 🚀 SAFE LOGO COMPONENT
