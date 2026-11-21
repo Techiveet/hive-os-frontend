@@ -4,8 +4,12 @@ useDefault = true
 # Exclude generated dependencies and private runtime data, never source,
 # tests, docs or environment files. Review any future exception individually.
 [allowlist]
-description = "Generated dependencies and runtime artifacts only"
+description = "Generated dependencies, runtime artifacts, and official AWS documentation example placeholders"
 paths = [
   '''(^|/)(vendor|node_modules|\.git|\.next[^/]*|coverage|playwright-report|test-results)/''',
   '''(^|/)(storage|backups|reports|tmp|\.playwright|\.codex-validation)/''',
+]
+regexes = [
+  '''AKIAIOSFODNN7EXAMPLE''',
+  '''wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY''',
 ]

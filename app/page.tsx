@@ -1471,11 +1471,11 @@ function LandingUI({
                   </div>
                   <div className="flex items-center gap-2.5 rounded-xl border border-border/80 bg-muted/40 px-3.5 py-2 text-xs font-mono text-muted-foreground backdrop-blur-md">
                     <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                    <span>Telebirr, CBE & Card Checkout</span>
+                    <span>Telebirr, CBE &amp; Card Checkout</span>
                   </div>
                   <div className="flex items-center gap-2.5 rounded-xl border border-border/80 bg-muted/40 px-3.5 py-2 text-xs font-mono text-muted-foreground backdrop-blur-md">
                     <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                    <span>Isolated DB & Custom Subdomain</span>
+                    <span>Isolated DB &amp; Custom Subdomain</span>
                   </div>
                 </div>
               </div>

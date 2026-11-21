@@ -376,7 +376,7 @@ export function EmailSettings() {
                   value={formData.mail_username}
                   onChange={(e) => setFormData((p) => ({ ...p, mail_username: e.target.value }))}
                   className="bg-muted/30 h-11 rounded-xl font-mono text-sm"
-                  placeholder="AKIAIOSFODNN7EXAMPLE"
+                  placeholder="Enter AWS Access Key ID"
                 />
               </div>
               <div className="space-y-2">
@@ -386,7 +386,7 @@ export function EmailSettings() {
                   value={formData.mail_password}
                   onChange={(e) => setFormData((p) => ({ ...p, mail_password: e.target.value }))}
                   className="bg-muted/30 h-11 rounded-xl font-mono text-sm"
-                  placeholder={formData.mail_password_configured ? "Saved (leave empty to keep)" : "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}
+                  placeholder={formData.mail_password_configured ? "Saved (leave empty to keep)" : "Enter AWS Secret Access Key"}
                 />
               </div>
             </div>
