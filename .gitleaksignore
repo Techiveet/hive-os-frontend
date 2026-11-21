@@ -1,0 +1,27 @@
+# Reviewed false positives in historical commits (zero real secrets):
+# - UI template/module/i18n keys (b2b-marketplace, b2b_marketplace, nav.b2b_marketplace, hikvision_isapi)
+# - Static Playwright E2E idempotency test UUIDs
+# - Public browser-exposed NEXT_PUBLIC_REVERB_APP_KEY in CI workflow
+195ca1514fc37514daffd66741d80108fa06fa9c:modules/tenancy/components/tenant-landing-router.tsx:generic-api-key:99
+388c4a8a9467bd97cefc50797c8c00a67b9a3942:.github/workflows/ci.yml:generic-api-key:318
+388c4a8a9467bd97cefc50797c8c00a67b9a3942:.github/workflows/ci.yml:generic-api-key:329
+62cc0b17f2eb7389fe9d96f5952ab316af15e90e:.github/workflows/ci.yml:generic-api-key:318
+62cc0b17f2eb7389fe9d96f5952ab316af15e90e:.github/workflows/ci.yml:generic-api-key:329
+ab0d1cc01d477a538b1df09e14d16e039ba5d04d:.github/workflows/ci.yml:generic-api-key:318
+ab0d1cc01d477a538b1df09e14d16e039ba5d04d:.github/workflows/ci.yml:generic-api-key:329
+b266543dac75af1d8ffbe8bbab211cda480fcb0c:lib/master-tour.ts:generic-api-key:694
+f2238f7a60cdfbd2a636d15879d3ac404e84073f:app/dashboard/human-resources/attendance-device-connectors.tsx:generic-api-key:52
+f2238f7a60cdfbd2a636d15879d3ac404e84073f:modules/attendance/components/device-management-workspace.tsx:generic-api-key:41
+02ce69201ffbbb0d2bcc6e1fa3d2b58c422b2234:app/page.tsx:generic-api-key:780
+02ce69201ffbbb0d2bcc6e1fa3d2b58c422b2234:lib/route-permissions.ts:generic-api-key:556
+7fab6a249613dfecb87c399caa9fe25d8eeaf8e6:.github/workflows/ci.yml:generic-api-key:248
+7fab6a249613dfecb87c399caa9fe25d8eeaf8e6:.github/workflows/ci.yml:generic-api-key:259
+4d556598ecdf5f33ff2f63b56dbd133bc0d33e1b:tests/e2e/waiter-pos/course-workflow.spec.ts:generic-api-key:172
+b46d1e0adb25aa301ec2d97e513a3be98b91c733:tests/e2e/waiter-pos/concurrency.spec.ts:generic-api-key:79
+b46d1e0adb25aa301ec2d97e513a3be98b91c733:tests/e2e/waiter-pos/concurrency.spec.ts:generic-api-key:167
+59cbb770e18ed3e1d1e6e61b2648414ad617313b:tests/e2e/waiter-pos/retry-history.spec.ts:generic-api-key:58
+f03dad741d7f5fc7934fe9012b0ab51dee08e216:tests/e2e/waiter-pos/unauthorized.spec.ts:generic-api-key:42
+2a391499c18770df216b47d934ba52dc6915e9a6:lib/route-permissions.ts:generic-api-key:346
+d4a223334ad34e07219968446023139d827fb624:lib/route-permissions.ts:generic-api-key:169
+69c3802c51c22ce302e63093a84096cafdd4bb07:modules/b2b-marketplace/module.ts:generic-api-key:13
+501930a31ec7a88c65c9a7e403749c5d4fe929e9:.github/workflows/deploy.yml:generic-api-key:60
