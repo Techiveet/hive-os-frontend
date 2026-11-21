@@ -22,21 +22,15 @@ import { SettingsProvider } from "@/components/providers/settings-provider";
 // build deterministic and offline-safe, and drop the render-blocking fetch.
 // Each file is the variable font covering the full weight range.
 const inter = localFont({
-  src: [
-    { path: "./fonts/inter-latin.woff2", style: "normal" },
-    { path: "./fonts/inter-latin-ext.woff2", style: "normal" },
-  ],
+  src: [{ path: "./fonts/inter-latin.woff2", style: "normal" }],
   weight: "100 900",
-  display: "swap",
+  display: "optional",
   variable: "--font-inter",
   fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
 });
 
 const spaceGrotesk = localFont({
-  src: [
-    { path: "./fonts/space-grotesk-latin.woff2", style: "normal" },
-    { path: "./fonts/space-grotesk-latin-ext.woff2", style: "normal" },
-  ],
+  src: [{ path: "./fonts/space-grotesk-latin.woff2", style: "normal" }],
   weight: "300 700",
   display: "swap",
   variable: "--font-space",
@@ -50,22 +44,19 @@ const spaceGrotesk = localFont({
 const instrumentSerif = localFont({
   src: [
     { path: "./fonts/instrument-serif-latin.woff2", style: "normal", weight: "400" },
-    { path: "./fonts/instrument-serif-latin-ext.woff2", style: "normal", weight: "400" },
     { path: "./fonts/instrument-serif-italic-latin.woff2", style: "italic", weight: "400" },
-    { path: "./fonts/instrument-serif-italic-latin-ext.woff2", style: "italic", weight: "400" },
   ],
   display: "swap",
+  preload: false,
   variable: "--font-serif",
   fallback: ["ui-serif", "Georgia", "serif"],
 });
 
 const jetbrainsMono = localFont({
-  src: [
-    { path: "./fonts/jetbrains-mono-latin.woff2", style: "normal" },
-    { path: "./fonts/jetbrains-mono-latin-ext.woff2", style: "normal" },
-  ],
+  src: [{ path: "./fonts/jetbrains-mono-latin.woff2", style: "normal" }],
   weight: "100 800",
   display: "swap",
+  preload: false,
   variable: "--font-mono",
   fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
 });

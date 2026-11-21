@@ -39,7 +39,6 @@ import { LandingMetrics } from "@/modules/landing/components/landing-metrics";
 import { ErpSubdomainChecker } from "@/modules/landing/components/erp-subdomain-checker";
 import { HiveBeacon, HiveLockup, HiveMark } from "@/modules/landing/components/hive-mark";
 import { AnnualPrice } from "@/modules/subscription/components/annual-price";
-import { fetchPublicSubscriptionCatalog } from "@/modules/subscription/api";
 import type { SignupCatalogModule } from "@/modules/subscription/components/signup-catalog-selector";
 import { Reveal, RevealGroup, RevealItem, SpotlightCard } from "@/modules/landing/components/reveal";
 import {
@@ -643,9 +642,22 @@ function LandingUI({
   });
 
   // 🚀 Live Public Subscription Catalog for Dynamic Pricing (Same as /auth/signup)
+  // Uses native fetch directly rather than @/modules/subscription/api so the
+  // public landing route does not pull in axios, auth-sync, or pusher-js.
   const { data: catalogData } = useQuery({
     queryKey: ["public-catalog"],
-    queryFn: fetchPublicSubscriptionCatalog,
+    queryFn: async () => {
+      const res = await fetch(`${getBackendApiRoot()}/public/subscriptions/catalog`, {
+        headers: {
+          Accept: "application/json",
+          ...getTenantHeaders(),
+        },
+      });
+      if (!res.ok) {
+        throw new Error("Failed to fetch public subscription catalog");
+      }
+      return res.json();
+    },
     staleTime: 300000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
