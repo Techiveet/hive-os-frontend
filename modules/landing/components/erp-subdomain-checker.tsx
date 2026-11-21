@@ -1,34 +1,125 @@
 "use client";
 
 import * as React from "react";
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import {
   Globe,
   CheckCircle2,
+  AlertCircle,
+  Loader2,
   ArrowRight,
   ShieldCheck,
-  Zap,
   Lock,
-  Building,
-  Sparkles,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { useTranslation } from "@/store/use-translation";
+import {
+  checkTenantAvailability,
+  sanitizeTenantSlug,
+  type TenantAvailabilityResult,
+} from "@/lib/tenant-availability";
+import { getPlatformRootDomain } from "@/lib/runtime-context";
+
+// Identical on server and client (NEXT_PUBLIC_* is inlined at build time), so
+// the first client render matches the SSR markup; the runtime-resolved root
+// (which can inspect window.location) is applied after mount.
+const INITIAL_ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "localhost").trim().toLowerCase();
 
 export function ErpSubdomainChecker() {
-  const { t } = useTranslation();
   const [subdomain, setSubdomain] = useState("ethio-logistics");
-  const [copied, setCopied] = useState(false);
+  // No availability request fires for anonymous visitors until they actually
+  // interact (edit the name or press Check) — previously every landing-page
+  // view hit /check-tenant.
+  const [touched, setTouched] = useState(false);
+  const [rootDomain, setRootDomain] = useState(INITIAL_ROOT_DOMAIN);
+  const cleanSubdomain = sanitizeTenantSlug(subdomain);
+  const fullDomain = `${cleanSubdomain || "your-company"}.${rootDomain}`;
 
-  const cleanSubdomain = subdomain
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/^-+|-+$/g, "");
+  useEffect(() => {
+    setRootDomain(getPlatformRootDomain());
+  }, []);
 
-  const fullDomain = `${cleanSubdomain || "your-company"}.hive.et`;
+  const [checkedState, setCheckedState] = useState<{
+    slug: string;
+    result: TenantAvailabilityResult;
+  }>({
+    slug: "",
+    result: {
+      status: "checking",
+      available: false,
+      message: "Checking workspace availability...",
+    },
+  });
+
+  useEffect(() => {
+    if (!touched) {
+      return;
+    }
+
+    if (!cleanSubdomain) {
+      setCheckedState({
+        slug: "",
+        result: {
+          status: "invalid",
+          available: false,
+          message: "Enter at least 3 letters, numbers, or hyphens to check availability.",
+        },
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    setCheckedState({
+      slug: cleanSubdomain,
+      result: {
+        status: "checking",
+        available: false,
+        message: `Checking ${fullDomain} availability...`,
+      },
+    });
+
+    const timer = setTimeout(async () => {
+      try {
+        const result = await checkTenantAvailability(cleanSubdomain, controller.signal);
+        if (!controller.signal.aborted) {
+          setCheckedState({ slug: cleanSubdomain, result });
+        }
+      } catch (err) {
+        if ((err as { name?: string })?.name !== "AbortError" && !controller.signal.aborted) {
+          setCheckedState({
+            slug: cleanSubdomain,
+            result: {
+              status: "error",
+              available: false,
+              message: "Unable to verify workspace availability right now.",
+            },
+          });
+        }
+      }
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [cleanSubdomain, fullDomain, touched]);
+
+  const availability: TenantAvailabilityResult = !touched
+    ? {
+        status: "idle",
+        available: false,
+        message: "Type your company name or press Check to see if the address is free.",
+      }
+    : checkedState.slug === cleanSubdomain
+      ? checkedState.result
+      : {
+          status: "checking",
+          available: false,
+          message: `Checking ${fullDomain} availability...`,
+        };
+
+  const isClaimable = Boolean(cleanSubdomain) && availability.status === "available";
+  const isBlocked = availability.status === "taken" || availability.status === "reserved" || availability.status === "invalid";
 
   return (
     <div className="w-full max-w-3xl mx-auto rounded-3xl border border-primary/30 bg-gradient-to-b from-card/90 via-card/70 to-card/90 p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden">
@@ -59,37 +150,91 @@ export function ErpSubdomainChecker() {
 
         {/* Input & Subdomain Preview */}
         <div className="space-y-3">
-          <label className="block font-space text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <label
+            htmlFor="landing-portal-slug-input"
+            className="block font-space text-xs font-bold uppercase tracking-wider text-muted-foreground"
+          >
             Enter Your Company / Organization Name
           </label>
           <div className="flex flex-col sm:flex-row items-stretch gap-2">
             <div className="relative flex-1 flex items-center rounded-2xl border border-border/80 bg-background px-4 py-3 shadow-inner focus-within:border-primary">
               <span className="font-mono text-xs text-muted-foreground mr-1">https://</span>
               <input
+                id="landing-portal-slug-input"
                 type="text"
                 value={subdomain}
-                onChange={(e) => setSubdomain(e.target.value)}
+                onChange={(e) => {
+                  setTouched(true);
+                  setSubdomain(e.target.value);
+                }}
                 placeholder="acme-industries"
                 className="flex-1 bg-transparent font-space text-base font-bold text-foreground focus:outline-none placeholder:text-muted-foreground/50"
               />
-              <span className="font-space text-sm font-bold text-primary">.hive.et</span>
+              <span className="font-space text-sm font-bold text-primary">.{rootDomain}</span>
             </div>
 
-            <Link href={`/auth/signup?slug=${cleanSubdomain || "my-company"}`}>
-              <Button className="h-full w-full sm:w-auto px-6 py-3.5 rounded-2xl font-space text-sm font-bold uppercase tracking-wider shadow-lg shadow-primary/25">
+            {isClaimable ? (
+              <Button
+                asChild
+                className="h-full w-full sm:w-auto px-6 py-3.5 rounded-2xl font-space text-sm font-bold uppercase tracking-wider shadow-lg shadow-primary/25"
+              >
+                <Link href={`/auth/signup?slug=${encodeURIComponent(cleanSubdomain)}`}>
+                  Claim Portal <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Link>
+              </Button>
+            ) : !touched ? (
+              <Button
+                type="button"
+                onClick={() => setTouched(true)}
+                className="h-full w-full sm:w-auto px-6 py-3.5 rounded-2xl font-space text-sm font-bold uppercase tracking-wider"
+              >
+                Check Availability <ArrowRight className="h-4 w-4 ml-1.5" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                disabled
+                className="h-full w-full sm:w-auto px-6 py-3.5 rounded-2xl font-space text-sm font-bold uppercase tracking-wider opacity-60 cursor-not-allowed"
+              >
                 Claim Portal <ArrowRight className="h-4 w-4 ml-1.5" />
               </Button>
-            </Link>
+            )}
           </div>
         </div>
 
         {/* Live Validation & Status Card */}
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/40 p-4 font-mono text-xs">
-          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-semibold">
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            <span>
-              <strong>{fullDomain}</strong> is available for instant deployment
-            </span>
+          <div role="status" aria-live="polite" className="min-w-0">
+            {availability.status === "available" ? (
+              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-semibold">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>
+                  <strong>{fullDomain}</strong> is available for instant deployment
+                </span>
+              </div>
+            ) : isBlocked ? (
+              <div className="flex items-center gap-2 text-rose-700 dark:text-rose-300 font-semibold">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>
+                  <strong>{fullDomain}</strong> — {availability.message}
+                </span>
+              </div>
+            ) : availability.status === "idle" ? (
+              <div className="flex items-center gap-2 text-muted-foreground font-semibold">
+                <Globe className="h-4 w-4 shrink-0" />
+                <span>{availability.message}</span>
+              </div>
+            ) : availability.status === "checking" ? (
+              <div className="flex items-center gap-2 text-muted-foreground font-semibold">
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                <span>{availability.message}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-semibold">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{availability.message}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-4 text-muted-foreground text-[11px]">

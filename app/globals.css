@@ -338,6 +338,15 @@ summary {
   cursor: var(--cursor-pointer, pointer);
 }
 
+/* Single source of truth for hiding the native <select> chevron on
+   NativeSelect (components/ui/native-select.tsx renders its own icon). */
+select[data-slot="native-select"] {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: none !important;
+}
+
 input,
 textarea,
 [contenteditable="true"] {

@@ -623,37 +623,37 @@ export function SubscriptionAdminClient() {
                 <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                 Refresh
               </Button>
-              <Link href="/dashboard/subscriptions/demo-requests">
-                <Button variant="default" size="sm" className="h-10 rounded-full font-bold">
+              <Button asChild variant="default" size="sm" className="h-10 rounded-full font-bold">
+                <Link href="/dashboard/subscriptions/demo-requests">
                   <Bell className="mr-1.5 h-3.5 w-3.5" />
                   Inbound Demos
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           </div>
         </section>
 
         {/* MAIN NAVIGATION TABS */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="gap-5">
-          <TabsList className="h-auto max-w-full justify-start overflow-x-auto p-1.5" aria-label="Subscription administration tabs">
-            <TabsTrigger value="overview" className="flex items-center gap-2 px-4 py-2 text-sm font-bold">
-              <Boxes className="h-4 w-4" />
+          <TabsList className="h-auto w-full max-w-full flex-wrap justify-start gap-1 p-1.5 group-data-[orientation=horizontal]/tabs:h-auto" aria-label="Subscription administration tabs">
+            <TabsTrigger value="overview" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold">
+              <Boxes className="h-4 w-4 shrink-0" />
               System Catalog ({allModules.length})
             </TabsTrigger>
-            <TabsTrigger value="plans" className="flex items-center gap-2 px-4 py-2 text-sm font-bold">
-              <Sliders className="h-4 w-4" />
+            <TabsTrigger value="plans" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold">
+              <Sliders className="h-4 w-4 shrink-0" />
               Plan Feature Matrix
             </TabsTrigger>
-            <TabsTrigger value="pricing" className="flex items-center gap-2 px-4 py-2 text-sm font-bold">
-              <DollarSign className="h-4 w-4" />
+            <TabsTrigger value="pricing" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold">
+              <DollarSign className="h-4 w-4 shrink-0" />
               Module Pricing
             </TabsTrigger>
-            <TabsTrigger value="tenants" className="flex items-center gap-2 px-4 py-2 text-sm font-bold">
-              <Users className="h-4 w-4" />
+            <TabsTrigger value="tenants" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold">
+              <Users className="h-4 w-4 shrink-0" />
               Tenant Subscriptions ({tenants.length})
             </TabsTrigger>
-            <TabsTrigger value="billing" className="flex items-center gap-2 px-4 py-2 text-sm font-bold">
-              <ShieldCheck className="h-4 w-4" />
+            <TabsTrigger value="billing" className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold">
+              <ShieldCheck className="h-4 w-4 shrink-0" />
               Billing Controls &amp; Coupons
             </TabsTrigger>
           </TabsList>

@@ -20,7 +20,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getErrorMessage } from "@/lib/errors";
-import { isTenantSession } from "@/lib/runtime-context";
+import { getPlatformRootDomain, isHostUnderRootDomain, isTenantSession } from "@/lib/runtime-context";
+import { isReservedTenantId, isValidTenantSlug } from "@/lib/tenant-availability";
 import { tenantSignInUrl } from "@/modules/tenancy/components/tenant-activity-dashboard";
 import {
   expireDemoRequest,
@@ -83,7 +84,7 @@ function statusVariant(status: string): "default" | "secondary" | "outline" | "d
 }
 
 function slugify(value: string) {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 20) || "demo";
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 20).replace(/^-+|-+$/g, "") || "demo";
 }
 
 function localDateTime(value: string | null, days = 14) {
@@ -183,14 +184,16 @@ function DemoLeaseCard({ request, catalog, onSave, onProvision, onExpire }: {
   onProvision: (payload: Parameters<typeof provisionDemoRequest>[1]) => Promise<unknown>;
   onExpire: () => Promise<unknown>;
 }) {
-  const initialTenantId = request.demo_tenant_id ?? `${slugify(request.company)}-${request.id}`.slice(0, 20);
+  const idSuffix = `-${request.id}`;
+  const baseCompanySlug = slugify(request.company).slice(0, Math.max(3, 20 - idSuffix.length)).replace(/^-+|-+$/g, "") || "demo";
+  const initialTenantId = request.demo_tenant_id ?? `${baseCompanySlug}${idSuffix}`;
   const [status, setStatus] = React.useState(request.status === "provisioning" || request.status === "expired" ? "provisioned" : request.status);
   const [notes, setNotes] = React.useState(request.notes ?? "");
   const [businessType, setBusinessType] = React.useState(request.business_type || catalog.business_types[0]?.key || "general");
   const [plan, setPlan] = React.useState(request.demo_plan || catalog.plans[0]?.key || "business");
   const [expiresAt, setExpiresAt] = React.useState(localDateTime(request.demo_expires_at, catalog.default_expiration_days));
   const [tenantId, setTenantId] = React.useState(initialTenantId);
-  const [domain, setDomain] = React.useState(request.demo_domain ?? `${initialTenantId}.localhost`);
+  const [domain, setDomain] = React.useState(request.demo_domain ?? `${initialTenantId}.${getPlatformRootDomain()}`);
   const [modules, setModules] = React.useState(request.requested_modules ?? []);
   const [submodules, setSubmodules] = React.useState(request.requested_submodules ?? []);
   const [busy, setBusy] = React.useState(false);
@@ -228,8 +231,26 @@ function DemoLeaseCard({ request, catalog, onSave, onProvision, onExpire }: {
     setSubmodules((current) => current.filter((key) => compatibleSlugs.has(key.split(":")[0])));
   };
 
-  const run = async (action: () => Promise<unknown>) => {
+  const run = async (action: () => Promise<unknown>, requireValidTenantId = false) => {
     setError("");
+    if (requireValidTenantId && !provisioned) {
+      const normalizedId = tenantId.trim().toLowerCase();
+      if (!isValidTenantSlug(normalizedId)) {
+        setError("Tenant ID must be 3 to 20 lowercase letters or numbers, with single hyphens only between characters.");
+        requestAnimationFrame(() => errorRef.current?.focus());
+        return;
+      }
+      if (isReservedTenantId(normalizedId)) {
+        setError("This workspace ID is reserved for platform use.");
+        requestAnimationFrame(() => errorRef.current?.focus());
+        return;
+      }
+      if (!isHostUnderRootDomain(domain)) {
+        setError(`Domain must be a workspace subdomain of ${getPlatformRootDomain()}, for example ${normalizedId}.${getPlatformRootDomain()}.`);
+        requestAnimationFrame(() => errorRef.current?.focus());
+        return;
+      }
+    }
     if (!modules.length) {
       setError("Select at least one module before saving or provisioning.");
       requestAnimationFrame(() => errorRef.current?.focus());
@@ -281,7 +302,7 @@ function DemoLeaseCard({ request, catalog, onSave, onProvision, onExpire }: {
                 <Field><FieldLabel htmlFor={`demo-business-${request.id}`}>Business type</FieldLabel><NativeSelect id={`demo-business-${request.id}`} className="h-11 w-full" value={businessType} onChange={(event) => changeBusinessType(event.target.value)} disabled={busy || provisioning}>{catalog.business_types.map((option) => <NativeSelectOption key={option.key} value={option.key}>{option.label}</NativeSelectOption>)}</NativeSelect></Field>
                 <Field><FieldLabel htmlFor={`demo-plan-${request.id}`}>Demo plan</FieldLabel><NativeSelect id={`demo-plan-${request.id}`} className="h-11 w-full" value={plan} onChange={(event) => setPlan(event.target.value)} disabled={busy || provisioning}>{catalog.plans.map((option) => <NativeSelectOption key={option.key} value={option.key}>{option.name}</NativeSelectOption>)}</NativeSelect></Field>
                 <Field><FieldLabel htmlFor={`demo-expiry-${request.id}`}>Expires at</FieldLabel><Input id={`demo-expiry-${request.id}`} className="h-11" type="datetime-local" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} disabled={busy || provisioning} /><FieldDescription>Uses your current browser time zone.</FieldDescription></Field>
-                <Field><FieldLabel htmlFor={`demo-tenant-${request.id}`}>Tenant ID</FieldLabel><Input id={`demo-tenant-${request.id}`} className="h-11" value={tenantId} onChange={(event) => { const next = slugify(event.target.value); setTenantId(next); if (!provisioned) setDomain(`${next}.localhost`); }} disabled={busy || provisioning || provisioned} maxLength={20} /></Field>
+                <Field><FieldLabel htmlFor={`demo-tenant-${request.id}`}>Tenant ID</FieldLabel><Input id={`demo-tenant-${request.id}`} className="h-11" value={tenantId} onChange={(event) => { const next = slugify(event.target.value); setTenantId(next); if (!provisioned) setDomain(`${next}.${getPlatformRootDomain()}`); }} disabled={busy || provisioning || provisioned} maxLength={20} /></Field>
                 <Field><FieldLabel htmlFor={`demo-domain-${request.id}`}>Domain</FieldLabel><Input id={`demo-domain-${request.id}`} className="h-11" value={domain} onChange={(event) => setDomain(event.target.value.toLowerCase().trim())} disabled={busy || provisioning || provisioned} /></Field>
               </div>
               <Field><FieldLabel htmlFor={`demo-notes-${request.id}`}>Internal notes</FieldLabel><Textarea id={`demo-notes-${request.id}`} rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} disabled={busy || provisioning} /></Field>
@@ -293,7 +314,7 @@ function DemoLeaseCard({ request, catalog, onSave, onProvision, onExpire }: {
 
             <div className="flex flex-wrap gap-3">
               <Button variant="outline" disabled={busy || provisioning} onClick={() => run(() => onSave(configuration()))}>{busy ? <Spinner data-icon="inline-start" /> : null}Save changes</Button>
-              <Button disabled={busy || provisioning} onClick={() => run(() => onProvision({ ...configuration(), tenant_id: tenantId, tenant_name: request.company, domain }))}>{busy || provisioning ? <Spinner data-icon="inline-start" /> : <ShieldCheck data-icon="inline-start" aria-hidden="true" />}{provisioning ? "Provisioning demo…" : expired ? "Reactivate demo access" : (provisioned ? "Apply access and expiry" : "Provision demo tenant")}</Button>
+              <Button disabled={busy || provisioning} onClick={() => run(() => onProvision({ ...configuration(), tenant_id: tenantId, tenant_name: request.company, domain }), true)}>{busy || provisioning ? <Spinner data-icon="inline-start" /> : <ShieldCheck data-icon="inline-start" aria-hidden="true" />}{provisioning ? "Provisioning demo…" : expired ? "Reactivate demo access" : (provisioned ? "Apply access and expiry" : "Provision demo tenant")}</Button>
               {request.demo_domain ? <Button variant="outline" asChild><a href={tenantSignInUrl(request.demo_domain) ?? `//${request.demo_domain}/sign-in`} target="_blank" rel="noreferrer">Open demo<ExternalLink data-icon="inline-end" aria-hidden="true" /></a></Button> : null}
             </div>
           </div>

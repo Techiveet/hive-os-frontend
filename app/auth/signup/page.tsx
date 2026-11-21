@@ -19,7 +19,9 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getAppOrigin, getBackendApiRoot } from "@/lib/runtime-context";
+import { getAppOrigin, getPlatformRootDomain, isHostUnderRootDomain } from "@/lib/runtime-context";
+import { PUBLIC_CATALOG_QUERY_KEY, PUBLIC_CATALOG_STALE_TIME_MS } from "@/modules/subscription/public-catalog-query";
+import { checkTenantAvailability, isValidTenantSlug, sanitizeTenantSlug, type TenantAvailabilityStatus } from "@/lib/tenant-availability";
 import {
   fetchPublicSubscriptionCatalog,
   startPublicSubscriptionCheckout,
@@ -163,28 +165,25 @@ const STEPS: { key: Step; label: string; icon: React.ElementType }[] = [
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function slugify(str: string) {
-  return str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
+  return sanitizeTenantSlug(str);
 }
 
 function buildTenantDomain(tenantId: string) {
   const slug = tenantId.trim().toLowerCase();
   if (!slug) return "";
-  if (typeof window === "undefined") {
-    return `${slug}.localhost`;
-  }
-
-  const hostname = window.location.hostname || "localhost";
-  if (hostname === "localhost" || hostname === "127.0.0.1") {
-    return `${slug}.localhost`;
-  }
-
-  const parts = hostname.split(".");
-  const rootDomain = parts.length > 2 ? parts.slice(-2).join(".") : hostname;
-  return `${slug}.${rootDomain}`;
+  // The platform root comes from configuration, never from slicing the
+  // current hostname (which broke multi-label suffixes such as `.com.et`).
+  return `${slug}.${getPlatformRootDomain()}`;
 }
 
 function buildWorkspaceSignInUrl(host: string) {
   if (typeof window === "undefined" || !host) {
+    return "/sign-in";
+  }
+
+  // `host` can come from the order payload (`order.tenant_domain`). Only ever
+  // redirect to a workspace subdomain of this platform's root domain.
+  if (!isHostUnderRootDomain(host)) {
     return "/sign-in";
   }
 
@@ -279,41 +278,97 @@ export default function TenantSignupPage() {
   const [manualTransactionReference, setManualTransactionReference] = useState("");
   const [error, setError] = useState("");
   const [orderToken, setOrderToken] = useState<string | null>(null);
-  const [tenantIdError, setTenantIdError] = useState("");
+  const [tenantIdCheck, setTenantIdCheck] = useState<{
+    slug: string;
+    status: TenantAvailabilityStatus;
+    message: string;
+  }>({ slug: "", status: "idle", message: "" });
   const [checkoutReturnContext, setCheckoutReturnContext] = useState<CheckoutReturnContext | null>(null);
   const [graceExpired, setGraceExpired] = useState(false);
-  const checkRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tenantIdLockedRef = useRef(false);
   const hydratedCheckoutReturnRef = useRef(false);
   const appliedBusinessTypeFromQueryRef = useRef(false);
   const appliedPlanFromQueryRef = useRef(false);
   const checkoutRequestIdRef = useRef<string | null>(null);
   const checkoutErrorRef = useRef<HTMLDivElement | null>(null);
 
-  // Derive tenantId from orgName
+  // Prefill workspace ID when arriving from landing page Claim Portal (?slug=...)
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const requestedSlug = sanitizeTenantSlug(new URLSearchParams(window.location.search).get("slug") || "");
+    if (requestedSlug) {
+      tenantIdLockedRef.current = true;
+      setTenantId(requestedSlug);
+    }
+  }, []);
+
+  // Derive tenantId from orgName unless user explicitly edited or arrived with ?slug=
+  useEffect(() => {
+    if (tenantIdLockedRef.current) return;
     setTenantId(slugify(orgName));
   }, [orgName]);
 
-  // Real-time tenant ID availability check
+  // Real-time tenant ID availability check bound to the exact slug
   useEffect(() => {
-    if (!tenantId || tenantId.length < 3) { setTenantIdError(""); return; }
-    if (checkRef.current) clearTimeout(checkRef.current);
-    checkRef.current = setTimeout(async () => {
+    const normalized = tenantId.trim().toLowerCase();
+    if (!normalized) {
+      setTenantIdCheck({ slug: "", status: "idle", message: "" });
+      return;
+    }
+    if (!isValidTenantSlug(normalized)) {
+      setTenantIdCheck({
+        slug: normalized,
+        status: "invalid",
+        message: "Use 3 to 20 lowercase letters, numbers, or hyphens (cannot start or end with a hyphen).",
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    setTenantIdCheck({ slug: normalized, status: "checking", message: "" });
+    const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`${getBackendApiRoot()}/check-tenant/${tenantId}`);
-        if (res.ok) setTenantIdError("This workspace ID is already taken. Choose another name.");
-        else setTenantIdError("");
-      } catch {
-        setTenantIdError("");
+        const result = await checkTenantAvailability(normalized, controller.signal);
+        if (!controller.signal.aborted) {
+          setTenantIdCheck({
+            slug: normalized,
+            status: result.status,
+            message: result.available ? "" : result.message,
+          });
+        }
+      } catch (err) {
+        if ((err as { name?: string })?.name !== "AbortError" && !controller.signal.aborted) {
+          setTenantIdCheck({
+            slug: normalized,
+            status: "error",
+            message: "Unable to verify workspace availability right now. Please retry.",
+          });
+        }
       }
-    }, 500);
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [tenantId]);
+
+  const normalizedTenantId = tenantId.trim().toLowerCase();
+  const tenantIdConfirmedAvailable =
+    Boolean(normalizedTenantId)
+    && tenantIdCheck.slug === normalizedTenantId
+    && tenantIdCheck.status === "available";
+  const tenantIdError =
+    tenantIdCheck.slug === normalizedTenantId && tenantIdCheck.status !== "available" && tenantIdCheck.status !== "checking" && tenantIdCheck.status !== "idle"
+      ? tenantIdCheck.message
+      : "";
 
   // Public catalog (for plan pricing confirmation)
   const { data: catalogData, isError: catalogError, isLoading: catalogLoading } = useQuery({
-    queryKey: ["public-catalog"],
+    queryKey: PUBLIC_CATALOG_QUERY_KEY,
     queryFn: fetchPublicSubscriptionCatalog,
-    staleTime: 0,
+    staleTime: PUBLIC_CATALOG_STALE_TIME_MS,
+    // Checkout must confirm current pricing, so always revalidate on mount.
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
@@ -779,7 +834,7 @@ export default function TenantSignupPage() {
 
   // ── Validation ──────────────────────────────────────────────────────────
   const canGoToWorkspace = availablePlanKeys.includes(selectedPlan);
-  const canGoToCheckout = !publicQuoteExperience && orgName.trim().length >= 2 && tenantId.length >= 3 && !tenantIdError
+  const canGoToCheckout = !publicQuoteExperience && orgName.trim().length >= 2 && tenantIdConfirmedAvailable
     && adminName.trim().length >= 2 && adminEmail.includes("@") && adminPassword.length >= 8;
   const directTransferSelected = requiresSignupPayment && checkoutChannel === "direct_transfer";
   const gatewaySelected = requiresSignupPayment && checkoutChannel !== "direct_transfer";
@@ -1166,8 +1221,13 @@ export default function TenantSignupPage() {
                       <Input
                         id="tenant-id"
                         value={tenantId}
-                        onChange={e => setTenantId(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                        placeholder="techive-technology-solutions"
+                        maxLength={20}
+                        onChange={e => {
+                          const next = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 20);
+                          tenantIdLockedRef.current = next.length > 0;
+                          setTenantId(next);
+                        }}
+                        placeholder="techive-solutions"
                         required
                         aria-invalid={Boolean(tenantIdError)}
                         aria-describedby={tenantIdError ? "tenant-id-error" : "tenant-id-help"}
@@ -1176,7 +1236,7 @@ export default function TenantSignupPage() {
                           tenantIdError && "border-destructive/50 ring-1 ring-destructive/30"
                         )}
                       />
-                      {tenantId && !tenantIdError && tenantId.length >= 3 && (
+                      {tenantIdConfirmedAvailable && (
                         <Check className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-700 dark:text-emerald-300" />
                       )}
                     </div>

@@ -39,14 +39,10 @@ import { LandingProof } from "@/modules/landing/components/landing-proof";
 import { LandingMetrics } from "@/modules/landing/components/landing-metrics";
 import { LandingSecurity } from "@/modules/landing/components/landing-security";
 import { LandingCompare } from "@/modules/landing/components/landing-compare";
-import { EthiopianPayrollCalculator } from "@/modules/landing/components/ethiopian-payroll-calculator";
-import { ErpWorkbenchPreview } from "@/modules/landing/components/erp-workbench-preview";
-import { SupportWebchatWidget } from "@/components/support-bot/support-webchat-widget";
 import { ErpIndustrySolutions } from "@/modules/landing/components/erp-industry-solutions";
 import { ErpSubdomainChecker } from "@/modules/landing/components/erp-subdomain-checker";
 import { HiveIntro } from "@/modules/landing/components/hive-intro";
 import { HiveBeacon, HiveLockup, HiveMark } from "@/modules/landing/components/hive-mark";
-import { HiveModuleMap } from "@/modules/landing/components/hive-module-map";
 import { AnnualPrice } from "@/modules/subscription/components/annual-price";
 import { fetchPublicSubscriptionCatalog } from "@/modules/subscription/api";
 import type { SignupCatalogModule } from "@/modules/subscription/components/signup-catalog-selector";
@@ -70,13 +66,52 @@ import {
   isTenantHost,
 } from "@/lib/runtime-context";
 import { resolveLandingTemplate } from "@/modules/tenancy/landing-template";
-import { TenantBusinessLanding } from "@/modules/tenancy/components/tenant-business-landing";
-import { RestaurantLandingTemplate } from "@/modules/tenancy/components/restaurant-landing-template";
-import LmsLandingTemplate from "@/modules/tenancy/components/lms-landing-template";
-import B2BLandingTemplate from "@/modules/tenancy/components/b2b-landing-template";
 import { MarketplacePreloader } from "@/modules/b2b-marketplace/components/MarketplacePreloader";
 import { LmsPreloader } from "@/modules/Lms/components/lms-preloader";
 import { formatDocumentTitle } from "@/lib/document-title";
+import { PUBLIC_CATALOG_QUERY_KEY, PUBLIC_CATALOG_STALE_TIME_MS } from "@/modules/subscription/public-catalog-query";
+import dynamic from "next/dynamic";
+
+// Tenant landing templates render only on tenant hosts, and these widgets sit
+// below the fold of the central landing page. Code-splitting them keeps the
+// first-load bundle of `/` limited to what the hero actually needs.
+const TenantBusinessLanding = dynamic(() =>
+  import("@/modules/tenancy/components/tenant-business-landing").then((m) => m.TenantBusinessLanding),
+);
+const RestaurantLandingTemplate = dynamic(() =>
+  import("@/modules/tenancy/components/restaurant-landing-template").then((m) => m.RestaurantLandingTemplate),
+);
+const LmsLandingTemplate = dynamic(() => import("@/modules/tenancy/components/lms-landing-template"));
+const ErpWorkbenchPreview = dynamic(() =>
+  import("@/modules/landing/components/erp-workbench-preview").then((m) => m.ErpWorkbenchPreview),
+);
+const EthiopianPayrollCalculator = dynamic(() =>
+  import("@/modules/landing/components/ethiopian-payroll-calculator").then((m) => m.EthiopianPayrollCalculator),
+);
+const HiveModuleMap = dynamic(() =>
+  import("@/modules/landing/components/hive-module-map").then((m) => m.HiveModuleMap),
+);
+// Floating chat launcher: purely client-side, nothing to server-render.
+const SupportWebchatWidget = dynamic(
+  () => import("@/components/support-bot/support-webchat-widget").then((m) => m.SupportWebchatWidget),
+  { ssr: false },
+);
+
+/** Performs the sign-in redirect as an effect, never during render. */
+function RedirectToSignIn() {
+  useEffect(() => {
+    window.location.replace("/sign-in");
+  }, []);
+
+  return (
+    <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-white">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <p className="text-sm text-slate-400 font-medium">Redirecting to login...</p>
+      </div>
+    </div>
+  );
+}
 
 interface LandingUIProps {
   initialPortalName: string;
@@ -542,9 +577,9 @@ function LandingUI({
 
   // 🚀 Live Public Subscription Catalog for Dynamic Pricing (Same as /auth/signup)
   const { data: catalogData } = useQuery({
-    queryKey: ["public-catalog"],
+    queryKey: PUBLIC_CATALOG_QUERY_KEY,
     queryFn: fetchPublicSubscriptionCatalog,
-    staleTime: 300000,
+    staleTime: PUBLIC_CATALOG_STALE_TIME_MS,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     enabled: !initialIsTenant,
@@ -766,17 +801,7 @@ function LandingUI({
 
     // If tenant is not assigned a template, redirect to login page (/sign-in)
     if (!hasAssignedTemplate) {
-      if (typeof window !== "undefined") {
-        window.location.replace("/sign-in");
-      }
-      return (
-        <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-white">
-          <div className="flex flex-col items-center gap-3">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            <p className="text-sm text-slate-400 font-medium">Redirecting to login...</p>
-          </div>
-        </div>
-      );
+      return <RedirectToSignIn />;
     }
 
     /*
@@ -899,7 +924,7 @@ function LandingUI({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 12 }}
             transition={springSoft}
-            className="fixed bottom-8 right-8 z-[100]"
+            className="fixed bottom-7 right-24 z-40"
           >
             <Button
               onClick={scrollToTop}
@@ -1956,9 +1981,9 @@ function LandingUI({
                 const email = footerEmail.trim();
                 router.push(email ? `/request-demo?email=${encodeURIComponent(email)}` : "/request-demo");
               }}
-              className="group mt-6 flex max-w-xs items-center border-b border-border pb-2 focus-within:border-primary"
+              className="group mt-6 flex w-full max-w-md items-center border-b border-border pb-2 focus-within:border-primary"
             >
-              <label htmlFor="footer-email" className="mr-2 font-mono text-primary">
+              <label htmlFor="footer-email" className="mr-2 shrink-0 whitespace-nowrap font-mono text-primary">
                 system@{initialTenantSlug}:~$
               </label>
               <input
@@ -1968,7 +1993,7 @@ function LandingUI({
                 value={footerEmail}
                 onChange={(event) => setFooterEmail(event.target.value)}
                 placeholder={t('landing.footer.newsletter', 'enter email for updates')}
-                className="w-full border-none bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0"
+                className="min-w-0 flex-1 border-none bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0"
               />
               <button
                 type="submit"
