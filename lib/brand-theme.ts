@@ -165,6 +165,12 @@ const getReadableAccent = (hex: string, surface: { r: number; g: number; b: numb
 // runtime cannot drift apart. Re-exported here to keep existing import sites working.
 export { resolveBrandFontStack } from "./brand-fonts";
 
+const setRootPropertyIfChanged = (root: HTMLElement, name: string, value: string) => {
+  if (root.style.getPropertyValue(name).trim() !== value.trim()) {
+    root.style.setProperty(name, value);
+  }
+};
+
 export const applyBrandRuntime = (settings?: BrandThemeInput | null): void => {
   if (typeof document === "undefined") return;
 
@@ -173,19 +179,21 @@ export const applyBrandRuntime = (settings?: BrandThemeInput | null): void => {
   const primaryHsl = hexToHslChannels(primaryColor);
   const primaryForeground = getReadableForeground(primaryColor);
 
-  root.style.setProperty("--primary", primaryHsl);
-  root.style.setProperty("--accent", primaryHsl);
-  root.style.setProperty("--ring", primaryHsl);
-  root.style.setProperty("--primary-foreground", primaryForeground);
-  root.style.setProperty("--accent-foreground", primaryForeground);
+  setRootPropertyIfChanged(root, "--primary", primaryHsl);
+  setRootPropertyIfChanged(root, "--accent", primaryHsl);
+  setRootPropertyIfChanged(root, "--ring", primaryHsl);
+  setRootPropertyIfChanged(root, "--primary-foreground", primaryForeground);
+  setRootPropertyIfChanged(root, "--accent-foreground", primaryForeground);
 
   // Text-safe variants of the brand colour for each surface. globals.css picks
   // between them per theme; `.text-primary` reads the result.
-  root.style.setProperty(
+  setRootPropertyIfChanged(
+    root,
     "--primary-readable-light",
     getReadableAccent(primaryColor, { r: 253, g: 253, b: 252 }, "darken"),
   );
-  root.style.setProperty(
+  setRootPropertyIfChanged(
+    root,
     "--primary-readable-dark",
     getReadableAccent(primaryColor, { r: 5, g: 5, b: 6 }, "lighten"),
   );
@@ -193,19 +201,19 @@ export const applyBrandRuntime = (settings?: BrandThemeInput | null): void => {
   // Typography. font_size/weight/style/text_transformation have been persisted by
   // the brand matrix since it shipped but were never read, so saving them did
   // nothing. globals.css consumes each variable below.
-  root.style.setProperty("--brand-font-family", resolveBrandFontStack(settings?.font_family));
-  root.style.setProperty("--brand-font-scale", resolveFontSizeScale(settings?.font_size));
-  root.style.setProperty("--brand-font-weight", resolveFontWeight(settings?.font_weight));
-  root.style.setProperty("--brand-font-style", resolveFontStyle(settings?.font_style));
-  root.style.setProperty("--brand-text-transform", resolveTextTransform(settings?.text_transformation));
+  setRootPropertyIfChanged(root, "--brand-font-family", resolveBrandFontStack(settings?.font_family));
+  setRootPropertyIfChanged(root, "--brand-font-scale", resolveFontSizeScale(settings?.font_size));
+  setRootPropertyIfChanged(root, "--brand-font-weight", resolveFontWeight(settings?.font_weight));
+  setRootPropertyIfChanged(root, "--brand-font-style", resolveFontStyle(settings?.font_style));
+  setRootPropertyIfChanged(root, "--brand-text-transform", resolveTextTransform(settings?.text_transformation));
 
   // Opt-in only. A tenant that has never set a body colour inherits the theme
   // foreground; applying the stored legacy default (#0399ff) would repaint every
   // string in the product blue.
   const fontColor = (settings?.font_color ?? "").trim();
   if (/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(fontColor)) {
-    root.style.setProperty("--brand-font-color", hexToHslChannels(fontColor));
-  } else {
+    setRootPropertyIfChanged(root, "--brand-font-color", hexToHslChannels(fontColor));
+  } else if (root.style.getPropertyValue("--brand-font-color")) {
     root.style.removeProperty("--brand-font-color");
   }
 

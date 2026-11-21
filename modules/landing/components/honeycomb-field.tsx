@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useReducedMotion } from "framer-motion";
 
 import { cn } from "@/lib/utils";
+import { usePrefersReducedMotion } from "./use-landing-motion";
 
 /**
  * Living honeycomb behind the hero.
@@ -25,7 +25,7 @@ const LIGHT_RADIUS = 220;
 
 export function HoneycombField({ className }: { className?: string }) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
-  const reduced = useReducedMotion();
+  const reduced = usePrefersReducedMotion();
 
   React.useEffect(() => {
     const canvas = canvasRef.current;

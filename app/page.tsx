@@ -26,9 +26,8 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useDeferredValue, useEffect, useRef, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { AnimatePresence, motion } from "framer-motion";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -50,7 +49,6 @@ import {
   SectionShell,
   WindowChrome,
 } from "@/modules/landing/components/section";
-import { EASE, springSoft } from "@/modules/landing/motion";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
@@ -61,7 +59,6 @@ import {
   getWorkspaceScopeKey,
   isTenantHost,
 } from "@/lib/runtime-context";
-import { resolveLandingTemplate } from "@/modules/tenancy/landing-template";
 import { formatDocumentTitle } from "@/lib/document-title";
 
 // Code-split below-the-fold interactive widgets and tenant-only templates with
@@ -108,33 +105,11 @@ const SupportWebchatWidget = dynamic(
   { ssr: false, loading: () => null },
 );
 
-const TenantBusinessLanding = dynamic(
+const TenantLandingRouter = dynamic(
   () =>
-    import("@/modules/tenancy/components/tenant-business-landing").then(
-      (m) => m.TenantBusinessLanding,
+    import("@/modules/tenancy/components/tenant-landing-router").then(
+      (m) => m.TenantLandingRouter,
     ),
-  { ssr: false, loading: () => null },
-);
-const RestaurantLandingTemplate = dynamic(
-  () =>
-    import("@/modules/tenancy/components/restaurant-landing-template").then(
-      (m) => m.RestaurantLandingTemplate,
-    ),
-  { ssr: false, loading: () => null },
-);
-const LmsLandingTemplate = dynamic(
-  () => import("@/modules/tenancy/components/lms-landing-template"),
-  { ssr: false, loading: () => null },
-);
-const MarketplacePreloader = dynamic(
-  () =>
-    import("@/modules/b2b-marketplace/components/MarketplacePreloader").then(
-      (m) => m.MarketplacePreloader,
-    ),
-  { ssr: false, loading: () => null },
-);
-const LmsPreloader = dynamic(
-  () => import("@/modules/Lms/components/lms-preloader").then((m) => m.LmsPreloader),
   { ssr: false, loading: () => null },
 );
 
@@ -680,8 +655,10 @@ function LandingUI({
   // The server always renders the fallback plans (it has no catalog). If the
   // query resolves before this subtree hydrates, rendering live names/prices on
   // that first pass is a text mismatch and React throws the tree away. Live
-  // plans therefore apply from the first post-mount render onwards.
-  const catalogPayload = (mounted ? catalogData?.data : undefined) ?? {};
+  // plans therefore apply from the first post-mount render onwards, deferred via
+  // useDeferredValue so mounting the 46-module catalogue never blocks main-thread TBT.
+  const deferredCatalogData = useDeferredValue(catalogData);
+  const catalogPayload = (mounted ? deferredCatalogData?.data : undefined) ?? {};
   const catalogModules = useMemo(
     () =>
       [...((catalogPayload.catalog ?? []) as SignupCatalogModule[])].sort(
@@ -829,180 +806,12 @@ function LandingUI({
   ];
 
   if (isTenantExperience) {
-    if (isLoadingTenantLanding) {
-      /*
-       * What identifies a tenant as an LMS is business_type on the landing
-       * payload — which is precisely what has not arrived yet at this point.
-       * So the same two signals the nightclub branch below uses: the slug, and
-       * a payload React Query still holds from an earlier visit.
-       *
-       * Without this the LMS fell through to MarketplacePreloader and a student
-       * opening their course site was greeted by a dark grid of shopping carts
-       * reading "Loading marketplace".
-       */
-      const looksLikeLms =
-        tenantLandingPayload?.business_type === "lms" ||
-        detectedTenantSlug === "lms-demo" ||
-        (detectedTenantSlug?.includes("lms") ?? false);
-
-      if (looksLikeLms) {
-        return <LmsPreloader brandName={brandSettings?.app_title || detectedTenantSlug} />;
-      }
-
-      if (detectedTenantSlug === "savory-lounge") {
-        return (
-          <div className="flex h-screen w-screen items-center justify-center bg-[#080510]">
-            <div className="flex flex-col items-center gap-4">
-              <div className="h-12 w-12 animate-spin rounded-full border-4 border-[#FF1A43] border-t-transparent" />
-              <p className="text-white/60 font-black tracking-widest text-xs uppercase">
-                Loading {brandSettings?.app_title || "Savory Lounge"}...
-              </p>
-            </div>
-          </div>
-        );
-      }
-      return <MarketplacePreloader brandName={brandSettings?.app_title || detectedTenantSlug} />;
-    }
-
-    const businessType = tenantLandingPayload?.business_type;
-    const resolvedTemplate = resolveLandingTemplate(tenantLandingPayload?.landing_page_template);
-    const selectedTemplateKey = resolvedTemplate.meta?.template_key ?? "";
-    const selectedTemplateBusinessType = resolvedTemplate.meta?.business_type ?? businessType;
-    const hasCustomCode = (resolvedTemplate.rendering.mode === "custom_code" || resolvedTemplate.rendering.mode === "raw_package") && Boolean(resolvedTemplate.rendering.html?.trim());
-    const isSavoryLounge = selectedTemplateKey === "savory-lounge-nightclub" || selectedTemplateKey === "savory-lounge" || detectedTenantSlug === "savory-lounge" || (["nightclub", "restaurant", "lounge"].includes(businessType) && selectedTemplateKey === "signature");
-    const isLmsTemplate = selectedTemplateKey === "lms-academy" || selectedTemplateKey === "lms" || detectedTenantSlug === "lms-demo" || (
-      selectedTemplateBusinessType === "lms" && (!selectedTemplateKey || selectedTemplateKey === "signature")
-    );
-    const isB2BTemplate = selectedTemplateKey === "b2b-marketplace" || selectedTemplateKey === "b2b" || detectedTenantSlug === "global-b2b" || (
-      selectedTemplateBusinessType === "b2b" && (!selectedTemplateKey || selectedTemplateKey === "signature")
-    );
-
-    const hasAssignedTemplate = Boolean(
-      (tenantLandingPayload?.has_template && tenantLandingPayload?.landing_page_template) ||
-      isSavoryLounge ||
-      isLmsTemplate ||
-      isB2BTemplate ||
-      hasCustomCode ||
-      [
-        "lms-academy", "savory-lounge-nightclub", "b2b-marketplace",
-        "restaurant-modern", "water-beverage", "technology-company",
-        "lms", "savory-lounge", "b2b", "restaurant", "water-bottling", "software-development"
-      ].includes(selectedTemplateKey) ||
-      ["lanouveil", "global-b2b", "savory-lounge", "aquauno", "aquavivo", "techive", "lms-demo"].includes(detectedTenantSlug)
-    );
-
-    // If tenant is not assigned a template, redirect to login page (/sign-in)
-    if (!hasAssignedTemplate) {
-      if (typeof window !== "undefined") {
-        window.location.replace("/sign-in");
-      }
-      return (
-        <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-white">
-          <div className="flex flex-col items-center gap-3">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            <p className="text-sm text-slate-400 font-medium">Redirecting to login...</p>
-          </div>
-        </div>
-      );
-    }
-
-    /*
-     * The LMS academy template is checked before stored custom code.
-     *
-     * Every tenant carries a custom_code landing, so that branch always won and
-     * an LMS tenant's landing rendered as raw HTML inside a full-screen iframe.
-     * That iframe cannot share the React chrome, so the site header, its nav
-     * tabs, the active-tab state, the language switcher and the theme toggle
-     * were all missing from the landing while every other page in the template
-     * had them — the navigation was not the same throughout.
-     *
-     * Scoped to the LMS on purpose: the other business templates keep their
-     * existing custom_code precedence.
-     */
-    if (isLmsTemplate) {
-      return (
-        <LmsLandingTemplate
-          brandSettings={brandSettings}
-          template={resolvedTemplate}
-          tenantName={
-            tenantLandingPayload?.tenant?.name ||
-            brandSettings?.app_title ||
-            detectedTenantSlug ||
-            t('landing.common.tenant_workspace', "Tenant Workspace")
-          }
-        />
-      );
-    }
-
-    if (hasCustomCode) {
-      return (
-        <TenantBusinessLanding
-          brandSettings={brandSettings}
-          businessLabel={
-            tenantLandingPayload?.business_type_meta?.label ||
-            tenantLandingPayload?.business_type ||
-            t('landing.common.general_business', "General Business")
-          }
-          template={resolvedTemplate}
-          tenantName={
-            tenantLandingPayload?.tenant?.name ||
-            brandSettings?.app_title ||
-            detectedTenantSlug ||
-            t('landing.common.tenant_workspace', "Tenant Workspace")
-          }
-          tenantData={tenantLandingPayload?.tenant_data || tenantLandingPayload?.tenant}
-          collections={tenantLandingPayload?.collections}
-        />
-      );
-    }
-
-    if (isSavoryLounge) {
-      return (
-        <RestaurantLandingTemplate
-          brandSettings={brandSettings}
-          template={resolvedTemplate}
-          tenantName={
-            tenantLandingPayload?.tenant?.name ||
-            brandSettings?.app_title ||
-            detectedTenantSlug ||
-            t('landing.common.tenant_workspace', "Tenant Workspace")
-          }
-        />
-      );
-    }
-
-    if (isLmsTemplate) {
-      return (
-        <LmsLandingTemplate
-          brandSettings={brandSettings}
-          template={resolvedTemplate}
-          tenantName={
-            tenantLandingPayload?.tenant?.name ||
-            brandSettings?.app_title ||
-            detectedTenantSlug ||
-            t('landing.common.tenant_workspace', "Tenant Workspace")
-          }
-        />
-      );
-    }
-
     return (
-      <TenantBusinessLanding
+      <TenantLandingRouter
+        isLoadingTenantLanding={isLoadingTenantLanding}
+        tenantLandingPayload={tenantLandingPayload}
         brandSettings={brandSettings}
-        businessLabel={
-          tenantLandingPayload?.business_type_meta?.label ||
-          tenantLandingPayload?.business_type ||
-          t('landing.common.general_business', "General Business")
-        }
-        template={resolvedTemplate}
-        tenantName={
-          tenantLandingPayload?.tenant?.name ||
-          brandSettings?.app_title ||
-          detectedTenantSlug ||
-          t('landing.common.tenant_workspace', "Tenant Workspace")
-        }
-        tenantData={tenantLandingPayload?.tenant_data || tenantLandingPayload?.tenant}
-        collections={tenantLandingPayload?.collections}
+        detectedTenantSlug={detectedTenantSlug}
       />
     );
   }
@@ -1010,26 +819,18 @@ function LandingUI({
   return (
     <div className="hive-landing relative min-h-screen w-full bg-background text-foreground font-sans selection:bg-amber-400/30 overflow-x-hidden">
       {/* 🚀 SCROLL TO TOP BUTTON */}
-      <AnimatePresence>
-        {showScrollTop && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8, y: 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 12 }}
-            transition={springSoft}
-            className="fixed bottom-7 right-24 z-40"
+      {showScrollTop && (
+        <div className="fixed bottom-7 right-24 z-40 animate-in fade-in zoom-in-95 duration-200">
+          <Button
+            onClick={scrollToTop}
+            size="icon"
+            aria-label={t("landing.nav.back_to_top", "Back to top")}
+            className="h-12 w-12 rounded-full border border-primary/20 bg-primary/90 text-primary-foreground shadow-2xl shadow-primary/30 transition-all duration-300 hover:-translate-y-1 hover:bg-primary"
           >
-            <Button
-              onClick={scrollToTop}
-              size="icon"
-              aria-label={t("landing.nav.back_to_top", "Back to top")}
-              className="h-12 w-12 rounded-full border border-primary/20 bg-primary/90 text-primary-foreground shadow-2xl shadow-primary/30 transition-all duration-300 hover:-translate-y-1 hover:bg-primary"
-            >
-              <ArrowUp className="h-6 w-6" />
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <ArrowUp className="h-6 w-6" />
+          </Button>
+        </div>
+      )}
 
       {/* --- BACKGROUND --- */}
       <div className="tech-grid fixed inset-0 z-0 pointer-events-none opacity-40" />
@@ -1046,7 +847,7 @@ function LandingUI({
             width={89}
             height={32}
             optimizeWidth={128}
-            className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
+            className="h-8 w-[89px] object-contain transition-transform group-hover:scale-105"
             fallback={<HiveLockup />}
           />
         }
@@ -1991,22 +1792,16 @@ function LandingUI({
                   {/* Was a max-h-40 transition, which silently clipped the longer
                       answers (the on-premise and multi-tenancy ones both overflow).
                       height:auto has no ceiling. */}
-                  <AnimatePresence initial={false}>
-                    {isOpen && (
-                      <motion.div
-                        id={`faq-panel-${idx}`}
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.32, ease: EASE }}
-                        className="overflow-hidden"
-                      >
-                        <p className="px-6 pb-6 text-muted-foreground text-sm leading-relaxed">
-                          {faq.a}
-                        </p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  {isOpen && (
+                    <div
+                      id={`faq-panel-${idx}`}
+                      className="overflow-hidden animate-in fade-in duration-200"
+                    >
+                      <p className="px-6 pb-6 text-muted-foreground text-sm leading-relaxed">
+                        {faq.a}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </RevealItem>
             );
@@ -2080,7 +1875,7 @@ function LandingUI({
               width={112}
               height={40}
               optimizeWidth={192}
-              className="h-10 w-auto object-contain mb-4 transition-transform hover:scale-105"
+              className="h-10 w-[112px] object-contain mb-4 transition-transform hover:scale-105"
               fallback={
                 <HiveLockup
                   showTagline

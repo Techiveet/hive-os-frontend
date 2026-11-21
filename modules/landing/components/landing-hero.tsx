@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { motion, useReducedMotion } from "framer-motion";
 import {
   Activity,
   ArrowRight,
@@ -17,10 +16,10 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/store/use-translation";
 
-import { EASE, springSoft } from "../motion";
 import { CountUp } from "./count-up";
 import { HiveMark } from "./hive-mark";
 import { HoneycombField } from "./honeycomb-field";
+import { usePrefersReducedMotion } from "./use-landing-motion";
 
 type Props = {
   isTenant: boolean;
@@ -29,7 +28,7 @@ type Props = {
 
 export function LandingHero({ isTenant, appTitle }: Props) {
   const { t } = useTranslation();
-  const reduced = useReducedMotion();
+  const reduced = usePrefersReducedMotion();
 
   const headline = isTenant
     ? {
@@ -131,11 +130,11 @@ export function LandingHero({ isTenant, appTitle }: Props) {
         {/* CTAs */}
         <div className="mt-9 flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row">
           <Link href={isTenant ? "/sign-in" : "/auth/signup"} className="w-full sm:w-auto">
-            <motion.span
-              whileHover={reduced ? undefined : { scale: 1.03 }}
-              whileTap={reduced ? undefined : { scale: 0.98 }}
-              transition={springSoft}
-              className="block"
+            <span
+              className={cn(
+                "block",
+                !reduced && "transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98]",
+              )}
             >
               <Button className="group h-14 w-full rounded-full border-none bg-primary px-8 font-space text-base font-bold uppercase tracking-wider text-primary-foreground shadow-xl shadow-primary/30 ring-1 ring-inset ring-white/20 sm:w-auto">
                 {isTenant
@@ -143,7 +142,7 @@ export function LandingHero({ isTenant, appTitle }: Props) {
                   : t("landing.cta.pill_plan", "Start Free — Pick a Plan")}
                 <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Button>
-            </motion.span>
+            </span>
           </Link>
           <Link href="/request-demo" className="w-full sm:w-auto">
             <Button
@@ -297,12 +296,9 @@ function HeroConsole({ reduced }: { reduced: boolean }) {
             <br />
             <span className="text-lg font-bold">{t("landing.preview.optimal", "OPTIMAL")}</span>
             <div className="mt-3 h-1 w-full overflow-hidden rounded bg-primary/20">
-              <motion.div
-                initial={{ scaleX: 0 }}
-                whileInView={{ scaleX: 0.98 }}
-                viewport={{ once: true }}
-                transition={{ duration: 1.4, ease: EASE, delay: 0.6 }}
-                className="h-full origin-left bg-primary shadow-[0_0_10px_hsl(var(--primary))]"
+              <div
+                style={{ transform: "scaleX(0.98)" }}
+                className="h-full origin-left bg-primary shadow-[0_0_10px_hsl(var(--primary))] [animation:hi-grow-x_1.4s_cubic-bezier(0.16,1,0.3,1)_0.6s_both]"
               />
             </div>
           </div>
@@ -360,12 +356,9 @@ function HeroConsole({ reduced }: { reduced: boolean }) {
               value={<CountUp to={12} suffix="ms" />}
               foot={
                 <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-muted">
-                  <motion.div
-                    initial={{ scaleX: 0 }}
-                    whileInView={{ scaleX: 0.05 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 1, ease: EASE, delay: 0.8 }}
-                    className="h-full origin-left bg-primary shadow-[0_0_10px_hsl(var(--primary))]"
+                  <div
+                    style={{ transform: "scaleX(0.05)" }}
+                    className="h-full origin-left bg-primary shadow-[0_0_10px_hsl(var(--primary))] [animation:hi-grow-x_1s_cubic-bezier(0.16,1,0.3,1)_0.8s_both]"
                   />
                 </div>
               }
@@ -409,14 +402,12 @@ function RevenueChart() {
       <div className="flex h-32 items-stretch gap-1.5">
         {REVENUE_SERIES.map((value, index) => (
           <div key={index} className="group/bar flex flex-1 flex-col justify-end gap-2">
-            <motion.div
-              initial={{ scaleY: 0 }}
-              whileInView={{ scaleY: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.7, ease: EASE, delay: 0.5 + index * 0.045 }}
-              // 82% leaves room for the month label below the tallest bar.
-              style={{ height: `${(value / peak) * 82}%`, originY: 1 }}
-              className="w-full rounded-sm bg-gradient-to-t from-primary/30 to-primary transition-opacity group-hover/bar:opacity-80"
+            <div
+              style={{
+                height: `${(value / peak) * 82}%`,
+                animationDelay: `${0.5 + index * 0.045}s`,
+              }}
+              className="w-full origin-bottom rounded-sm bg-gradient-to-t from-primary/30 to-primary transition-opacity group-hover/bar:opacity-80 [animation:hm-grow_0.7s_cubic-bezier(0.16,1,0.3,1)_both]"
             />
             <span className="text-center font-mono text-[9px] text-muted-foreground">
               {MONTHS[index]}

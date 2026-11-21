@@ -27,7 +27,8 @@ export default function BrandCursor() {
 
     const updateCursorTokens = () => {
       rafId = null;
-      const primary = getComputedStyle(root).getPropertyValue("--primary").trim();
+      const inlinePrimary = root.style.getPropertyValue("--primary").trim();
+      const primary = inlinePrimary || getComputedStyle(root).getPropertyValue("--primary").trim();
       if (primary === lastPrimary && root.style.getPropertyValue("--cursor-default")) {
         return;
       }

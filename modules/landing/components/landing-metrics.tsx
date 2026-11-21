@@ -1,16 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import {
   Activity,
   Boxes,
   Building2,
   CheckCircle2,
-  CloudLightning,
   Globe,
   Languages,
-  Layers,
   ServerCog,
   ShieldCheck,
   Sparkles,
@@ -22,7 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "@/store/use-translation";
 import { getBackendApiRoot, getTenantHeaders } from "@/lib/runtime-context";
 import { CountUp } from "./count-up";
-import { fadeUp, inView, respectMotion, stagger } from "../motion";
+import { RevealGroup, RevealItem } from "./reveal";
 import { cn } from "@/lib/utils";
 
 /**
@@ -48,7 +45,6 @@ type PlatformStats = Partial<Record<keyof typeof FALLBACK | "plans", number | nu
 
 export function LandingMetrics() {
   const { t } = useTranslation();
-  const reduced = useReducedMotion();
 
   // Live stats apply after mount so the hydration pass renders the same
   // fallback figures the server did (see the matching note in app/page.tsx).
@@ -182,15 +178,13 @@ export function LandingMetrics() {
         </div>
 
         {/* 5-Column Animated Metrics Bento */}
-        <motion.div
-          {...inView}
-          variants={stagger(0.08)}
+        <RevealGroup
+          step={0.08}
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5"
         >
           {metrics.map(({ id, icon: Icon, to, suffix, badge, badgeColor, accent, iconBg, label, note, highlight }) => (
-            <motion.div
+            <RevealItem
               key={id}
-              variants={respectMotion(reduced, fadeUp)}
               className={cn(
                 "group relative flex flex-col justify-between overflow-hidden rounded-2xl border p-5 sm:p-6 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-xl",
                 highlight
@@ -233,9 +227,9 @@ export function LandingMetrics() {
                   {note}
                 </p>
               </div>
-            </motion.div>
+            </RevealItem>
           ))}
-        </motion.div>
+        </RevealGroup>
 
         {/* Telemetry Guarantee Strip */}
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/30 px-5 py-3.5 backdrop-blur-sm text-xs font-mono text-muted-foreground">

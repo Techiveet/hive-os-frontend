@@ -1,12 +1,16 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldAlert } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { SystemOffline } from "@/components/auth/system-offline";
-import { handleAuthFailureResponse, logoutHiveSession } from "@/lib/auth-sync";
 import { getAccessToken, getAuthHeaders, getBackendApiRoot, getWorkspaceScopeKey } from "@/lib/runtime-context";
+
+const SystemOffline = dynamic(
+    () => import("@/components/auth/system-offline").then((m) => m.SystemOffline),
+    { ssr: false, loading: () => null },
+);
 
 // 🚀 Interfaces
 export interface RuntimeSystemSettings {
@@ -28,10 +32,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
     const [hasCheckedUser, setHasCheckedUser] = useState(false);
+    const [hasToken, setHasToken] = useState(false);
     const workspaceScope = getWorkspaceScopeKey();
 
     useEffect(() => {
         try {
+            setHasToken(Boolean(getAccessToken()));
             const userStr = localStorage.getItem("hive_user");
             const context = localStorage.getItem("hive_context");
             if (userStr && context === "central") {
@@ -46,7 +52,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
             } else {
                 setIsSuperAdmin(false);
             }
-        } catch (e) {
+        } catch {
             setIsSuperAdmin(false);
         } finally {
             setHasCheckedUser(true);
@@ -66,6 +72,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
                 headers: getAuthHeaders(),
             });
 
+            const { handleAuthFailureResponse } = await import("@/lib/auth-sync");
             if (await handleAuthFailureResponse(res)) {
                 return { data: null };
             }
@@ -73,6 +80,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
             if (!res.ok) return { data: null };
             return res.json();
         },
+        enabled: hasCheckedUser && hasToken,
         staleTime: 1000 * 60 * 5, // Cache for 5 minutes
         retry: false,
     });
@@ -80,20 +88,21 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     const settings = data?.data as RuntimeSystemSettings | null;
 
     const handleEmergencyLogout = async () => {
+        const { logoutHiveSession } = await import("@/lib/auth-sync");
         await logoutHiveSession();
         router.push("/sign-in");
     };
 
-    if (!hasCheckedUser && !isLoading && pathname !== "/sign-in") {
+    if (!hasCheckedUser && !isLoading && pathname !== "/sign-in" && pathname !== "/") {
         return <div className="h-screen w-screen bg-background" />;
     }
 
     // 🚀 MAINTENANCE INTERCEPTOR
-    if (settings?.maintenance_mode && pathname !== '/sign-in' && !isSuperAdmin) {
+    if (settings?.maintenance_mode && pathname !== "/sign-in" && !isSuperAdmin) {
         return (
-            <SystemOffline 
-                supportEmail={settings.support_email || 'admin@hive-os.com'} 
-                onLogout={handleEmergencyLogout} 
+            <SystemOffline
+                supportEmail={settings.support_email || "admin@hive-os.com"}
+                onLogout={handleEmergencyLogout}
             />
         );
     }

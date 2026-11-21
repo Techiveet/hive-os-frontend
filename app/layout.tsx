@@ -7,8 +7,7 @@ import localFont from "next/font/local";
 
 import Providers from "@/components/providers";
 import { ThemeProvider } from "@/components/theme/theme-provider";
-import { Toaster } from "@/components/ui/toaster";
-import BrandCursor from "@/components/brand-cursor";
+import { DeferredChrome } from "@/components/deferred-chrome";
 import { PublicBrandSyncProvider } from "@/components/providers/public-brand-sync-provider";
 import { formatDocumentTitle } from "@/lib/document-title";
 import { fetchPublicBrandSettings, fetchSeoSettings } from "@/lib/seo";
@@ -161,6 +160,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
+      dir="ltr"
       data-scroll-behavior="smooth"
       suppressHydrationWarning
       className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${instrumentSerif.variable}`}
@@ -199,9 +199,8 @@ export default async function RootLayout({
             {/* 🚀 WRAP THE APP IN SETTINGS SO AUTH-GUARD CAN READ THE TIMEOUT */}
             <SettingsProvider>
               <PublicBrandSyncProvider />
-              <BrandCursor />
               {children}
-              <Toaster />
+              <DeferredChrome />
             </SettingsProvider>
           </Providers>
         </ThemeProvider>

@@ -57,9 +57,6 @@ const nextConfig: NextConfig = {
   },
   allowedDevOrigins,
   experimental: {
-    // Inline compiled CSS into SSR HTML to eliminate render-blocking stylesheet
-    // round-trips on Slow 4G mobile networks.
-    inlineCss: true,
     // Hive's large modular dashboard can otherwise retain enough Webpack state
     // while compiling many development routes to exhaust the shared WSL VM.
     // These are Next.js-supported memory controls; they trade a small amount
@@ -146,9 +143,11 @@ const nextConfig: NextConfig = {
   turbopack: {},
 };
 
-const enableSentryBuildPlugin =
-  process.env.NODE_ENV === "production" ||
-  Boolean(process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN);
+const enableSentryBuildPlugin = Boolean(
+  process.env.SENTRY_DSN ||
+    process.env.NEXT_PUBLIC_SENTRY_DSN ||
+    process.env.SENTRY_AUTH_TOKEN,
+);
 
 export default enableSentryBuildPlugin
   ? withSentryConfig(nextConfig, {

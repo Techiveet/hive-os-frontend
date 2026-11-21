@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, ChevronDown, Menu, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 
@@ -11,8 +10,8 @@ import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/store/use-translation";
+import { usePrefersReducedMotion } from "./use-landing-motion";
 
-import { DURATION, EASE, springSoft } from "../motion";
 import {
   buildLandingNav,
   LANDING_SECTION_IDS,
@@ -33,7 +32,7 @@ const CLOSE_INTENT_MS = 140;
 export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
   // `dictionary` is pulled in purely as a memo dependency below — see buildLandingNav.
   const { t, locale, dictionary } = useTranslation();
-  const reduced = useReducedMotion();
+  const reduced = usePrefersReducedMotion();
 
   const [scrolled, setScrolled] = React.useState(false);
   const [openKey, setOpenKey] = React.useState<string | null>(null);
@@ -155,28 +154,23 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
         setMobileOpen(nextOpen);
       }}
     >
-      <motion.header
+      <header
         ref={navRef}
-        initial={false}
-        animate={{
-          paddingTop: scrolled ? 10 : 16,
-          paddingBottom: scrolled ? 10 : 16,
-        }}
-        transition={reduced ? { duration: 0 } : { duration: DURATION.fast, ease: EASE }}
-        className="fixed inset-x-0 top-0 z-50 px-3 sm:px-6"
+        className={cn(
+          "fixed inset-x-0 top-0 z-50 px-3 sm:px-6 transition-[padding] duration-300",
+          scrolled ? "py-2.5" : "py-4",
+        )}
       >
         {/* The mega panel is a sibling of the bar, not a child of a trigger, so
             it centres on the nav container and can never be pushed off-screen by
             a trigger that sits near the viewport edge. */}
-        <motion.div
-          initial={false}
-          animate={{ maxWidth: scrolled ? 1180 : 1920 }}
-          transition={reduced ? { duration: 0 } : { duration: DURATION.fast, ease: EASE }}
+        <div
+          style={{ maxWidth: scrolled ? 1180 : 1920 }}
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
-          className="relative mx-auto"
+          className="relative mx-auto transition-[max-width] duration-300"
         >
-        <motion.nav
+        <nav
           aria-label={t("landing.nav.primary", "Main")}
           className={cn(
             "flex items-center justify-between gap-3 rounded-full px-4 py-2 transition-[background-color,border-color,box-shadow] duration-500 md:px-6",
@@ -254,18 +248,18 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
             )}
             {!isTenant && (
               <Link href="/auth/signup" className="hidden sm:block">
-                <motion.span
-                  whileHover={reduced ? undefined : { scale: 1.04 }}
-                  whileTap={reduced ? undefined : { scale: 0.97 }}
-                  transition={springSoft}
-                  className="relative block overflow-hidden rounded-full"
+                <span
+                  className={cn(
+                    "relative block overflow-hidden rounded-full",
+                    !reduced && "transition-transform duration-200 hover:scale-[1.04] active:scale-[0.97]",
+                  )}
                 >
                   <Button className="group relative h-9 overflow-hidden rounded-full border-none bg-primary px-5 font-space text-sm font-bold uppercase tracking-wider text-primary-foreground shadow-lg shadow-primary/25">
                     {/* Specular sweep on hover */}
                     <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
                     <span className="relative">{t("landing.hero.cta_free", "Get Started Free")}</span>
                   </Button>
-                </motion.span>
+                </span>
               </Link>
             )}
 
@@ -280,21 +274,18 @@ export function LandingNavbar({ brand, isTenant, onNavigateSection }: Props) {
             </button>
             </DialogPrimitive.Trigger>
           </div>
-        </motion.nav>
+        </nav>
 
-        <AnimatePresence>
-          {openItem?.groups && (
-            <MegaMenu
-              key={openItem.key}
-              item={openItem}
-              reduced={Boolean(reduced)}
-              onSection={goToSection}
-              onClose={() => setOpenKey(null)}
-            />
-          )}
-        </AnimatePresence>
-        </motion.div>
-      </motion.header>
+        {openItem?.groups && (
+          <MegaMenu
+            key={openItem.key}
+            item={openItem}
+            onSection={goToSection}
+            onClose={() => setOpenKey(null)}
+          />
+        )}
+        </div>
+      </header>
 
       <MobileNav
         open={mobileOpen}
@@ -332,10 +323,8 @@ function NavPill({
       )}
     >
       {active && (
-        <motion.span
-          layoutId="landing-nav-pill"
-          transition={springSoft}
-          className="absolute inset-0 -z-10 rounded-full bg-primary/10"
+        <span
+          className="absolute inset-0 -z-10 rounded-full bg-primary/10 transition-opacity duration-300"
         />
       )}
       {children}
@@ -347,12 +336,10 @@ function NavPill({
 
 function MegaMenu({
   item,
-  reduced,
   onSection,
   onClose,
 }: {
   item: LandingNavItem;
-  reduced: boolean;
   onSection: (id: string) => void;
   onClose: () => void;
 }) {
@@ -363,16 +350,12 @@ function MegaMenu({
   const width = `${Math.min(columns * 15.5 + 2, 62)}rem`;
 
   return (
-    <motion.div
-      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
-      animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
-      exit={reduced ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98 }}
-      transition={{ duration: DURATION.fast, ease: EASE }}
+    <div
       // Centred on the nav container (not the trigger) and capped at the
       // viewport, so a menu hanging off a right-hand trigger cannot overflow.
       style={{ width: `min(94vw, ${width})` }}
       className={cn(
-        "hidden lg:block absolute left-1/2 top-[calc(100%+12px)] z-10 -translate-x-1/2 rounded-3xl border border-border/60",
+        "hidden lg:block absolute left-1/2 top-[calc(100%+12px)] z-10 -translate-x-1/2 rounded-3xl border border-border/60 animate-in fade-in zoom-in-95 duration-200",
         // Invisible bridge across the gap between bar and panel, so travelling
         // from the trigger to a link never leaves the hover subtree.
         "before:absolute before:inset-x-0 before:-top-3 before:h-3 before:content-['']",
@@ -426,7 +409,7 @@ function MegaMenu({
           </Link>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -570,28 +553,20 @@ function MobileNav({
                     )}
                   />
                 </button>
-                <AnimatePresence initial={false}>
-                  {isOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3, ease: EASE }}
-                      className="overflow-hidden"
-                    >
-                      <div className="space-y-0.5 border-l border-border/70 pb-2 pl-3 ml-3">
-                        {item.groups.flatMap((group) => group.links).map((link) => (
-                          <MegaLink
-                            key={link.label}
-                            link={link}
-                            onSection={onSection}
-                            onClose={onClose}
-                          />
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {isOpen && (
+                  <div className="overflow-hidden animate-in fade-in duration-200">
+                    <div className="space-y-0.5 border-l border-border/70 pb-2 pl-3 ml-3">
+                      {item.groups.flatMap((group) => group.links).map((link) => (
+                        <MegaLink
+                          key={link.label}
+                          link={link}
+                          onSection={onSection}
+                          onClose={onClose}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

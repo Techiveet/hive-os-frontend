@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { useTranslation } from "@/store/use-translation";
 import { createQueryClient } from "@/lib/query-client";
+import { safeLocalStorageGetItem } from "@/lib/safe-storage";
 import {
   restorePersistedQueryCache,
   subscribeToPersistedQueryCache,
@@ -36,8 +37,20 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const isPublicLanding = pathname === "/";
 
   useEffect(() => {
-    initLocale();
-  }, [initLocale]);
+    if (!isPublicLanding) {
+      void initLocale();
+      return;
+    }
+    const saved = safeLocalStorageGetItem("hive_locale") || "en";
+    if (saved !== "en") {
+      void initLocale();
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void initLocale();
+    }, 2400);
+    return () => window.clearTimeout(timer);
+  }, [initLocale, isPublicLanding]);
 
   useEffect(() => {
     if (isPublicLanding) {

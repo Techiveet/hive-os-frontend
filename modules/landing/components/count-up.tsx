@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useInView, useReducedMotion } from "framer-motion";
+import { useInViewOnce, usePrefersReducedMotion } from "./use-landing-motion";
 
 type Props = {
   to: number;
@@ -15,12 +15,6 @@ type Props = {
 
 /**
  * Counts a metric up the first time it scrolls into view.
- *
- * Deliberately rAF-driven rather than a framer-motion `animate()` on a
- * MotionValue: the hero already runs a particle canvas plus scroll transforms,
- * and a single shared frame loop per number is cheaper than spinning up a
- * MotionValue subscription for each. Renders the final value immediately under
- * `prefers-reduced-motion`.
  */
 export function CountUp({
   to,
@@ -31,8 +25,8 @@ export function CountUp({
   className,
 }: Props) {
   const ref = React.useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-10% 0px" });
-  const reduced = useReducedMotion();
+  const inView = useInViewOnce(ref, { rootMargin: "-10% 0px" });
+  const reduced = usePrefersReducedMotion();
   const [value, setValue] = React.useState(0);
 
   React.useEffect(() => {
@@ -46,8 +40,6 @@ export function CountUp({
     const start = performance.now();
     const tick = (now: number) => {
       const progress = Math.min((now - start) / durationMs, 1);
-      // easeOutCubic — matches the settle of the shared EASE curve closely
-      // enough that numbers and their containers feel like one movement.
       const eased = 1 - Math.pow(1 - progress, 3);
       setValue(to * eased);
       if (progress < 1) frame = requestAnimationFrame(tick);

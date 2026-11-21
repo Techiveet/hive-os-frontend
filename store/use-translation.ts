@@ -1,3 +1,4 @@
+import { startTransition } from 'react';
 import { create } from 'zustand';
 import { getBackendApiRoot, getTenantHeaders } from '@/lib/runtime-context';
 import { safeLocalStorageSetItem, safeLocalStorageGetItem } from '@/lib/safe-storage';
@@ -64,9 +65,11 @@ export const useTranslation = create<TranslationState>((set, get) => ({
 
     inflight[newLocale] ??= fetchDictionary(newLocale)
       .then((dictionary) => {
-        set(dictionary
-          ? { locale: newLocale, dictionary, isReady: true }
-          : { locale: newLocale, isReady: true });
+        startTransition(() => {
+          set(dictionary
+            ? { locale: newLocale, dictionary, isReady: true }
+            : { locale: newLocale, isReady: true });
+        });
       })
       .finally(() => {
         inflight[newLocale] = undefined;

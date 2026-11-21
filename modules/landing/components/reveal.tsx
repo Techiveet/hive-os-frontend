@@ -1,10 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { motion, useReducedMotion, type Variants } from "framer-motion";
 
 import { cn } from "@/lib/utils";
-import { fadeUp, inView, respectMotion, scaleIn, stagger } from "../motion";
+import { useInViewOnce, usePrefersReducedMotion } from "./use-landing-motion";
 
 type RevealProps = {
   children: React.ReactNode;
@@ -15,18 +14,40 @@ type RevealProps = {
   as?: "div" | "section" | "li" | "article";
 };
 
-/** Single-element scroll entrance. */
-export function Reveal({ children, className, variant = "up", delay = 0, as = "div" }: RevealProps) {
-  const reduced = useReducedMotion();
-  const base: Variants = variant === "scale" ? scaleIn : fadeUp;
-  const Component = motion[as];
+const RevealGroupContext = React.createContext<{
+  visible: boolean;
+  reduced: boolean;
+} | null>(null);
+
+/** Single-element scroll entrance using GPU-composited CSS transitions. */
+export function Reveal({
+  children,
+  className,
+  variant = "up",
+  delay = 0,
+  as = "div",
+}: RevealProps) {
+  const ref = React.useRef<HTMLElement>(null);
+  const visible = useInViewOnce(ref, { rootMargin: "-10% 0px -8% 0px" });
+  const reduced = usePrefersReducedMotion();
+  const Component = as as React.ElementType;
 
   return (
     <Component
-      {...inView}
-      variants={respectMotion(reduced, base)}
-      transition={{ delay }}
-      className={className}
+      ref={ref}
+      style={delay > 0 && !reduced ? { transitionDelay: `${delay}s` } : undefined}
+      className={cn(
+        !reduced &&
+          (variant === "scale"
+            ? "transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            : "transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"),
+        !reduced && !visible
+          ? variant === "scale"
+            ? "opacity-0 translate-y-4 scale-[0.97]"
+            : "opacity-0 translate-y-6"
+          : "opacity-100 translate-y-0 scale-100",
+        className,
+      )}
     >
       {children}
     </Component>
@@ -34,24 +55,28 @@ export function Reveal({ children, className, variant = "up", delay = 0, as = "d
 }
 
 /**
- * Parent orchestrator — pair with `RevealItem` children. Keeps the sequencing in
- * one place so every grid on the page enters at the same cadence.
+ * Parent orchestrator — pair with `RevealItem` children.
  */
 export function RevealGroup({
   children,
   className,
-  step = 0.08,
-  delay = 0,
 }: {
   children: React.ReactNode;
   className?: string;
   step?: number;
   delay?: number;
 }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const visible = useInViewOnce(ref, { rootMargin: "-10% 0px -8% 0px" });
+  const reduced = usePrefersReducedMotion();
+  const ctx = React.useMemo(() => ({ visible, reduced }), [visible, reduced]);
+
   return (
-    <motion.div {...inView} variants={stagger(step, delay)} className={className}>
-      {children}
-    </motion.div>
+    <RevealGroupContext.Provider value={ctx}>
+      <div ref={ref} className={className}>
+        {children}
+      </div>
+    </RevealGroupContext.Provider>
   );
 }
 
@@ -64,14 +89,27 @@ export function RevealItem({
   className?: string;
   variant?: "up" | "scale";
 }) {
-  const reduced = useReducedMotion();
+  const group = React.useContext(RevealGroupContext);
+  const reduced = group?.reduced ?? false;
+  const visible = group?.visible ?? true;
+
   return (
-    <motion.div
-      variants={respectMotion(reduced, variant === "scale" ? scaleIn : fadeUp)}
-      className={className}
+    <div
+      className={cn(
+        !reduced &&
+          (variant === "scale"
+            ? "transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            : "transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"),
+        !reduced && !visible
+          ? variant === "scale"
+            ? "opacity-0 translate-y-4 scale-[0.97]"
+            : "opacity-0 translate-y-6"
+          : "opacity-100 translate-y-0 scale-100",
+        className,
+      )}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 
