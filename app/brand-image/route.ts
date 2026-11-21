@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
   const inputBuffer = Buffer.from(await upstream.arrayBuffer());
 
   const cacheHeaders = {
-    "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+    "Cache-Control": "public, max-age=2592000, stale-while-revalidate=31536000",
     Vary: "Accept",
   };
 
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (preferWebp) {
-      pipeline = pipeline.webp({ quality: 82, effort: 4 });
+      pipeline = pipeline.webp({ quality: 72, effort: 6 });
     } else {
       pipeline = pipeline.png({ compressionLevel: 9, palette: true });
     }

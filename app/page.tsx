@@ -26,7 +26,7 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring } from "framer-motion";
 import { useTheme } from "next-themes";
@@ -64,35 +64,48 @@ import {
 import { resolveLandingTemplate } from "@/modules/tenancy/landing-template";
 import { formatDocumentTitle } from "@/lib/document-title";
 
-// Code-split below-the-fold interactive widgets and tenant-only templates so the
-// central landing page does not download or evaluate unused JS on first paint.
-const ErpWorkbenchPreview = dynamic(() =>
-  import("@/modules/landing/components/erp-workbench-preview").then((m) => m.ErpWorkbenchPreview),
+// Code-split below-the-fold interactive widgets and tenant-only templates with
+// explicit local loading fallbacks so nothing can ever suspend up to the root
+// app/loading.tsx boundary ("Preparing HIVE.OS") during initial page hydration.
+const SectionSkeleton = () => (
+  <div className="min-h-[24rem] w-full rounded-3xl border border-border/40 bg-card/20" aria-hidden="true" />
 );
-const ErpIndustrySolutions = dynamic(() =>
-  import("@/modules/landing/components/erp-industry-solutions").then((m) => m.ErpIndustrySolutions),
+
+const ErpWorkbenchPreview = dynamic(
+  () => import("@/modules/landing/components/erp-workbench-preview").then((m) => m.ErpWorkbenchPreview),
+  { ssr: false, loading: SectionSkeleton },
 );
-const HiveModuleMap = dynamic(() =>
-  import("@/modules/landing/components/hive-module-map").then((m) => m.HiveModuleMap),
+const ErpIndustrySolutions = dynamic(
+  () => import("@/modules/landing/components/erp-industry-solutions").then((m) => m.ErpIndustrySolutions),
+  { ssr: false, loading: SectionSkeleton },
 );
-const EthiopianPayrollCalculator = dynamic(() =>
-  import("@/modules/landing/components/ethiopian-payroll-calculator").then(
-    (m) => m.EthiopianPayrollCalculator,
-  ),
+const HiveModuleMap = dynamic(
+  () => import("@/modules/landing/components/hive-module-map").then((m) => m.HiveModuleMap),
+  { ssr: false, loading: SectionSkeleton },
 );
-const LandingSecurity = dynamic(() =>
-  import("@/modules/landing/components/landing-security").then((m) => m.LandingSecurity),
+const EthiopianPayrollCalculator = dynamic(
+  () =>
+    import("@/modules/landing/components/ethiopian-payroll-calculator").then(
+      (m) => m.EthiopianPayrollCalculator,
+    ),
+  { ssr: false, loading: SectionSkeleton },
 );
-const LandingProof = dynamic(() =>
-  import("@/modules/landing/components/landing-proof").then((m) => m.LandingProof),
+const LandingSecurity = dynamic(
+  () => import("@/modules/landing/components/landing-security").then((m) => m.LandingSecurity),
+  { ssr: false, loading: SectionSkeleton },
 );
-const LandingCompare = dynamic(() =>
-  import("@/modules/landing/components/landing-compare").then((m) => m.LandingCompare),
+const LandingProof = dynamic(
+  () => import("@/modules/landing/components/landing-proof").then((m) => m.LandingProof),
+  { ssr: false, loading: SectionSkeleton },
+);
+const LandingCompare = dynamic(
+  () => import("@/modules/landing/components/landing-compare").then((m) => m.LandingCompare),
+  { ssr: false, loading: SectionSkeleton },
 );
 const SupportWebchatWidget = dynamic(
   () =>
     import("@/components/support-bot/support-webchat-widget").then((m) => m.SupportWebchatWidget),
-  { ssr: false },
+  { ssr: false, loading: () => null },
 );
 
 const TenantBusinessLanding = dynamic(
@@ -100,30 +113,77 @@ const TenantBusinessLanding = dynamic(
     import("@/modules/tenancy/components/tenant-business-landing").then(
       (m) => m.TenantBusinessLanding,
     ),
-  { ssr: false },
+  { ssr: false, loading: () => null },
 );
 const RestaurantLandingTemplate = dynamic(
   () =>
     import("@/modules/tenancy/components/restaurant-landing-template").then(
       (m) => m.RestaurantLandingTemplate,
     ),
-  { ssr: false },
+  { ssr: false, loading: () => null },
 );
 const LmsLandingTemplate = dynamic(
   () => import("@/modules/tenancy/components/lms-landing-template"),
-  { ssr: false },
+  { ssr: false, loading: () => null },
 );
 const MarketplacePreloader = dynamic(
   () =>
     import("@/modules/b2b-marketplace/components/MarketplacePreloader").then(
       (m) => m.MarketplacePreloader,
     ),
-  { ssr: false },
+  { ssr: false, loading: () => null },
 );
 const LmsPreloader = dynamic(
   () => import("@/modules/Lms/components/lms-preloader").then((m) => m.LmsPreloader),
-  { ssr: false },
+  { ssr: false, loading: () => null },
 );
+
+/**
+ * Mounts heavy below-the-fold interactive chunks only once the visitor scrolls
+ * within 500px of the section, keeping initial JS parse/eval and DOM size lean.
+ * While deferred, an optional anchor `id` stays on the placeholder so navbar /
+ * footer jump links land at the exact spot and immediately hydrate the section.
+ */
+function DeferUntilVisible({
+  id,
+  minHeight = "24rem",
+  children,
+}: {
+  id?: string;
+  minHeight?: string;
+  children: React.ReactNode;
+}) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (visible) return;
+    const node = hostRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "500px 0px" },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  if (visible) {
+    return <>{children}</>;
+  }
+
+  return <div ref={hostRef} id={id} style={{ minHeight }} aria-hidden="true" />;
+}
 
 interface LandingUIProps {
   initialPortalName: string;
@@ -541,6 +601,7 @@ function LandingUI({
 
   // SCROLL TO TOP STATE
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [showSupportWidget, setShowSupportWidget] = useState(false);
   const detectedTenantSlug =
     mounted && typeof window !== "undefined"
       ? getTenantId() || initialTenantSlug
@@ -554,8 +615,14 @@ function LandingUI({
   useEffect(() => {
     setMounted(true);
     const handleScroll = () => setShowScrollTop(window.scrollY > 400);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    // Defer the support webchat widget past initial hydration/paint so its
+    // bundle never blocks FCP/LCP or adds to Total Blocking Time.
+    const widgetTimer = window.setTimeout(() => setShowSupportWidget(true), 1200);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.clearTimeout(widgetTimer);
+    };
   }, []);
 
   const scrollToTop = () => {
@@ -988,7 +1055,7 @@ function LandingUI({
             alt={appTitle}
             width={89}
             height={32}
-            optimizeWidth={192}
+            optimizeWidth={128}
             className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
             fallback={<HiveLockup />}
           />
@@ -1022,7 +1089,9 @@ function LandingUI({
         />
 
         <Reveal variant="scale" className="mt-8">
-          <ErpWorkbenchPreview />
+          <DeferUntilVisible minHeight="32rem">
+            <ErpWorkbenchPreview />
+          </DeferUntilVisible>
         </Reveal>
       </SectionShell>
 
@@ -1036,7 +1105,9 @@ function LandingUI({
         />
 
         <Reveal variant="scale" className="mt-8">
-          <ErpIndustrySolutions />
+          <DeferUntilVisible minHeight="28rem">
+            <ErpIndustrySolutions />
+          </DeferUntilVisible>
         </Reveal>
       </SectionShell>
 
@@ -1052,7 +1123,9 @@ function LandingUI({
           )}
         />
 
-        <HiveModuleMap />
+        <DeferUntilVisible minHeight="30rem">
+          <HiveModuleMap />
+        </DeferUntilVisible>
       </SectionShell>
 
       {/* --- FINTECH & PAYMENT GATEWAY INTEGRATION --- */}
@@ -1253,7 +1326,9 @@ function LandingUI({
                 aria-hidden
                 className="absolute left-1/2 top-1/2 -z-10 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-[100px]"
               />
-              <EthiopianPayrollCalculator />
+              <DeferUntilVisible minHeight="32rem">
+                <EthiopianPayrollCalculator />
+              </DeferUntilVisible>
             </div>
           </Reveal>
 
@@ -1524,13 +1599,21 @@ function LandingUI({
       </SectionShell>
 
       {/* --- SECURITY & DATA RESIDENCY --- */}
-      <LandingSecurity />
+      <DeferUntilVisible id="security" minHeight="28rem">
+        <LandingSecurity />
+      </DeferUntilVisible>
 
       {/* --- CUSTOMER PROOF --- */}
-      <LandingProof />
+      <DeferUntilVisible id="proof" minHeight="32rem">
+        <LandingProof />
+      </DeferUntilVisible>
 
       {/* --- POSITIONING TABLE --- */}
-      {!initialIsTenant && <LandingCompare />}
+      {!initialIsTenant && (
+        <DeferUntilVisible id="compare" minHeight="36rem">
+          <LandingCompare />
+        </DeferUntilVisible>
+      )}
 
       {/* ─── HOW IT WORKS ────────────────────────────────────────────── */}
       {!initialIsTenant && (
@@ -2006,7 +2089,7 @@ function LandingUI({
               alt={appTitle}
               width={112}
               height={40}
-              optimizeWidth={256}
+              optimizeWidth={192}
               className="h-10 w-auto object-contain mb-4 transition-transform hover:scale-105"
               fallback={
                 <HiveLockup
@@ -2117,7 +2200,7 @@ function LandingUI({
       </footer>
 
       {/* Floating AI Customer Support Webchat Widget */}
-      <SupportWebchatWidget botSlug="workspace-assistant" />
+      {showSupportWidget ? <SupportWebchatWidget botSlug="workspace-assistant" /> : null}
     </div>
   );
 }

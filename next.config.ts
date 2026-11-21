@@ -76,6 +76,18 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        source: "/logos/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
+      {
+        source: "/branding/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
+      {
         // Public chat is intended to be framed by the approved Techive and Gubae sites.
         // Keep every authenticated route under the same-origin policy below.
         source: "/embed/support-bot/:path*",
