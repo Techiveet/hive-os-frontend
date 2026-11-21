@@ -105,12 +105,21 @@ const SupportWebchatWidget = dynamic(
   { ssr: false, loading: () => null },
 );
 
+const TenantLoadingFallback = () => (
+  <div className="flex min-h-screen w-full items-center justify-center bg-slate-950 text-white" role="status" aria-live="polite">
+    <div className="flex flex-col items-center gap-3">
+      <div className="h-9 w-9 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <p className="font-mono text-xs uppercase tracking-widest text-slate-400">Loading workspace...</p>
+    </div>
+  </div>
+);
+
 const TenantLandingRouter = dynamic(
   () =>
     import("@/modules/tenancy/components/tenant-landing-router").then(
       (m) => m.TenantLandingRouter,
     ),
-  { ssr: false, loading: () => null },
+  { ssr: false, loading: TenantLoadingFallback },
 );
 
 /**
@@ -646,7 +655,7 @@ function LandingUI({
   // Uses native fetch directly rather than @/modules/subscription/api so the
   // public landing route does not pull in axios, auth-sync, or pusher-js.
   const { data: catalogData } = useQuery({
-    queryKey: ["public-catalog"],
+    queryKey: PUBLIC_CATALOG_QUERY_KEY,
     queryFn: async () => {
       const res = await fetch(`${getBackendApiRoot()}/public/subscriptions/catalog`, {
         headers: {
@@ -659,10 +668,10 @@ function LandingUI({
       }
       return res.json();
     },
-    staleTime: 300000,
+    staleTime: PUBLIC_CATALOG_STALE_TIME_MS,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
-    enabled: !initialIsTenant,
+    enabled: mounted && !isTenantExperience,
   });
 
   // The server always renders the fallback plans (it has no catalog). If the

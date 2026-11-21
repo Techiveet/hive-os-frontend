@@ -5,34 +5,43 @@ import dynamic from "next/dynamic";
 import { useTranslation } from "@/store/use-translation";
 import { resolveLandingTemplate } from "@/modules/tenancy/landing-template";
 
+const TenantTemplateLoadingShell = () => (
+  <div className="flex min-h-screen w-full items-center justify-center bg-slate-950 text-white" role="status" aria-live="polite">
+    <div className="flex flex-col items-center gap-3">
+      <div className="h-9 w-9 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <p className="font-mono text-xs uppercase tracking-widest text-slate-400">Loading workspace...</p>
+    </div>
+  </div>
+);
+
 const TenantBusinessLanding = dynamic(
   () =>
     import("@/modules/tenancy/components/tenant-business-landing").then(
       (m) => m.TenantBusinessLanding,
     ),
-  { ssr: false, loading: () => null },
+  { ssr: false, loading: TenantTemplateLoadingShell },
 );
 const RestaurantLandingTemplate = dynamic(
   () =>
     import("@/modules/tenancy/components/restaurant-landing-template").then(
       (m) => m.RestaurantLandingTemplate,
     ),
-  { ssr: false, loading: () => null },
+  { ssr: false, loading: TenantTemplateLoadingShell },
 );
 const LmsLandingTemplate = dynamic(
   () => import("@/modules/tenancy/components/lms-landing-template"),
-  { ssr: false, loading: () => null },
+  { ssr: false, loading: TenantTemplateLoadingShell },
 );
 const MarketplacePreloader = dynamic(
   () =>
     import("@/modules/b2b-marketplace/components/MarketplacePreloader").then(
       (m) => m.MarketplacePreloader,
     ),
-  { ssr: false, loading: () => null },
+  { ssr: false, loading: TenantTemplateLoadingShell },
 );
 const LmsPreloader = dynamic(
   () => import("@/modules/Lms/components/lms-preloader").then((m) => m.LmsPreloader),
-  { ssr: false, loading: () => null },
+  { ssr: false, loading: TenantTemplateLoadingShell },
 );
 
 function RedirectToSignIn() {

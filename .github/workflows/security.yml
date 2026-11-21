@@ -69,4 +69,4 @@ jobs:
         run: |
           docker run --rm --network none -v "$PWD:/src:ro" -w /src semgrep/semgrep:1.183.0 \
             semgrep scan --metrics=off --disable-version-check --config .semgrep.yml --error --strict --timeout 60 --severity ERROR \
-            --exclude security/semgrep --exclude vendor --exclude node_modules --exclude workspace --exclude tmp --exclude storage --exclude .next .
+            --exclude security/semgrep --exclude vendor --exclude public/vendor --exclude node_modules --exclude workspace --exclude tmp --exclude storage --exclude .next .
