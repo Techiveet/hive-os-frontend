@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -757,9 +757,6 @@ function LandingUI({
   const customLogoUrl = rawLogoUrl && !rawLogoUrl.startsWith("/branding/") ? rawLogoUrl : null;
 
   const router = useRouter();
-  const reducedMotion = useReducedMotion();
-  const { scrollYProgress } = useScroll();
-  const scrollProgress = useSpring(scrollYProgress, { stiffness: 140, damping: 30, mass: 0.4 });
   const [footerEmail, setFooterEmail] = useState("");
 
   // 🌍 BROWSER METADATA SYNC
@@ -1012,13 +1009,6 @@ function LandingUI({
 
   return (
     <div className="hive-landing relative min-h-screen w-full bg-background text-foreground font-sans selection:bg-amber-400/30 overflow-x-hidden">
-      {/* Reading progress: a cobalt-to-honey filament across the top edge */}
-      <motion.div
-        aria-hidden
-        style={{ scaleX: reducedMotion ? scrollYProgress : scrollProgress }}
-        className="fixed inset-x-0 top-0 z-[120] h-[2px] origin-left bg-gradient-to-r from-primary via-sky-400 to-amber-400"
-      />
-
       {/* 🚀 SCROLL TO TOP BUTTON */}
       <AnimatePresence>
         {showScrollTop && (

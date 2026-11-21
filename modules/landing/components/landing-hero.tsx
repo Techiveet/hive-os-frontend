@@ -2,13 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import {
-  motion,
-  useReducedMotion,
-  useScroll,
-  useSpring,
-  useTransform,
-} from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   Activity,
   ArrowRight,
@@ -36,18 +30,6 @@ type Props = {
 export function LandingHero({ isTenant, appTitle }: Props) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
-  const sectionRef = React.useRef<HTMLElement>(null);
-
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ["start start", "end start"],
-  });
-
-  // One useScroll for the whole section; every parallax below derives from it.
-  const textY = useTransform(scrollYProgress, [0, 1], [0, -140]);
-  const textOpacity = useTransform(scrollYProgress, [0, 0.6], [1, 0]);
-  const ambienceY = useTransform(scrollYProgress, [0, 1], [0, -60]);
-  const ambienceOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
   const headline = isTenant
     ? {
@@ -63,16 +45,10 @@ export function LandingHero({ isTenant, appTitle }: Props) {
 
   return (
     <section
-      ref={sectionRef}
       className="relative z-10 flex min-h-screen flex-col items-center justify-start overflow-hidden px-4 pb-0 pt-28 text-center md:pt-32"
     >
-      {/* ── Ambience: drifting grid, cobalt/honey aurora and the live honeycomb,
-             all fading out as the hero scrolls away so they never compete with
-             the sections below. ────────────────────────────────────────── */}
-      <motion.div
-        style={reduced ? undefined : { y: ambienceY, opacity: ambienceOpacity }}
-        className="pointer-events-none absolute inset-0 -z-10"
-      >
+      {/* ── Ambience: drifting grid, cobalt/honey aurora and the live honeycomb ── */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
         <div
           className={cn(
             "absolute inset-x-0 -top-[50px] -bottom-[50px] opacity-[0.35]",
@@ -105,14 +81,11 @@ export function LandingHero({ isTenant, appTitle }: Props) {
         </div>
 
         <HoneycombField />
-      </motion.div>
+      </div>
 
       {/* Above-the-fold hero copy must paint immediately at opacity 1 on SSR
           so LCP never waits for JS download, hydration, or stagger delays. */}
-      <motion.div
-        style={reduced ? undefined : { y: textY, opacity: textOpacity }}
-        className="relative z-10 flex w-full max-w-5xl flex-col items-center"
-      >
+      <div className="relative z-10 flex w-full max-w-5xl flex-col items-center">
         {/* Status pill */}
         <div>
           <div className="liquid-glass mb-7 inline-flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3.5">
@@ -198,24 +171,20 @@ export function LandingHero({ isTenant, appTitle }: Props) {
             </li>
           ))}
         </ul>
-      </motion.div>
+      </div>
 
-      <HeroConsole progress={scrollYProgress} reduced={Boolean(reduced)} />
+      <HeroConsole reduced={Boolean(reduced)} />
 
       {/* Dissolve the console into the next section */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-40 bg-gradient-to-t from-background to-transparent" />
 
-      {/* Scroll cue. Sits above the dissolve and fades with the hero copy so it
-          does not linger over the section below. */}
+      {/* Scroll cue */}
       {!reduced && (
-        <motion.div
-          style={{ opacity: textOpacity }}
-          className="pointer-events-none absolute bottom-6 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center gap-2"
-        >
+        <div className="pointer-events-none absolute bottom-6 left-1/2 z-40 flex -translate-x-1/2 flex-col items-center gap-2">
           <span className="flex h-8 w-5 items-start justify-center rounded-full border border-border/70 p-1.5">
             <span className="h-1.5 w-1 rounded-full bg-primary [animation:scroll-cue_2s_ease-in-out_infinite]" />
           </span>
-        </motion.div>
+        </div>
       )}
     </section>
   );
@@ -245,70 +214,14 @@ function MaskedLine({
 
 /* ── The product console ────────────────────────────────────────────────── */
 
-function HeroConsole({
-  progress,
-  reduced,
-}: {
-  progress: ReturnType<typeof useScroll>["scrollYProgress"];
-  reduced: boolean;
-}) {
+function HeroConsole({ reduced }: { reduced: boolean }) {
   const { t } = useTranslation();
-  const ref = React.useRef<HTMLDivElement>(null);
-
-  // The deck "lands": it enters tilted and flattens as you scroll. A spring on
-  // the raw progress keeps the rotation from stepping on low-frequency wheels.
-  const { scrollYProgress: enter } = useScroll({
-    target: ref,
-    offset: ["start end", "start 0.35"],
-  });
-  const smooth = useSpring(enter, { stiffness: 120, damping: 26, mass: 0.6 });
-  const landRotateX = useTransform(smooth, [0, 1], [14, 0]);
-  const scale = useTransform(smooth, [0, 1], [0.93, 1]);
-
-  // Inner panels drift at different rates on the way out — the depth cue.
-  const railY = useTransform(progress, [0, 1], [0, -20]);
-  const listY = useTransform(progress, [0, 1], [0, -42]);
-  const mainY = useTransform(progress, [0, 1], [0, -64]);
-
-  // Pointer parallax. Springs are deliberately soft: the deck should feel like
-  // a heavy object being nudged, not a card snapping to the cursor. Both values
-  // return to 0 on leave so the console rests flat.
-  const pointerX = useSpring(0, { stiffness: 90, damping: 20, mass: 0.7 });
-  const pointerY = useSpring(0, { stiffness: 90, damping: 20, mass: 0.7 });
-  const tiltY = useTransform(pointerX, [-0.5, 0.5], [-7, 7]);
-  const tiltX = useTransform(pointerY, [-0.5, 0.5], [5, -5]);
-  // The landing rotation and the pointer tilt share one axis, so they are
-  // summed rather than fighting over `rotateX`.
-  const rotateX = useTransform([landRotateX, tiltX] as const, ([a, b]) => (a as number) + (b as number));
-
-  const handlePointerMove = React.useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (reduced) return;
-      const rect = event.currentTarget.getBoundingClientRect();
-      pointerX.set((event.clientX - rect.left) / rect.width - 0.5);
-      pointerY.set((event.clientY - rect.top) / rect.height - 0.5);
-    },
-    [pointerX, pointerY, reduced],
-  );
-
-  const handlePointerLeave = React.useCallback(() => {
-    pointerX.set(0);
-    pointerY.set(0);
-  }, [pointerX, pointerY]);
-
-  const motionStyle = reduced ? undefined : { rotateX, rotateY: tiltY, scale };
 
   return (
-    <div
-      ref={ref}
-      className="relative z-20 mt-16 w-full max-w-6xl [perspective:2000px] md:mt-20"
-    >
+    <div className="relative z-20 mt-16 w-full max-w-6xl md:mt-20">
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-[120px]" />
 
-      <motion.div
-        onPointerMove={handlePointerMove}
-        onPointerLeave={handlePointerLeave}
-        style={{ ...motionStyle, transformOrigin: "center bottom" }}
+      <div
         className="group relative grid h-[440px] grid-cols-[72px_1fr] overflow-hidden rounded-2xl border border-primary/25 bg-background/60 shadow-[0_30px_80px_-20px_hsl(var(--background))] backdrop-blur-xl transition-colors duration-500 hover:border-primary/50 md:h-[620px] md:grid-cols-[80px_250px_1fr]"
       >
         {/* GPU-composited scan sweep: translate3d on an inset-0 container avoids
@@ -323,10 +236,7 @@ function HeroConsole({
         )}
 
         {/* Icon rail */}
-        <motion.div
-          style={reduced ? undefined : { y: railY }}
-          className="z-10 flex flex-col items-center gap-6 border-r border-border bg-muted/20 pt-8"
-        >
+        <div className="z-10 flex flex-col items-center gap-6 border-r border-border bg-muted/20 pt-8">
           {[LineChart, Truck, Users, Wallet].map((Icon, index) => (
             <div
               key={index}
@@ -343,13 +253,10 @@ function HeroConsole({
           <div className="mb-5 mt-auto text-muted-foreground">
             <Activity className="h-5 w-5 animate-pulse" />
           </div>
-        </motion.div>
+        </div>
 
         {/* Module list */}
-        <motion.div
-          style={reduced ? undefined : { y: listY }}
-          className="relative z-10 hidden border-r border-border bg-muted/5 p-8 text-left font-mono text-sm md:block"
-        >
+        <div className="relative z-10 hidden border-r border-border bg-muted/5 p-8 text-left font-mono text-sm md:block">
           <div className="mb-6 text-xs uppercase tracking-widest text-muted-foreground">
             &gt; {t("landing.preview.system_modules", "System Modules")}
           </div>
@@ -399,13 +306,10 @@ function HeroConsole({
               />
             </div>
           </div>
-        </motion.div>
+        </div>
 
         {/* Executive summary */}
-        <motion.div
-          style={reduced ? undefined : { y: mainY }}
-          className="relative z-10 overflow-hidden bg-card/10 p-6 text-left md:p-8"
-        >
+        <div className="relative z-10 overflow-hidden bg-card/10 p-6 text-left md:p-8">
           <div className="pointer-events-none absolute -right-10 -top-10 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
 
           <div className="flex items-end justify-between border-b border-border pb-6">
@@ -469,8 +373,8 @@ function HeroConsole({
           </div>
 
           <RevenueChart />
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -57,6 +57,9 @@ const nextConfig: NextConfig = {
   },
   allowedDevOrigins,
   experimental: {
+    // Inline compiled CSS into SSR HTML to eliminate render-blocking stylesheet
+    // round-trips on Slow 4G mobile networks.
+    inlineCss: true,
     // Hive's large modular dashboard can otherwise retain enough Webpack state
     // while compiling many development routes to exhaust the shared WSL VM.
     // These are Next.js-supported memory controls; they trade a small amount

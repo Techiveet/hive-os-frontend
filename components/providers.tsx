@@ -1,12 +1,10 @@
 "use client";
 
 import { QueryClientProvider } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { OfflineStatusBanner } from "@/components/offline/offline-status-banner";
-import { OfflineQueueInspector } from "@/components/offline/queue-inspector";
-import { OfflineRuntime } from "@/components/providers/offline-runtime";
 import { useTranslation } from "@/store/use-translation";
 import { createQueryClient } from "@/lib/query-client";
 import {
@@ -14,27 +12,49 @@ import {
   subscribeToPersistedQueryCache,
 } from "@/lib/offline/query-persistence";
 
+// Code-split offline runtime (Axios interceptors, IndexedDB upload queue, and
+// ERP offline mutation handlers) so the public landing page does not download
+// or evaluate dashboard-only offline plumbing on initial load.
+const OfflineRuntime = dynamic(
+  () => import("@/components/providers/offline-runtime").then((m) => m.OfflineRuntime),
+  { ssr: false, loading: () => null },
+);
+const OfflineStatusBanner = dynamic(
+  () => import("@/components/offline/offline-status-banner").then((m) => m.OfflineStatusBanner),
+  { ssr: false, loading: () => null },
+);
+const OfflineQueueInspector = dynamic(
+  () => import("@/components/offline/queue-inspector").then((m) => m.OfflineQueueInspector),
+  { ssr: false, loading: () => null },
+);
+
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(createQueryClient);
   const [isRestored, setIsRestored] = useState(false);
   const { initLocale } = useTranslation();
+  const pathname = usePathname() ?? "";
+  const isPublicLanding = pathname === "/";
 
   useEffect(() => {
     initLocale();
   }, [initLocale]);
 
   useEffect(() => {
+    if (isPublicLanding) {
+      setIsRestored(true);
+      return;
+    }
     restorePersistedQueryCache(queryClient);
     setIsRestored(true);
-  }, [queryClient]);
+  }, [queryClient, isPublicLanding]);
 
   useEffect(() => {
-    if (!isRestored) {
+    if (!isRestored || isPublicLanding) {
       return;
     }
 
     return subscribeToPersistedQueryCache(queryClient);
-  }, [queryClient, isRestored]);
+  }, [queryClient, isRestored, isPublicLanding]);
 
   useEffect(() => {
     const handleSessionCleared = () => {
@@ -55,42 +75,15 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     };
   }, [queryClient]);
 
-  const pathname = usePathname() ?? "";
-
-  /**
-   * The assistant's embed iframe renders on sites Hive does not control, and
-   * must contain the assistant and nothing else — not a status banner about
-   * Hive's own sync state, and certainly not a debug tool.
-   */
   const isEmbedFrame = pathname.startsWith("/embed/");
-
-  /**
-   * Where the offline *queue inspector* belongs: inside the signed-in
-   * application.
-   *
-   * It is a debug panel for staff doing work that must survive a dropped
-   * connection — a POS terminal, a stock count — and all of that lives under
-   * /dashboard. It was rendering on every page instead, including the public
-   * marketing site, pinned in the bottom-right corner at z-130. The assistant's
-   * launcher sits at z-50, so it had been shunted 96px inboard to avoid being
-   * covered, which left it stranded mid-page beside a debug button where no
-   * visitor would ever look for it.
-   *
-   * The banner is deliberately not scoped the same way. It is a thin, transient
-   * "you are offline" notice rather than a persistent control, and the sign-in
-   * and LMS login pages both queue requests offline — telling somebody why
-   * their login is not going through is worth more there than tidiness.
-   */
+  const showOfflineRuntime = !isPublicLanding && !isEmbedFrame;
   const showQueueInspector = pathname.startsWith("/dashboard");
-
-  // Cache restoration is non-blocking to allow immediate SSR and hydration
-
 
   return (
     <QueryClientProvider client={queryClient}>
-      <OfflineRuntime />
+      {showOfflineRuntime && <OfflineRuntime />}
 
-      {!isEmbedFrame && (
+      {showOfflineRuntime && (
         <div className="pointer-events-none fixed inset-x-0 top-0 z-[120] flex flex-col">
           <div className="pointer-events-auto">
             <OfflineStatusBanner />
