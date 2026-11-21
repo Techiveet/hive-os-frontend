@@ -42,6 +42,7 @@ import {
 } from "@/lib/runtime-context";
 import { initializeSessionActivity } from "@/lib/session-activity";
 import { resolveHomePath } from "@/lib/home-path";
+import { resolveSafeRedirectPath } from "@/lib/security/safe-redirect";
 
 const POST_LOGIN_REDIRECT_STORAGE_KEY = "hive_post_login_redirect";
 
@@ -57,18 +58,10 @@ const resolveStoredPostLoginRedirect = (user?: unknown) => {
     return fallback;
   }
 
-  const redirect = safeSessionStorageGetItem(POST_LOGIN_REDIRECT_STORAGE_KEY)?.trim();
-
-  if (
-    !redirect ||
-    !redirect.startsWith("/") ||
-    redirect.startsWith("//") ||
-    redirect.includes("\\")
-  ) {
-    return fallback;
-  }
-
-  return redirect;
+  return resolveSafeRedirectPath(
+    safeSessionStorageGetItem(POST_LOGIN_REDIRECT_STORAGE_KEY),
+    fallback,
+  );
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => {

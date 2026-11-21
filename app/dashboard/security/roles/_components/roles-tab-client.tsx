@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FieldInfoPopover } from "@/components/ui/field-info-popover";
+import { hasUnsafePlainText, UNSAFE_PLAIN_TEXT_MESSAGE } from "@/lib/plain-text-guard";
 import { DataTable, type CompanySettingsInfo, type BrandingSettingsInfo } from "@/components/datatable/data-table";
 import { fetchRoles, fetchPermissions, createRole, updateRole, deleteRole, cloneRole, bulkDeleteRoles } from "@/lib/api";
 import { logFrontendAction } from "@/modules/core/api";
@@ -172,9 +173,14 @@ export function RolesTabClient({
       else if (payload.data && Array.isArray(payload.data)) rawRoles = payload.data;
       else if (payload.roles && Array.isArray(payload.roles)) rawRoles = payload.roles;
 
+      const payloadObj = !Array.isArray(payload) ? payload : undefined;
       let total = rawRoles.length;
-      if (res.meta?.total !== undefined) total = res.meta.total;
-      else if (res.pagination?.total !== undefined) total = res.pagination.total;
+      if (res?.meta?.total !== undefined) total = Number(res.meta.total);
+      else if (res?.pagination?.total !== undefined) total = Number(res.pagination.total);
+      else if (payloadObj?.meta?.total !== undefined) total = Number(payloadObj.meta.total);
+      else if (payloadObj?.pagination?.total !== undefined) total = Number(payloadObj.pagination.total);
+      else if (typeof payloadObj?.total === "number") total = payloadObj.total;
+      else if (typeof res?.total === "number") total = res.total;
 
       return { rows: rawRoles, total };
     },
@@ -325,11 +331,16 @@ export function RolesTabClient({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!roleName.trim()) {
+    const trimmedName = roleName.trim();
+    if (!trimmedName) {
       toast.error(t('roles.name_required', "Role name is required"));
       return;
     }
-    saveMut.mutate({ name: roleName.trim(), permissions: selectedPermissions });
+    if (hasUnsafePlainText(trimmedName)) {
+      toast.error(UNSAFE_PLAIN_TEXT_MESSAGE);
+      return;
+    }
+    saveMut.mutate({ name: trimmedName, permissions: selectedPermissions });
   };
 
   const handleQueryChange = React.useCallback((q: TableQuery) => {
@@ -364,11 +375,11 @@ export function RolesTabClient({
       id: "row_number",
       header: t("global.id_number", "ID (#)"),
       enableSorting: false,
-      size: 72,
+      size: 60,
       meta: {
         sticky: "left" as const,
         stickyOffset: canDelete ? 48 : 0,
-        className: "w-[72px] min-w-[72px] max-w-[72px]",
+        className: "w-[60px] min-w-[60px] max-w-[60px]",
         align: "center",
         exportable: false,
         printable: true,
@@ -384,11 +395,11 @@ export function RolesTabClient({
       accessorKey: "name",
       header: t('roles.col_designation', "Clearance Designation"),
       enableSorting: true,
-      size: 280,
+      size: 230,
       meta: {
         sticky: "left" as const,
-        stickyOffset: canDelete ? 120 : 72,
-        className: "w-[280px] min-w-[280px] max-w-[280px] overflow-hidden",
+        stickyOffset: canDelete ? 108 : 60,
+        className: "w-[230px] min-w-[230px] max-w-[230px] overflow-hidden",
       },
       cell: ({ row }) => {
         const r = row.original;
@@ -478,7 +489,13 @@ export function RolesTabClient({
       ),
     },
     {
-      id: "actions", header: t('roles.col_actions', "Actions"), enableSorting: false, size: 120,
+      id: "actions", header: t('roles.col_actions', "Actions"), enableSorting: false, size: 140,
+      meta: {
+        sticky: "right" as const,
+        stickyOffset: 0,
+        align: "right" as const,
+        className: "w-[140px] min-w-[140px]",
+      },
       cell: ({ row }) => {
         const r = row.original;
         const isCore = isProtectedRole(r);
@@ -759,8 +776,14 @@ export function RolesTabClient({
                   value={roleName}
                   onChange={(e) => setRoleName(e.target.value)}
                   disabled={editingRole?.name === "Admin" || editingRole?.name === "Super Admin"}
-                  className="rounded-xl bg-muted/40 font-semibold"
+                  aria-invalid={hasUnsafePlainText(roleName)}
+                  className={cn("rounded-xl bg-muted/40 font-semibold", hasUnsafePlainText(roleName) && "border-destructive text-destructive focus-visible:ring-destructive")}
                 />
+                {hasUnsafePlainText(roleName) && (
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-destructive flex items-center gap-1 mt-1">
+                    <ShieldAlert className="h-3 w-3 shrink-0" /> {UNSAFE_PLAIN_TEXT_MESSAGE}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-3">

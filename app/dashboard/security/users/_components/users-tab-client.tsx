@@ -72,6 +72,7 @@ import { logFrontendAction } from "@/modules/core/api";
 import api from "@/modules/shared/api/http";
 import { createRole, fetchPermissions } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { hasUnsafePlainText, UNSAFE_PLAIN_TEXT_MESSAGE } from "@/lib/plain-text-guard";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTenantModuleAccess } from "@/hooks/use-tenant-module-access";
@@ -743,7 +744,11 @@ export function UsersTabClient(props: Props) {
     setIsAvatarRemoved(false);
     setAvatarLoadError(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    setFormRoleId(u.userRoles[0]?.roleId || (assignableRoles.length > 0 ? assignableRoles[0].id : ""));
+    const existingRoleId = u.userRoles?.[0]?.roleId;
+    const matchedRoleByName = u.role
+      ? assignableRoles.find((r) => r.name.toLowerCase() === u.role?.toLowerCase())?.id
+      : undefined;
+    setFormRoleId(existingRoleId || matchedRoleByName || "");
     setFormPassword("");
     setFormHospitalityStaffId(u.hospitalityStaff ? String(u.hospitalityStaff.id) : "");
     setFieldErrors({});
@@ -948,11 +953,11 @@ export function UsersTabClient(props: Props) {
       id: "row_number",
       header: t("global.id_number", "ID (#)"),
       enableSorting: false,
-      size: 72,
+      size: 60,
       meta: {
         sticky: "left" as const,
         stickyOffset: canDelete ? 48 : 0,
-        className: "w-[72px] min-w-[72px] max-w-[72px]",
+        className: "w-[60px] min-w-[60px] max-w-[60px]",
         align: "center",
         exportable: false,
         printable: true,
@@ -968,17 +973,17 @@ export function UsersTabClient(props: Props) {
       accessorKey: "name",
       header: t('users.col_operator', "Operator"),
       enableSorting: true,
-      size: 260,
+      size: 225,
       meta: {
         sticky: "left" as const,
-        stickyOffset: canDelete ? 120 : 72,
-        className: "w-[260px] min-w-[260px] max-w-[260px] overflow-hidden",
+        stickyOffset: canDelete ? 108 : 60,
+        className: "w-[225px] min-w-[225px] max-w-[225px] overflow-hidden",
       },
       cell: ({ row }) => {
         const u = row.original;
         const isSuper = isProtectedUser(u);
         return (
-          <div className="flex items-center gap-3 w-[240px] max-w-[240px] min-w-0 overflow-hidden py-1">
+          <div className="flex items-center gap-3 w-[200px] max-w-[200px] min-w-0 overflow-hidden py-1">
             <Avatar className={cn("h-9 w-9 shrink-0 border", isSuper ? "border-amber-500/50" : "border-border")}>
               <AvatarImage src={u.avatarUrl || ""} alt={u.name || "User"} className="object-cover bg-muted" />
               <AvatarFallback className={cn("text-white text-[11px] font-bold", isSuper ? "bg-amber-600" : "bg-gradient-to-br from-emerald-500 to-teal-600")}>
@@ -1039,7 +1044,16 @@ export function UsersTabClient(props: Props) {
       ),
     },
     {
-      id: "actions", header: t('users.col_actions', "Actions"), enableSorting: false, size: 120,
+      id: "actions",
+      header: t('users.col_actions', "Actions"),
+      enableSorting: false,
+      size: 168,
+      meta: {
+        sticky: "right" as const,
+        stickyOffset: 0,
+        align: "right" as const,
+        className: "w-[168px] min-w-[168px]",
+      },
       cell: ({ row }) => {
         const u = row.original;
 
@@ -1370,7 +1384,18 @@ export function UsersTabClient(props: Props) {
             </DialogHeader>
           </div>
 
-          <form onSubmit={handleSubmit} noValidate className="flex flex-col flex-1 min-h-0">
+          <form
+            onSubmit={(e) => {
+              if (hasUnsafePlainText(formName)) {
+                e.preventDefault();
+                toast.error(UNSAFE_PLAIN_TEXT_MESSAGE);
+                return;
+              }
+              handleSubmit(e);
+            }}
+            noValidate
+            className="flex flex-col flex-1 min-h-0"
+          >
             <div className="flex-1 overflow-y-auto px-6 sm:px-8 py-6 space-y-6">
 
               {/* HIDDEN NATIVE FILE INPUT */}
@@ -1619,38 +1644,45 @@ export function UsersTabClient(props: Props) {
 
                   {/* FULL NAME */}
                   <div className="sm:col-span-2 space-y-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <Label htmlFor="name" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", fieldErrors.name && "text-destructive")}>
-                        {t('users.full_name', 'Full Name')} <span className="text-destructive font-bold">*</span>
-                      </Label>
-                      <FieldInfoPopover
-                        label={t('users.full_name', 'Full Name')}
-                        required={true}
-                        info={{
-                          title: "Full Legal & Operational Name",
-                          description: "The official display name of the operator. Immutably stamped on inventory transfers, warehouse bin movements, order approvals, and forensic audit logs.",
-                          example: "e.g. Elena Vance, Ops User HDKZ, Alex Mercer",
-                          bestPractice: "Use the operator's real full name to maintain audit clarity and compliance accountability."
-                        }}
-                      />
-                    </div>
-                    <div className="relative">
-                      <User aria-hidden="true" className={cn("absolute left-3.5 top-3.5 h-4 w-4 pointer-events-none transition-colors", fieldErrors.name ? "text-destructive" : "text-muted-foreground")} />
-                      <Input
-                        id="name"
-                        name="name"
-                        autoComplete="name"
-                        value={formName}
-                        onChange={(e) => { setFormName(e.target.value); validateField("name", e.target.value); }}
-                        required
-                        aria-invalid={Boolean(fieldErrors.name)}
-                        aria-describedby={fieldErrors.name ? "name-hint name-error" : "name-hint"}
-                        placeholder="e.g. Elena Vance"
-                        className={cn("h-11 rounded-xl border border-border/70 bg-background/80 pl-10 text-sm font-medium transition-all hover:border-border focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:border-primary", fieldErrors.name && "border-destructive focus-visible:ring-destructive text-destructive")}
-                      />
-                    </div>
-                    <p id="name-hint" className="text-xs text-muted-foreground leading-relaxed">{t('users.name_hint', 'Use the name teammates will recognize across Hive.OS.')}</p>
-                    {fieldErrors.name && <p id="name-error" className="text-[11px] text-destructive font-bold uppercase tracking-wider flex items-center gap-1 mt-1 animate-in fade-in"><AlertCircle aria-hidden="true" className="h-3 w-3" /> {fieldErrors.name}</p>}
+                    {(() => {
+                      const effectiveNameError = fieldErrors.name || (hasUnsafePlainText(formName) ? UNSAFE_PLAIN_TEXT_MESSAGE : "");
+                      return (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            <Label htmlFor="name" className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1", effectiveNameError && "text-destructive")}>
+                              {t('users.full_name', 'Full Name')} <span className="text-destructive font-bold">*</span>
+                            </Label>
+                            <FieldInfoPopover
+                              label={t('users.full_name', 'Full Name')}
+                              required={true}
+                              info={{
+                                title: "Full Legal & Operational Name",
+                                description: "The official display name of the operator. Immutably stamped on inventory transfers, warehouse bin movements, order approvals, and forensic audit logs.",
+                                example: "e.g. Elena Vance, Ops User HDKZ, Alex Mercer",
+                                bestPractice: "Use the operator's real full name to maintain audit clarity and compliance accountability."
+                              }}
+                            />
+                          </div>
+                          <div className="relative">
+                            <User aria-hidden="true" className={cn("absolute left-3.5 top-3.5 h-4 w-4 pointer-events-none transition-colors", effectiveNameError ? "text-destructive" : "text-muted-foreground")} />
+                            <Input
+                              id="name"
+                              name="name"
+                              autoComplete="name"
+                              value={formName}
+                              onChange={(e) => { setFormName(e.target.value); validateField("name", e.target.value); }}
+                              required
+                              aria-invalid={Boolean(effectiveNameError)}
+                              aria-describedby={effectiveNameError ? "name-hint name-error" : "name-hint"}
+                              placeholder="e.g. Elena Vance"
+                              className={cn("h-11 rounded-xl border border-border/70 bg-background/80 pl-10 text-sm font-medium transition-all hover:border-border focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:border-primary", effectiveNameError && "border-destructive focus-visible:ring-destructive text-destructive")}
+                            />
+                          </div>
+                          <p id="name-hint" className="text-xs text-muted-foreground leading-relaxed">{t('users.name_hint', 'Use the name teammates will recognize across Hive.OS.')}</p>
+                          {effectiveNameError && <p id="name-error" className="text-[11px] text-destructive font-bold uppercase tracking-wider flex items-center gap-1 mt-1 animate-in fade-in"><AlertCircle aria-hidden="true" className="h-3 w-3" /> {effectiveNameError}</p>}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* EMAIL ADDRESS */}
@@ -1726,7 +1758,13 @@ export function UsersTabClient(props: Props) {
                       <SelectTrigger id="role" aria-invalid={Boolean(fieldErrors.role)} aria-describedby={fieldErrors.role ? "role-hint role-error" : "role-hint"} className={cn("h-11 rounded-xl border border-border/70 bg-background/80 px-3.5 text-sm font-medium transition-all hover:border-border focus:ring-2 focus:ring-primary/25 focus:border-primary", fieldErrors.role && "border-destructive focus:ring-destructive")}>
                         <div className="flex items-center gap-2 truncate">
                           <KeyRound aria-hidden="true" className="h-4 w-4 text-primary/70 shrink-0" />
-                          <SelectValue placeholder={t('users.select_role', "Select Role")} />
+                          <SelectValue
+                            placeholder={
+                              isEdit && !formRoleId
+                                ? t('users.select_unassigned_role', "Unassigned (Member) — Select Role")
+                                : t('users.select_role', "Select Role")
+                            }
+                          />
                         </div>
                       </SelectTrigger>
                       <SelectContent position="popper" side="bottom" className="max-h-[220px] rounded-xl border-border/60 bg-background/95 backdrop-blur-xl shadow-2xl">
@@ -2055,7 +2093,7 @@ export function UsersTabClient(props: Props) {
             <div className="grid grid-cols-2 gap-3 text-sm border-t border-border/40 pt-4">
               <div className="space-y-1 p-3 rounded-xl bg-muted/20 border border-border/40">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('users.filter_role', 'Clearance Role')}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('users.col_clearance', 'Clearance Level')}</p>
                   <FieldInfoPopover
                     label={t('users.filter_role', 'Clearance Role')}
                     info={{
