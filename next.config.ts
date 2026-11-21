@@ -30,6 +30,19 @@ const getApiOrigin = (): string => {
   }
 };
 
+const getPublicApiOrigin = (): string => {
+  const configured =
+    process.env.NEXT_PUBLIC_API_URL ||
+    "http://localhost:8081/api/v1";
+
+  const normalized = trimTrailingSlashes(configured);
+  try {
+    return new URL(normalized).origin;
+  } catch {
+    return normalized.replace(/\/api\/v1$/i, "");
+  }
+};
+
 const allowedDevOrigins = Array.from(
   new Set(
     [
@@ -45,6 +58,88 @@ const allowedDevOrigins = Array.from(
 );
 
 const distDir = process.env.NEXT_DIST_DIR?.trim() || ".next";
+const isDev = process.env.NODE_ENV !== "production";
+
+const toWebSocketOrigin = (origin: string): string | null => {
+  try {
+    const { origin: normalized, protocol } = new URL(origin);
+    if (protocol !== "http:" && protocol !== "https:") return null;
+    return normalized.replace(/^http(s?):/, "ws$1:");
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * connect-src: plaintext loopback/dev origins (http://localhost:*, ws://...)
+ * are only allowed in development builds. Production keeps the API origin,
+ * its WebSocket twin and HTTPS/WSS (payment, analytics and Sentry endpoints
+ * vary per deployment); set CSP_STRICT_CONNECT_SRC=true to drop the
+ * `https:`/`wss:` wildcards and allow only CSP_CONNECT_SRC_EXTRA.
+ */
+const buildConnectSrc = (publicApiOrigin: string): string => {
+  const strict = process.env.CSP_STRICT_CONNECT_SRC === "true" || process.env.CSP_STRICT_CONNECT_SRC === "1";
+  const extra = (process.env.CSP_CONNECT_SRC_EXTRA ?? "")
+    .split(/[\s,]+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const sources = [
+    "'self'",
+    publicApiOrigin,
+    toWebSocketOrigin(publicApiOrigin),
+    ...(isDev
+      ? [
+          "http://localhost:*",
+          "http://*.localhost:*",
+          "http://127.0.0.1:*",
+          "ws://localhost:*",
+          "ws://*.localhost:*",
+          "ws://127.0.0.1:*",
+        ]
+      : []),
+    ...extra,
+    ...(strict ? [] : ["https:", "wss:"]),
+  ].filter((value): value is string => Boolean(value));
+
+  return Array.from(new Set(sources)).join(" ");
+};
+
+const buildCsp = ({
+  frameAncestors,
+  allowTailwindCdn = false,
+}: {
+  frameAncestors: string;
+  allowTailwindCdn?: boolean;
+}): string => {
+  const publicApiOrigin = getPublicApiOrigin();
+  const scriptSrc = [
+    "'self'",
+    "'unsafe-inline'",
+    ...(isDev ? ["'unsafe-eval'"] : []),
+    "https://www.googletagmanager.com",
+    "https://connect.facebook.net",
+    // Still required: components/ui/model-3d-viewer.tsx loads <model-viewer> from here.
+    "https://ajax.googleapis.com",
+    ...(allowTailwindCdn ? ["https://cdn.tailwindcss.com"] : []),
+  ].join(" ");
+
+  return [
+    "default-src 'self'",
+    `script-src ${scriptSrc}`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: blob: http: https:",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    `connect-src ${buildConnectSrc(publicApiOrigin)}`,
+    "media-src 'self' blob: https:",
+    "worker-src 'self' blob:",
+    "frame-src 'self' blob: https://www.google.com",
+    `frame-ancestors ${frameAncestors}`,
+    "base-uri 'self'",
+    "object-src 'none'",
+    "form-action 'self'",
+  ].join("; ");
+};
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -74,6 +169,12 @@ const nextConfig: NextConfig = {
   },
 
   async headers() {
+    const sharedHeaders = [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()" },
+    ];
+
     return [
       {
         source: "/logos/:path*",
@@ -92,24 +193,52 @@ const nextConfig: NextConfig = {
         // Keep every authenticated route under the same-origin policy below.
         source: "/embed/support-bot/:path*",
         headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          ...sharedHeaders,
           {
             key: "Content-Security-Policy",
-            value: "frame-ancestors 'self' https://techiveet.com https://www.techiveet.com https://gubae.techiveet.com; base-uri 'self'; object-src 'none'",
+            value: buildCsp({
+              frameAncestors: "'self' https://techiveet.com https://www.techiveet.com https://gubae.techiveet.com",
+            }),
           },
         ],
       },
       {
-        source: "/((?!embed/support-bot).*)",
+        source: "/dashboard/landing-templates/:path*",
         headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
+          ...sharedHeaders,
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
-          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Content-Security-Policy",
-            value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'",
+            value: buildCsp({
+              frameAncestors: "'self'",
+              allowTailwindCdn: true,
+            }),
+          },
+        ],
+      },
+      {
+        source: "/dashboard/landing-library/:path*",
+        headers: [
+          ...sharedHeaders,
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          {
+            key: "Content-Security-Policy",
+            value: buildCsp({
+              frameAncestors: "'self'",
+              allowTailwindCdn: true,
+            }),
+          },
+        ],
+      },
+      {
+        source: "/((?!embed/support-bot|dashboard/landing-templates|dashboard/landing-library).*)",
+        headers: [
+          ...sharedHeaders,
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+          {
+            key: "Content-Security-Policy",
+            value: buildCsp({ frameAncestors: "'self'" }),
           },
         ],
       },

@@ -24,6 +24,7 @@ import { safeLocalStorageSetItem, safeLocalStorageRemoveItem, safeSessionStorage
 import { getBackendApiRoot, getPublicServeUrl, getTenantHeaders, getTenantId, getWorkspaceScopeKey, isTenantHost, persistHiveContext } from "@/lib/runtime-context";
 import { initializeSessionActivity } from "@/lib/session-activity";
 import { resolveHomePath } from "@/lib/home-path";
+import { resolveSafeRedirectPath, sanitizeRelativeRedirect } from "@/lib/security/safe-redirect";
 
 const POST_LOGIN_REDIRECT_STORAGE_KEY = "hive_post_login_redirect";
 const AUTH_SERVER_UNAVAILABLE_MESSAGE =
@@ -41,13 +42,10 @@ const resolveSafePostLoginRedirect = (user?: unknown) => {
     return fallback;
   }
 
-  const redirect = new URLSearchParams(window.location.search).get("redirect")?.trim();
-
-  if (!redirect || !redirect.startsWith("/") || redirect.startsWith("//") || redirect.includes("\\")) {
-    return fallback;
-  }
-
-  return redirect;
+  return resolveSafeRedirectPath(
+    new URLSearchParams(window.location.search).get("redirect"),
+    fallback,
+  );
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -144,7 +142,9 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      // A proxy/gateway error page (HTML) must not surface as a JSON parse
+      // crash; fall back to an empty payload and the generic message.
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || "Invalid credentials provided");
 
       if (data.__offlineQueued) {
@@ -158,8 +158,10 @@ export default function LoginPage() {
         // Only an explicit ?redirect= is worth carrying across the 2FA step.
         // The user is not known yet, so their home surface cannot be resolved
         // here — the 2FA screen does that once it has the authenticated user.
-        const explicitRedirect = new URLSearchParams(window.location.search).get("redirect")?.trim();
-        if (explicitRedirect?.startsWith("/") && !explicitRedirect.startsWith("//") && !explicitRedirect.includes("\\")) {
+        const explicitRedirect = sanitizeRelativeRedirect(
+          new URLSearchParams(window.location.search).get("redirect"),
+        );
+        if (explicitRedirect) {
           safeSessionStorageSetItem(POST_LOGIN_REDIRECT_STORAGE_KEY, explicitRedirect);
         } else {
           safeSessionStorageRemoveItem(POST_LOGIN_REDIRECT_STORAGE_KEY);

@@ -1,6 +1,7 @@
 "use client";
 
 import { safeLocalStorageSetItem, safeSessionStorageSetItem } from '@/lib/safe-storage';
+import { sanitizeRelativeRedirect } from "@/lib/security/safe-redirect";
 
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -56,14 +57,11 @@ type ApiErrorPayload = {
 };
 
 const resolveSafeIntendedPath = (value: string | null): string => {
-  const candidate = value?.trim();
+  // Shared same-origin check (also rejects control characters such as
+  // "/\t/evil.com" that the old hand-rolled prefix test let through).
+  const candidate = sanitizeRelativeRedirect(value);
 
-  if (
-    !candidate ||
-    !candidate.startsWith("/") ||
-    candidate.startsWith("//") ||
-    candidate.includes("\\")
-  ) {
+  if (!candidate) {
     return "/dashboard";
   }
 

@@ -1,19 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { getAccessToken, getBackendApiRoot, getBackendOrigin, getPublicServeUrl, getStoredHiveContextSignature, getTenantHeaders, getTenantId } from "@/lib/runtime-context";
+import { getAccessToken, getBackendApiRoot, getPublicServeUrl, getStoredHiveContextSignature, getTenantId } from "@/lib/runtime-context";
 import { cn } from "@/lib/utils";
 import "@/lib/swagger-ui-globals";
+import { applySwaggerRequestCredentials, loadSwaggerUiAssets, useClientBackendOrigin } from "@/lib/swagger-ui-loader";
 import { Activity, Braces, CircleCheckBig, ExternalLink, Home, Layers3, Network, RefreshCcw, Route, ServerCog, ShieldCheck } from "lucide-react";
-
-const SWAGGER_CSS_ID = "swagger-ui-dist-css";
-const SWAGGER_BUNDLE_SRC = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js";
-const SWAGGER_PRESET_SRC = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js";
 
 type Mode = "central" | "tenant";
 
@@ -53,40 +50,6 @@ function getApiStats(spec: ApiSpec): ApiStats {
   };
 }
 
-function ensureSwaggerCss() {
-  if (document.getElementById(SWAGGER_CSS_ID)) return;
-  const link = document.createElement("link");
-  link.id = SWAGGER_CSS_ID;
-  link.rel = "stylesheet";
-  link.href = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css";
-  document.head.appendChild(link);
-}
-
-function loadScript(src: string) {
-  return new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
-    if (existing) {
-      if (existing.dataset.loaded === "true") {
-        resolve();
-        return;
-      }
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.addEventListener("load", () => {
-      script.dataset.loaded = "true";
-      resolve();
-    }, { once: true });
-    script.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
-    document.body.appendChild(script);
-  });
-}
-
 export default function ApiDocsPage() {
   const swaggerRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
@@ -100,10 +63,10 @@ export default function ApiDocsPage() {
   const [logoFailed, setLogoFailed] = useState(false);
   const requestConfigRef = useRef({ mode, token, tenant, tenantSignature });
 
-  const backendOrigin = useMemo(() => getBackendOrigin(), []);
-  const specUrl = `${backendOrigin}/api/docs/openapi.json`;
-  const backendDocsUrl = `${backendOrigin}/api/docs`;
-  const rawSpecUrl = `${backendOrigin}/api/docs/openapi.json`;
+  const backendOrigin = useClientBackendOrigin();
+  const specUrl = backendOrigin ? `${backendOrigin}/api/docs/openapi.json` : "";
+  const backendDocsUrl = backendOrigin ? `${backendOrigin}/api/docs` : "#";
+  const rawSpecUrl = backendOrigin ? `${backendOrigin}/api/docs/openapi.json` : "#";
   const { data: centralBrandResponse } = useQuery<{ data?: CentralBrandSettings }>({
     queryKey: ["centralBrandSettings", "api-docs"],
     queryFn: async () => {
@@ -117,7 +80,7 @@ export default function ApiDocsPage() {
     staleTime: 600000,
     retry: 1,
   });
-  const centralBrand = centralBrandResponse?.data;
+  const centralBrand = backendOrigin ? centralBrandResponse?.data : undefined;
   const brandName = centralBrand?.app_title?.trim() || "Hive.OS";
   const logoUrl = getPublicServeUrl(centralBrand?.logo_dark || centralBrand?.logo_light);
 
@@ -130,9 +93,7 @@ export default function ApiDocsPage() {
   }, [logoUrl]);
 
   useEffect(() => {
-    ensureSwaggerCss();
-    loadScript(SWAGGER_BUNDLE_SRC)
-      .then(() => loadScript(SWAGGER_PRESET_SRC))
+    loadSwaggerUiAssets()
       .then(() => setReady(true))
       .catch((error) => setStatus(error instanceof Error ? error.message : "Swagger assets could not be loaded. Open the raw specification instead."));
   }, []);
@@ -153,17 +114,18 @@ export default function ApiDocsPage() {
   }, []);
 
   useEffect(() => {
-    if (!ready || !swaggerRef.current || !window.SwaggerUIBundle) {
+    if (!ready || !backendOrigin || !specUrl || !swaggerRef.current || !window.SwaggerUIBundle) {
       return;
     }
 
     let cancelled = false;
+    const abortController = new AbortController();
 
     const mountSwagger = async () => {
       setStatus((current) => current.startsWith("Loading") ? current : "Refreshing API command deck...");
 
       try {
-        const response = await fetch(specUrl, { cache: "no-store" });
+        const response = await fetch(specUrl, { cache: "no-store", signal: abortController.signal });
         if (!response.ok) {
           throw new Error(`Failed to load spec (${response.status})`);
         }
@@ -198,45 +160,18 @@ export default function ApiDocsPage() {
             swaggerPreset,
           ],
           layout: "BaseLayout",
-          requestInterceptor: (request: { headers?: Record<string, string> }) => {
-            request.headers = request.headers || {};
-            const currentRequestConfig = requestConfigRef.current;
-
-            if (currentRequestConfig.token) {
-              request.headers.Authorization = `Bearer ${currentRequestConfig.token}`;
-            } else {
-              delete request.headers.Authorization;
-            }
-
-            const tenantHeaders = currentRequestConfig.mode === "tenant"
-              ? getTenantHeaders({
-                  tenantOverride: currentRequestConfig.tenant || null,
-                  signatureOverride: currentRequestConfig.tenantSignature || null,
-                  allowUnsigned: !currentRequestConfig.token,
-                })
-              : {};
-
-            if (tenantHeaders["X-Tenant"]) {
-              request.headers["X-Tenant"] = tenantHeaders["X-Tenant"];
-            } else {
-              delete request.headers["X-Tenant"];
-            }
-
-            if (tenantHeaders["X-Tenant-Signature"]) {
-              request.headers["X-Tenant-Signature"] = tenantHeaders["X-Tenant-Signature"];
-            } else {
-              delete request.headers["X-Tenant-Signature"];
-            }
-
-            return request;
-          },
+          // Reads the live controls through a ref, so typing a token or tenant
+          // never re-fetches the spec or rebuilds Swagger UI.
+          requestInterceptor: (request: { url?: string; headers?: Record<string, string> }) =>
+            applySwaggerRequestCredentials(request, backendOrigin, requestConfigRef.current),
         });
 
         setStats(nextStats);
         setStatus(mode === "tenant"
-          ? `${nextStats.operations.toLocaleString()} operations loaded. Tenant requests will include signed headers for ${tenant || "[empty]"}.`
+          ? `${nextStats.operations.toLocaleString()} operations loaded. Tenant requests will include signed headers for ${requestConfigRef.current.tenant || "[empty]"}.`
           : `${nextStats.operations.toLocaleString()} operations loaded from the live Laravel route table.`);
       } catch (error) {
+        if (cancelled || abortController.signal.aborted) return;
         setStatus(error instanceof Error ? error.message : "Unable to load the OpenAPI spec.");
       }
     };
@@ -245,12 +180,13 @@ export default function ApiDocsPage() {
 
     return () => {
       cancelled = true;
+      abortController.abort();
       if (window.hiveSwaggerUi?.destroy) {
         window.hiveSwaggerUi.destroy();
       }
       window.hiveSwaggerUi = null;
     };
-  }, [backendOrigin, mode, ready, refreshKey, specUrl, tenant]);
+  }, [backendOrigin, mode, ready, refreshKey, specUrl]);
 
   const applySessionDefaults = () => {
     const savedToken = getAccessToken() || "";
@@ -406,7 +342,7 @@ export default function ApiDocsPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700">
             <div>
               <h2 id="live-reference-heading" className="inline font-semibold">Live reference:</h2>{" "}
-              <code className="rounded bg-slate-200 px-2 py-1 font-mono text-xs">{backendOrigin}/api</code>
+              <code className="rounded bg-slate-200 px-2 py-1 font-mono text-xs">{backendOrigin ? `${backendOrigin}/api` : "Resolving endpoint..."}</code>
             </div>
             <div className="text-xs text-slate-500">Swagger requests inherit the mode, token, and tenant values from the controls.</div>
           </div>

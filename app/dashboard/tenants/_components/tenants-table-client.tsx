@@ -57,6 +57,7 @@ import {
 } from "@/modules/tenancy/landing-template";
 import { getErrorMessage } from "@/lib/errors";
 import { getBackendApiRoot, getWorkspaceScopeKey } from "@/lib/runtime-context";
+import { isReservedTenantId, isValidTenantSlug } from "@/lib/tenant-availability";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -784,8 +785,24 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
             return;
         }
 
+        const normalizedId = formId.trim().toLowerCase();
+        if (!isValidTenantSlug(normalizedId)) {
+            const msg = "The workspace ID must be 3 to 20 lowercase letters or numbers, with single hyphens only between characters.";
+            setFormError(msg);
+            setFormErrors({ id: [msg] });
+            requestAnimationFrame(() => formErrorRef.current?.focus());
+            return;
+        }
+        if (isReservedTenantId(normalizedId)) {
+            const msg = "This workspace ID is reserved for platform use.";
+            setFormError(msg);
+            setFormErrors({ id: [msg] });
+            requestAnimationFrame(() => formErrorRef.current?.focus());
+            return;
+        }
+
         const payload: TenantCreateOfflinePayload = {
-            id: formId,
+            id: normalizedId,
             name: formName,
             plan: formPlan,
             business_type: formBusinessType,
@@ -803,9 +820,10 @@ export function TenantsTableClient({ companySettings, brandingSettings }: Props)
     };
 
     const handleIdChange = (val: string) => {
-        const sanitized = val.toLowerCase().replace(/[^a-z0-9-]/g, '');
+        const sanitized = val.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-{2,}/g, '-').slice(0, 20);
         setFormId(sanitized);
-        if (!isEdit) setFormDomain(sanitized ? `${sanitized}.${DEFAULT_TENANT_ROOT_DOMAIN}` : "");
+        const cleanDomainSlug = sanitized.replace(/^-+|-+$/g, '');
+        if (!isEdit) setFormDomain(cleanDomainSlug ? `${cleanDomainSlug}.${DEFAULT_TENANT_ROOT_DOMAIN}` : "");
     };
 
     const getPlanBadge = (plan?: string) => {

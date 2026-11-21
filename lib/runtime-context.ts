@@ -83,6 +83,44 @@ const extractConfiguredHost = (
   }
 };
 
+const LOCAL_DEV_HOST_REGEX = /^(?:localhost|127\.0\.0\.1|\[::1\])$|\.localhost$/;
+
+/**
+ * Root domain tenant workspaces live under (`<slug>.<root>`).
+ *
+ * NEXT_PUBLIC_ROOT_DOMAIN always wins. It is never derived by slicing the
+ * current hostname (`parts.slice(-2)`), which breaks multi-label public
+ * suffixes such as `.com.et` (`acme.hive.com.et` -> `com.et`).
+ */
+export const getPlatformRootDomain = (): string => {
+  const configured = normalizeHost(process.env.NEXT_PUBLIC_ROOT_DOMAIN);
+  if (configured) return configured;
+
+  if (typeof window === "undefined") return "localhost";
+
+  const host = normalizeHost(window.location.hostname);
+  if (!host || LOCAL_DEV_HOST_REGEX.test(host)) return "localhost";
+
+  return "gulfingot.com";
+};
+
+/**
+ * True when `host` is a single-label workspace subdomain of the platform root
+ * (e.g. `acme.<root>`). Used to refuse redirects to hostnames that arrive in
+ * API payloads but do not belong to this platform.
+ */
+export const isHostUnderRootDomain = (
+  host: string | null | undefined,
+  rootDomain: string = getPlatformRootDomain(),
+): boolean => {
+  const normalized = normalizeHost(host);
+  const root = normalizeHost(rootDomain);
+  if (!normalized || !root || !normalized.endsWith(`.${root}`)) return false;
+
+  const label = normalized.slice(0, -(root.length + 1));
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label);
+};
+
 export const getCentralHosts = (): string[] => {
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "gulfingot.com";
 
@@ -610,7 +648,10 @@ export const handleAuthFailureResponse = async (
   res: Response,
 ): Promise<boolean> => {
   if (res.status === 401) {
-    if (typeof window !== "undefined") {
+    if (
+      typeof window !== "undefined" &&
+      !window.location.pathname.includes("/sign-in")
+    ) {
       window.location.href = "/sign-in";
     }
     return true;

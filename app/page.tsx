@@ -59,6 +59,7 @@ import {
   isTenantHost,
 } from "@/lib/runtime-context";
 import { formatDocumentTitle } from "@/lib/document-title";
+import { PUBLIC_CATALOG_QUERY_KEY, PUBLIC_CATALOG_STALE_TIME_MS } from "@/modules/subscription/public-catalog-query";
 
 // Code-split below-the-fold interactive widgets and tenant-only templates with
 // explicit local loading fallbacks so nothing can ever suspend up to the root

@@ -316,9 +316,11 @@ export function resourceAllocationBarChart(
     },
     xAxis: {
       type: "value",
+      splitNumber: 3,
       axisLabel: {
         color: theme.mutedForeground,
         fontSize: 10,
+        hideOverlap: true,
         formatter: (v: number) => `${compactNumber(v)} MB`,
       },
       splitLine: {

@@ -22,6 +22,7 @@ import {
 } from "@/lib/runtime-context";
 import { initializeSessionActivity } from "@/lib/session-activity";
 import { resolveHomePath } from "@/lib/home-path";
+import { resolveSafeRedirectPath, sanitizeRelativeRedirect } from "@/lib/security/safe-redirect";
 import {
   LMS_MY_LEARNING_PATH,
   LMS_TOKENS,
@@ -51,13 +52,10 @@ const resolveSafePostLoginRedirect = (user?: unknown): string => {
     return home;
   }
 
-  const redirect = new URLSearchParams(window.location.search).get("redirect")?.trim();
-
-  if (!redirect || !redirect.startsWith("/") || redirect.startsWith("//") || redirect.includes("\\")) {
-    return home;
-  }
-
-  return redirect;
+  return resolveSafeRedirectPath(
+    new URLSearchParams(window.location.search).get("redirect"),
+    home,
+  );
 };
 
 const getErrorMessage = (error: unknown, fallback: string) =>
@@ -93,7 +91,7 @@ export default function LmsStudentLoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || "Invalid credentials provided");
 
       if (data.__offlineQueued) {
@@ -103,15 +101,22 @@ export default function LmsStudentLoginPage() {
       // 2FA global intercept — mirrors the platform sign-in flow.
       if (data.requires_2fa || data.global_2fa_enforced) {
         safeSessionStorageSetItem("hive_pending_email", email);
-        safeSessionStorageSetItem(POST_LOGIN_REDIRECT_STORAGE_KEY, resolveSafePostLoginRedirect());
+        const explicitRedirect = sanitizeRelativeRedirect(
+          new URLSearchParams(window.location.search).get("redirect"),
+        );
+        if (explicitRedirect) {
+          safeSessionStorageSetItem(POST_LOGIN_REDIRECT_STORAGE_KEY, explicitRedirect);
+        } else {
+          safeSessionStorageRemoveItem(POST_LOGIN_REDIRECT_STORAGE_KEY);
+        }
         if (data.two_factor_token) safeSessionStorageSetItem("hive_2fa_token", data.two_factor_token);
 
         if (data.requires_2fa_setup && data.qr_code_url) {
           safeSessionStorageSetItem("hive_2fa_setup_qr", data.qr_code_url);
           safeSessionStorageSetItem("hive_2fa_setup_secret", data.secret);
         } else {
-          sessionStorage.removeItem("hive_2fa_setup_qr");
-          sessionStorage.removeItem("hive_2fa_setup_secret");
+          safeSessionStorageRemoveItem("hive_2fa_setup_qr");
+          safeSessionStorageRemoveItem("hive_2fa_setup_secret");
         }
 
         logFrontendAction({ module: "Auth", action: "2fa_required", description: `Identity ${email} requires strict 2FA clearance. Redirecting.` }).catch(() => {});
@@ -124,13 +129,13 @@ export default function LmsStudentLoginPage() {
       }
 
       clearHiveSession();
-      localStorage.removeItem("hive_original_token");
+      safeLocalStorageRemoveItem("hive_original_token");
       purgeNonEssentialStorage();
       safeLocalStorageSetItem("hive_token", data.data.token);
       safeLocalStorageSetItem("hive_user", JSON.stringify(data.data.user));
       persistHiveContext(data.data.context, data.data.context_signature ?? null);
       initializeSessionActivity();
-      sessionStorage.removeItem("hive_eject_reason");
+      safeSessionStorageRemoveItem("hive_eject_reason");
 
       await logFrontendAction({ module: "Auth", action: "session_initialized", description: `Learner ${email} authenticated.` }).catch(() => {});
       window.location.href = resolveSafePostLoginRedirect(data.data.user);

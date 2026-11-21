@@ -380,7 +380,7 @@ export function AuditLogsClient() {
       accessorKey: "description",
       header: t("audit.col_desc", "Activity Description"),
       cell: ({ row }) => (
-        <span className="block max-w-80 whitespace-normal">
+        <span className="block max-w-60 whitespace-normal break-words">
           {row.original.description}
         </span>
       ),
@@ -399,6 +399,12 @@ export function AuditLogsClient() {
       id: "actions",
       header: "Actions",
       enableSorting: false,
+      meta: {
+        sticky: "right",
+        stickyOffset: 0,
+        align: "center",
+        className: "w-[96px] min-w-[96px]",
+      },
       cell: ({ row }) => (
         <div className="flex gap-1">
           <Button

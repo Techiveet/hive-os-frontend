@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useTranslation } from "@/store/use-translation";
 import { resolveLandingTemplate } from "@/modules/tenancy/landing-template";
@@ -34,6 +34,21 @@ const LmsPreloader = dynamic(
   () => import("@/modules/Lms/components/lms-preloader").then((m) => m.LmsPreloader),
   { ssr: false, loading: () => null },
 );
+
+function RedirectToSignIn() {
+  useEffect(() => {
+    window.location.replace("/sign-in");
+  }, []);
+
+  return (
+    <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-white">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <p className="text-sm text-slate-400 font-medium">Redirecting to login...</p>
+      </div>
+    </div>
+  );
+}
 
 export interface TenantLandingRouterProps {
   isLoadingTenantLanding: boolean;
@@ -134,17 +149,7 @@ export function TenantLandingRouter({
   );
 
   if (!hasAssignedTemplate) {
-    if (typeof window !== "undefined") {
-      window.location.replace("/sign-in");
-    }
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-white">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm text-slate-400 font-medium">Redirecting to login...</p>
-        </div>
-      </div>
-    );
+    return <RedirectToSignIn />;
   }
 
   if (isLmsTemplate) {

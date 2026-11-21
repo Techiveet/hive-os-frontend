@@ -622,16 +622,13 @@ function DataTableInner<TData, TValue>({
     [],
   );
 
+  // Scroll changes are handled by handleContainerScroll (the Table's
+  // onContainerScroll prop); this only syncs the initial position, so there
+  // is a single scroll listener per table.
   React.useEffect(() => {
     const el = tableContainerRef.current;
     if (!el) return;
-    const checkScroll = () => {
-      const scrolled = el.scrollLeft > 2;
-      setIsScrolledLeft(scrolled);
-    };
-    checkScroll();
-    el.addEventListener("scroll", checkScroll, { passive: true });
-    return () => el.removeEventListener("scroll", checkScroll);
+    setIsScrolledLeft(el.scrollLeft > 2);
   }, []);
 
   const effectiveRowSelection = selectedRowIds ?? rowSelection;
@@ -1168,6 +1165,7 @@ function DataTableInner<TData, TValue>({
                     const isStickyRight = stickyInfo?.sticky === "right";
                     const stickyOffset = stickyInfo?.offset ?? 0;
                     const isLastLeftSticky = Boolean(stickyInfo?.isLastLeftSticky);
+                    const stickySize = h.column.columnDef.size;
 
                     return (
                       <TableHead
@@ -1191,6 +1189,13 @@ function DataTableInner<TData, TValue>({
                                     ? `${stickyOffset}px`
                                     : stickyOffset,
                                 zIndex: 30,
+                                ...(stickySize && !isStickyRight
+                                  ? {
+                                      width: `${stickySize}px`,
+                                      minWidth: `${stickySize}px`,
+                                      maxWidth: `${stickySize}px`,
+                                    }
+                                  : {}),
                               }
                             : {}),
                         }}
@@ -1199,6 +1204,7 @@ function DataTableInner<TData, TValue>({
                           meta?.align === "center" && "text-center",
                           meta?.align === "right" && "text-right",
                           isSticky && "sticky bg-muted dark:bg-[#15161e] z-30 transition-[box-shadow,border-color] duration-200",
+                          isStickyRight && "border-l border-border/50 shadow-[-8px_0_16px_-6px_rgba(0,0,0,0.18)]",
                           isLastLeftSticky && (
                             isScrolledLeft
                               ? "border-r-2 border-border/80 shadow-[8px_0_16px_-4px_rgba(0,0,0,0.16)] dark:shadow-[10px_0_24px_-2px_rgba(0,0,0,0.65)]"
@@ -1335,6 +1341,7 @@ function DataTableInner<TData, TValue>({
                         const isStickyRight = stickyInfo?.sticky === "right";
                         const stickyOffset = stickyInfo?.offset ?? 0;
                         const isLastLeftSticky = Boolean(stickyInfo?.isLastLeftSticky);
+                        const stickySize = cell.column.columnDef.size;
 
                         return (
                           <TableCell
@@ -1348,6 +1355,13 @@ function DataTableInner<TData, TValue>({
                                         ? `${stickyOffset}px`
                                         : stickyOffset,
                                     zIndex: 20,
+                                    ...(stickySize && !isStickyRight
+                                      ? {
+                                          width: `${stickySize}px`,
+                                          minWidth: `${stickySize}px`,
+                                          maxWidth: `${stickySize}px`,
+                                        }
+                                      : {}),
                                   }
                                 : {}),
                             }}
@@ -1356,6 +1370,7 @@ function DataTableInner<TData, TValue>({
                               meta?.align === "center" && "text-center",
                               meta?.align === "right" && "text-right",
                               isSticky && "sticky bg-card dark:bg-[#0c0d12] group-hover:bg-muted dark:group-hover:bg-[#1a1b23] group-data-[state=selected]:bg-muted dark:group-data-[state=selected]:bg-[#1a1b23] z-20 transition-[background-color,box-shadow,border-color] duration-200",
+                              isStickyRight && "border-l border-border/40 shadow-[-8px_0_16px_-6px_rgba(0,0,0,0.14)]",
                               isLastLeftSticky && (
                                 isScrolledLeft
                                   ? "border-r-2 border-border/80 shadow-[8px_0_16px_-4px_rgba(0,0,0,0.16)] dark:shadow-[10px_0_24px_-2px_rgba(0,0,0,0.65)]"

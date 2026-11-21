@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Request a Configurable Demo | HIVE.OS",
+  title: "Request a Configurable Demo",
   description: "Request a time-limited HIVE.OS demo configured for your business type, modules, and sub-modules.",
 };
 
